@@ -4,6 +4,8 @@ brew "ffmpeg"
 brew "fnm"
 # Distributed revision control system
 brew "git"
+# Open source programming language to build simple/reliable/efficient software
+brew "go"
 # Lightweight and flexible command-line JSON processor
 brew "jq"
 # Message broker implementing the MQTT protocol

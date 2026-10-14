@@ -1,2 +1,2 @@
-100.72.239.2    ranch-ai      StyleT@  macOS  -                                                         
-100.101.234.70  epuspriw0e2a  StyleT@  macOS  active; direct 192.168.1.114:41641, tx 330100 rx 8730836  
+100.72.239.2    ranch-ai      StyleT@  macOS  -                                                           
+100.101.234.70  epuspriw0e2a  StyleT@  macOS  active; direct 192.168.1.114:41641, tx 3408252 rx 62092668  

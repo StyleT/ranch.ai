@@ -1,32 +1,32 @@
-19:04  up 11:31, 1 user, load averages: 1.40 1.17 1.11
+19:45  up 12:12, 1 user, load averages: 1.29 1.41 1.32
 
 
 System-wide memory free percentage: 91%
 
 Mach Virtual Memory Statistics: (page size of 16384 bytes)
-Pages free:                                   152981.
-Pages active:                                 147556.
-Pages inactive:                                88360.
-Pages speculative:                             64760.
+Pages free:                                    89863.
+Pages active:                                 156631.
+Pages inactive:                               139748.
+Pages speculative:                             64937.
 Pages throttled:                                   0.
-Pages wired down:                              38613.
-Pages purgeable:                                5254.
+Pages wired down:                              41092.
+Pages purgeable:                                5144.
 
 vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
 
-PID    COMMAND          %CPU MEM  
-18616  tail             0.0  1040K
-18615  top              0.0  2336K
-18608  zsh              0.0  1504K
-18607  sshd-session     0.0  2576K
-18604  sshd-session     0.0  3937K
-18248  sleep            0.0  1008K
-18061  sshd-session     0.0  4272K
-18058  sshd-session     0.0  3921K
-17543  zsh              0.0  2224K
-17542  sshd-session     0.0  2544K
-17539  sshd-session     0.0  4113K
-5473   com.apple.Stream 0.0  5216K
-5472   AssetCacheTether 0.0  2112K
-5471   AssetCache       0.0  3200K
-5470   AssetCacheLocato 0.0  3168K
+PID    COMMAND         %CPU MEM  
+23365  tail            0.0  1040K
+23364  top             0.0  2336K
+23357  zsh             0.0  1664K
+23356  sshd-session    0.0  2640K
+23353  sshd-session    0.0  3985K
+23130  sleep           0.0  1008K
+21918  go2rtc          0.0  13M  
+21906  wyze-bridge     0.0  12M  
+21905  mosquitto       0.0  2608K
+20759  bash            0.0  1376K
+20752  caffeinate      0.0  2048K
+20179  applekeystored  0.0  2224K
+20177  trustd          0.0  3984K
+19043  ReportCrash     0.0  1968K
+19042  XprotectService 0.0  24M  
