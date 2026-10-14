@@ -58,8 +58,8 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
 - Ansible from the laptop over nix-darwin or shell: mature, idempotent, zero agent on the mini, low risk on a
   day-one macOS. Chosen by Vlad on 13 Oct.
 - No GUI session, Tailscale as Homebrew `tailscaled` daemon: frees ~1 GB and kills the agent churn; see gotcha 1.
-- No Docker Desktop (2 GB VM). docker-wyze-bridge will run natively under `uv`; OrbStack capped at 1 GB only if a
-  container is unavoidable.
+- No Docker Desktop (2 GB VM). The Wyze bridge is the IDisposable Go fork, built natively with `go build` plus the
+  go2rtc darwin arm64 binary (no Python, no cgo); OrbStack capped at 1 GB only if a container is unavoidable.
 - TypeScript orchestration, Python only for the MLX sidecar (MLX is Python-only; bounded Python exposure is itself
   content). MQTT + SQLite/sqlite-vec. Frigate as the benchmark, not the runtime (won't fit beside the VLM on 8 GB).
 - Claude: `claude-opus-5-5` for tier-3 escalation and golden-set labeling (Batch API), `claude-haiku-5-5` as judge.
@@ -73,8 +73,8 @@ transformer detector on the Neural Engine" with an fps/memory/recall table (RF-D
 
 Order of work:
 1. Check the mini's disk size (`diskutil info /`) → decide SSD/retention.
-2. Bridge: mrlt8/docker-wyze-bridge or the IDisposable go2rtc fork, chosen by camera models. Run natively
-   (Python via `uv`, go2rtc binary) as `com.ranch.wyze-bridge`; credentials from `~/.config/ranch/wyze.env`.
+2. Bridge: IDisposable/docker-wyze-bridge (Go, chosen 14 Oct; see `docs/CAMERAS.md`). Build with `go build`, run
+   with the `go2rtc_darwin_arm64` binary as `com.ranch.wyze-bridge`; credentials from `~/.config/ranch/wyze.env`.
 3. Start Mosquitto as `com.ranch.mosquitto` (Brewfile already has it).
 4. 48 h of 1 fps keyframes per camera to disk as the seed dataset.
 5. `packages/events` schema + SQLite migrations; `apps/ingest` sampler; `apps/detector` CoreML runner (native,
@@ -82,8 +82,9 @@ Order of work:
 6. Benchmark RF-DETR and YOLO11 CoreML on 100 hand-checked frames; emit `horse_count` per camera per minute.
 
 **Blocked on Vlad:**
-- Wyze camera inventory: model + firmware per camera, and what each one points at (barn, pasture, gate, trough).
-  V4 on firmware ≥ 4.52 and Battery Cam Pro / Floodlight Pro change the bridge choice.
+- ~~Wyze camera inventory~~ done 14 Oct: 6× Cam v4 (4.52.17.26), 1× Cam v3 Pro (4.58.17.21), 1× Cam v3
+  (4.36.17.21), in `docs/CAMERAS.md`. Still missing: what each camera points at, and a reachability check on
+  Tractor Cam and Back Pasture Cam (app showed "status unknown").
 - Wyze Developer API ID + key, placed on the mini at `~/.config/ranch/wyze.env` (never in chat or the repo).
 - Decision on the external SSD once disk size is known.
 

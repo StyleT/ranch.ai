@@ -57,7 +57,7 @@ It is also a platform. The same bus, event store, tool layer and surfaces must l
 └────────────────────────────────────┬──────────────────────────────────────┘
                                      │ RTSP
 ┌────────────────────────────────────▼──────────────────────────────────────┐
-│ Ingest: docker-wyze-bridge (native via uv, or OrbStack) → RTSP per camera  │
+│ Ingest: wyze-bridge (IDisposable Go fork + go2rtc, native) → RTSP per camera│
 │ Later adapters: MrCool (Home Assistant), Omada API, weather (NWS)          │
 └───────────────────────────────────────────────────────────────────────────┘
 Infra: Mosquitto (MQTT), SQLite + sqlite-vec (events, embeddings),
@@ -75,7 +75,7 @@ Config: Ansible playbook in infra/ansible, state snapshots in infra/snapshots
 - **Claude as tier 3, labeler and judge.** `claude-opus-5-5` with adaptive thinking for escalations and for first-pass labeling of the golden set (frames + "describe and classify" with structured outputs). `claude-haiku-5-5` as the cheap LLM judge for digest quality. Use the Batch API for the nightly re-label pass at half price. Prompt caching on the fixed instruction + camera-layout prefix.
 - **Hosted observability, not self-hosted.** Langfuse self-hosted needs Postgres plus ClickHouse, which will not fit. Emit OTel spans with the GenAI semantic conventions (still marked Development as of mid-2026, so pin the semconv version and note that in the post) and ship them to a free hosted tier.
 - **Configuration as code, Mac as cattle.** Everything after Setup Assistant is an Ansible playbook run from the laptop over SSH. A second run must report `changed=0`; `--check --diff` is the drift detector. The erase-and-reprovision test happens once while the box is still empty, because it is cheap now and expensive after Phase 1.
-- **No GUI session, no Docker Desktop.** Tailscale runs as the Homebrew `tailscaled` daemon so the mini sits at the login window with nobody logged in, which removes WindowServer, Dock, Siri and the iMessage/iCloud agents from memory. docker-wyze-bridge runs natively under `uv`; if a container is ever needed, OrbStack with a 1 GB VM cap, never Docker Desktop's 2 GB default.
+- **No GUI session, no Docker Desktop.** Tailscale runs as the Homebrew `tailscaled` daemon so the mini sits at the login window with nobody logged in, which removes WindowServer, Dock, Siri and the iMessage/iCloud agents from memory. The Wyze bridge is the IDisposable Go fork, built natively with `go build` and the go2rtc darwin arm64 binary; if a container is ever needed, OrbStack with a 1 GB VM cap, never Docker Desktop's 2 GB default.
 - **Frigate as the benchmark, not the runtime.** Frigate 0.18 now has GenAI review summaries and a chat agent. On 8 GB it cannot run alongside our VLM, but it is the right thing to compare against in the posts ("what Frigate gets you vs. what you learn building it").
 
 ### 4.3 Memory budget (resident, steady state)
@@ -163,7 +163,7 @@ VS Code Remote-SSH from the laptop, Claude Code on the mini, the `ranch` repo cl
 
 ### Phase 1 — see the horses (2 weekends)
 
-- Inventory cameras: model and firmware. Wyze Cam V4 on firmware ≥ 4.52 blocks TUTK and falls back to WebRTC; Battery Cam Pro and Floodlight Pro are unsupported by the bridge. Decide between mrlt8/docker-wyze-bridge and the IDisposable go2rtc-based fork.
+- Inventory cameras: done 14 Oct, see `docs/CAMERAS.md` (6× Cam v4 on 4.52.17.26, 1× Cam v3 Pro, 1× Cam v3; no Battery Cam Pro or Floodlight Pro). Bridge: IDisposable/docker-wyze-bridge, the Go rewrite on go2rtc; v4s on 2025+ firmware lose TUTK and the fork promotes them to WebRTC automatically.
 - Run the bridge, confirm one RTSP stream per camera, record 48 hours of 1 fps keyframes to disk as the seed dataset.
 - Tier 0 sampler: ffmpeg scene-change gate plus a fixed 1 frame / 10 s floor so nothing is missed at night.
 - Tier 1 detector: export RF-DETR and YOLO11 to CoreML, run on ANE, log fps, memory, and `horse` recall on 100 hand-checked frames. Emit `horse_count` per camera to MQTT every minute.
