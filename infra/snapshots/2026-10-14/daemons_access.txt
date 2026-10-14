@@ -1,8 +1,9 @@
 /Library/LaunchDaemons:
-total 16
-drwxr-xr-x   4 root  wheel   128 Oct 13 22:52 .
+total 24
+drwxr-xr-x   5 root  wheel   160 Oct 14 07:38 .
 drwxr-xr-x  66 root  wheel  2112 Oct 14 07:18 ..
 -rw-r--r--   1 root  wheel   410 Oct 13 22:52 com.ranch.caffeinate.plist
+-rw-r--r--   1 root  wheel   597 Oct 14 07:38 com.ranch.quiet-audiomxd.plist
 -rw-r--r--   1 root  wheel   684 Oct 13 22:52 com.ranch.tailscaled.plist
 
 /etc/ssh/sshd_config.d:

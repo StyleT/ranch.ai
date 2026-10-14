@@ -1,32 +1,32 @@
- 7:24  up 2 mins, 0 users, load averages: 2.76 1.64 0.69
+ 7:39  up 6 mins, 0 users, load averages: 1.27 1.54 0.93
 
 
 System-wide memory free percentage: 92%
 
 Mach Virtual Memory Statistics: (page size of 16384 bytes)
-Pages free:                                   220197.
-Pages active:                                 115629.
-Pages inactive:                                85604.
-Pages speculative:                             33113.
+Pages free:                                   177433.
+Pages active:                                 131173.
+Pages inactive:                                82384.
+Pages speculative:                             63259.
 Pages throttled:                                   0.
-Pages wired down:                              37728.
-Pages purgeable:                                4031.
+Pages wired down:                              38022.
+Pages purgeable:                                4222.
 
 vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
 
 PID   COMMAND          %CPU MEM  
-1091  tail             0.0  1040K
-1090  top              0.0  2288K
-1083  zsh              0.0  1504K
-1082  sshd-session     0.0  2608K
-1079  sshd-session     0.0  3969K
-479   IOUserBluetoothS 0.0  912K 
-444   cfprefsd         0.0  2144K
-436   sshd-session     0.0  4096K
-433   sshd-session     0.0  3937K
-426   StandaloneHIDAud 0.0  2768K
-425   ioupsd           0.0  2160K
-424   modelcatalogd    0.0  2448K
-390   GSSCred          0.0  2528K
-389   distnoted        0.0  1584K
-382   countryd         0.0  2544K
+1930  tail             0.0  1040K
+1929  top              0.0  2272K
+1922  zsh              0.0  1504K
+1921  sshd-session     0.0  2576K
+1918  sshd-session     0.0  3937K
+1305  sleep            0.0  1008K
+1269  bash             0.0  1344K
+1262  caffeinate       0.0  2000K
+901   ASPCarryLog      0.0  2256K
+842   sshd-session     0.0  4320K
+839   sshd-session     0.0  3889K
+805   IOUserBluetoothS 0.0  944K 
+804   iconservicesagen 0.0  2384K
+801   AirPlayXPCHelper 0.0  3056K
+800   audiomxd         0.0  3680K

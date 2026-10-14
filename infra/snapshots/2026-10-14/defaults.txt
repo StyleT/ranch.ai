@@ -1,5 +1,4 @@
 {
-    AutomaticCheckEnabled = 1;
     AutomaticDownload = 1;
     AutomaticallyInstallMacOSUpdates = 0;
     ConfigDataInstall = 1;

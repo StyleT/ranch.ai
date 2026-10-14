@@ -4,6 +4,28 @@
   ansible.builtin.set_fact:
     ranch_daemons:
       - com.ranch.caffeinate
+      - com.ranch.quiet-audiomxd
+
+- name: Ranch bin dir
+  ansible.builtin.file:
+    path: "{{ ranch_bin_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+
+- name: Ranch scripts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../bin/{{ item }}"
+    dest: "{{ ranch_bin_dir }}/{{ item }}"
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+  loop:
+    - quiet-audiomxd.sh
+  notify: reload launchd daemons
 
 - name: Install daemon plists
   ansible.builtin.template:

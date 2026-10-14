@@ -53,6 +53,17 @@ disabled_agents:
   - com.apple.siriinferenced
   - com.apple.suggestd
 
+# System-domain daemons to disable on a headless box (`launchctl disable system/<label>`, effective at
+# next boot). com.apple.audiomxd: on macOS 27.0.1 with no console user it spins at ~75% CPU together
+# with configd (Bluetooth audio-routing loop asking for a user session that never comes). Audio is
+# useless headless. Reversible with `launchctl enable system/<label>`.
+disabled_system_daemons:
+  - com.apple.audiomxd   # launchd ignores this (SIP); kept as documentation. Real fix: quiet-audiomxd daemon.
+
+# System processes that must be absent OR paused (SIGSTOP, state T) when nobody is logged in.
+quiet_system_process_names:
+  - audiomxd
+
 # Process names to assert absent (pgrep -x -u ranch) once the disables are live.
 quiet_process_names:
   - mediaanalysisd
@@ -77,4 +88,5 @@ quiet_process_names:
 
 brew_prefix: /opt/homebrew
 tailscale_state_dir: /var/db/ranch-tailscale
+ranch_bin_dir: /usr/local/ranch/bin
 node_major: "24"

@@ -27,12 +27,35 @@
   loop: "{{ disabled_agents }}"
   when: disabled_out.rc == 0 and item not in disabled_labels
 
+- name: Read disabled system daemons
+  ansible.builtin.command: launchctl print-disabled system
+  become: true
+  register: disabled_sys_out
+  changed_when: false
+  check_mode: false
+
+- name: Disable headless-hostile system daemons (effective at next boot)
+  ansible.builtin.command: launchctl disable system/{{ item }}
+  become: true
+  loop: "{{ disabled_system_daemons }}"
+  when: item not in ((disabled_sys_out.stdout ~ '\n' ~ disabled_sys_out.stderr) | regex_findall('\"([^\"]+)\" => disabled'))
+
 - name: Siri off
   community.general.osx_defaults:
     domain: com.apple.assistant.support
     key: Assistant Enabled
     type: bool
     value: false
+
+- name: Which system processes are running and not paused
+  ansible.builtin.shell: |
+    pid=$(pgrep -x {{ item }} | head -1); [ -n "$pid" ] || exit 1
+    ps -o stat= -p "$pid" | grep -qv '^T' || exit 1
+  register: pgs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ quiet_system_process_names }}"
 
 - name: Which disabled agents are still running
   ansible.builtin.command: pgrep -u {{ ranch_user }} -x {{ item }}
@@ -44,7 +67,7 @@
 
 - name: Still-running list
   ansible.builtin.set_fact:
-    quiet_still_running: "{{ pg.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+    quiet_still_running: "{{ (pg.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list) + (pgs.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list) }}"
 
 - name: Report (reboot pending)
   ansible.builtin.debug:

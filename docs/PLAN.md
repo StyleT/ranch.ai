@@ -100,7 +100,17 @@ Event classes for Phase 1–2: `horse_down_prolonged`, `horse_count_mismatch`, `
 
 **Goal.** An identical mini can be rebuilt from an erased disk in under 45 minutes hands-on, and an unattended reboot comes back reachable over Tailscale with all services running and load average under 2.
 
-**State on 13 Oct 2026, late evening.** Bootstrap and playbook built and applied: run 4 reports `changed=0`, `make check` is clean, first snapshot taken (load 3.3 and 74% memory free with the GUI session still up, before reboot). Tailscale daemon running, awaiting one manual `tailscale login`. Reboot and `make verify` pending. macOS has no `timeout`; use a background job plus `sleep` when you need one.
+**State on 14 Oct 2026, 07:40.** Phase 0 complete. Repo `projects/ranch`, three commits. `make provision` converges to `changed=0`, `make check` clean, `make verify` green after reboot. Measured on the mini (M2, 8 GB, macOS 27.0.1):
+
+| Reading | Before (GUI session, first boot) | After (headless, 10 min uptime) |
+|---|---|---|
+| Load average 1 min | 11.4 → 42.6 at 2 min after boot | 1.30 |
+| Memory free | 69% | 91% |
+| Swap | 0 | 0 |
+| Console user | `ranch` (auto-login) | none |
+| Reboot to SSH back | n/a | 25–28 s |
+
+Findings that changed the design: Apple GUI agents marked disabled still start inside a logged-in session, so the real fix was turning auto-login off; `audiomxd` and `configd` spin at ~75% and ~40% CPU on a headless macOS 27.0.1 with no console user and ignore `launchctl disable`, so a watchdog LaunchDaemon pauses `audiomxd` (SIGSTOP) while nobody is logged in and resumes it when someone is. Open: one manual `tailscale login`; the timed erase-and-reprovision run; `make verify` at next unattended reboot to see the watchdog act from cold.
 
 ### 5.1 Manual checklist (`infra/MANUAL.md`, ~10 min, one screenshot each)
 
@@ -130,7 +140,7 @@ Laptop: `uv tool install ansible-core`, then `ansible-galaxy collection install 
 - **quiet.** The 21 agent labels from the 13 Oct diagnosis (mediaanalysisd, visualintelligenced, photoanalysisd, photolibraryd, imagent, IMDPersistenceAgent, cloudd, itunescloudd, the three spotlightknowledged variants, corespotlightd, knowledgeconstructiond, the three intelligence*d daemons, siriactionsd, sirittsd, siriknowledged, siriinferenced, suggestd) as a list variable, each `launchctl disable gui/<uid>/<label>`; Siri off via `osx_defaults` on `com.apple.assistant.support` "Assistant Enabled". The role parses `launchctl print-disabled` (format `"label" => disabled`) and is idempotent. Finding from the first reboot: with auto-login on, every one of these agents started anyway despite being marked disabled, so the disable list is defense in depth only. The real fix is no GUI session, which is why the base role turns auto-login off. Strict mode (`make verify`) asserts both: no console user and none of the processes running.
 - **packages.** `infra/Brewfile`: git, jq, ffmpeg, mosquitto, tailscale, fnm, uv; OrbStack commented out until needed. Applied with `brew bundle`. Node 24 via fnm.
 - **tailscale.** Our own `/Library/LaunchDaemons/com.ranch.tailscaled.plist` runs Homebrew's `tailscaled` as root with nobody logged in (`sudo brew services` fails as root because it cannot reach the user's Homebrew API cache); `tailscale up` with an auth key from Ansible Vault, or once by hand. This is what removes auto-login from the design. Variable `autologin: false`; if ever true, `sysadminctl -autologin set -userName ranch -password {{ vault_ranch_password }}`.
-- **services.** launchd plists templated from `infra/launchd/*.plist.j2` into `/Library/LaunchDaemons` and loaded with `launchctl bootstrap system`. Empty in Phase 0 apart from a `caffeinate -dims` daemon as insurance against the display path going dark; Phases 1 to 5 add theirs here.
+- **services.** launchd plists templated from `infra/launchd/*.plist.j2` into `/Library/LaunchDaemons`, scripts from `infra/bin` to `/usr/local/ranch/bin`. Phase 0 ships two daemons: `com.ranch.caffeinate` (`caffeinate -dims`, insurance against the display path going dark) and `com.ranch.quiet-audiomxd` (the headless `audiomxd` watchdog). Phases 1 to 5 add theirs here.
 
 ### 5.4 Snapshot and drift (`infra/snapshot.sh`, `make snapshot`)
 
@@ -240,6 +250,7 @@ Create the `ranch` git repo now at `~/job_hunt_2026/projects/ranch` with `infra/
 | Content drift into gadget blog | Wrong audience | Every post leads with a number or an architecture decision, not a feature |
 | Time | Job hunt comes first | Phases are weekend-sized; Phase 0–1 alone already yields two posts |
 | `launchctl disable` is ignored for Apple GUI agents inside a logged-in session (observed 14 Oct) | Churn returns whenever someone logs in on the console | Auto-login off so there is no session; `make verify` asserts no console user; log out after any Screen Sharing visit |
+| `audiomxd` + `configd` spin at ~75% and ~40% CPU on a headless macOS 27.0.1 with no console user (audio-routing loop waiting for a user session) | Wasted CPU, heat, skewed load numbers | `launchctl disable` is ignored and Bluetooth off did not help; `com.ranch.quiet-audiomxd` pauses it with SIGSTOP while headless. Re-test on each macOS update |
 | Apple Intelligence toggle is manual | One step that can be forgotten on re-provision | Checklist item with screenshot; follow-up to find a defaults key or configuration profile |
 
 ## 9. Content calendar (first six posts)
