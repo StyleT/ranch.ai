@@ -1,0 +1,17 @@
+# Play, record, convert, and stream select audio and video codecs
+brew "ffmpeg"
+# Fast and simple Node.js version manager
+brew "fnm"
+# Distributed revision control system
+brew "git"
+# Lightweight and flexible command-line JSON processor
+brew "jq"
+# Message broker implementing the MQTT protocol
+brew "mosquitto"
+# Easiest, most secure way to use WireGuard and 2FA
+brew "tailscale"
+# Extremely fast Python package installer and resolver, written in Rust
+brew "uv"
+
+* v24.21.0 default
+* system

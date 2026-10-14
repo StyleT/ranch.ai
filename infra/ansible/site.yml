@@ -1,0 +1,15 @@
+---
+# Phase 0: headless, reproducible Mac mini.
+#   make provision   -> apply
+#   make check       -> drift (--check --diff)
+#   make verify      -> post-reboot assertions (strict_quiet=true)
+- name: Provision ranch-ai
+  hosts: ranch
+  gather_facts: true
+  roles:
+    - base
+    - access
+    - quiet
+    - packages
+    - tailscale
+    - services

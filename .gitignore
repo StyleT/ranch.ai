@@ -1,0 +1,5 @@
+.DS_Store
+*.retry
+infra/ansible/.vault_pass
+node_modules/
+.venv/

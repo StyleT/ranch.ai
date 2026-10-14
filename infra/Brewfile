@@ -1,0 +1,9 @@
+# Applied by infra/ansible/roles/packages with `brew bundle`.
+brew "git"
+brew "jq"
+brew "ffmpeg"
+brew "mosquitto"
+brew "tailscale"
+brew "fnm"
+brew "uv"
+# cask "orbstack"   # only if a container is ever needed; cap its VM at 1 GB

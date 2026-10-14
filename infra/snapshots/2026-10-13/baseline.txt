@@ -1,0 +1,32 @@
+22:54  up 21 mins, 1 user, load averages: 3.26 11.42 10.45
+
+
+System-wide memory free percentage: 74%
+
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                    35655.
+Pages active:                                 165933.
+Pages inactive:                               155783.
+Pages speculative:                             11009.
+Pages throttled:                                   0.
+Pages wired down:                              58969.
+Pages purgeable:                                4011.
+
+vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
+
+PID   COMMAND          %CPU MEM  
+6858  tail             0.0  1056K
+6857  top              0.0  3760K
+6850  zsh              0.0  1488K
+6849  sshd-session     0.0  2592K
+6846  sshd-session     0.0  3969K
+6101  tailscaled       0.0  11M  
+5821  caffeinate       0.0  2048K
+5588  PCCAgentClientEx 0.0  2960K
+5525  biomesyncd       0.0  2992K
+1545  SetStoreUpdateSe 0.0  3456K
+1497  seserviced       0.0  3600K
+1454  sshd-session     0.0  4144K
+1451  sshd-session     0.0  3937K
+1450  GenerativeExperi 0.0  5952K
+1449  TGOnDeviceInfere 0.0  157M 

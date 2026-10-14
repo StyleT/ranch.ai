@@ -1,0 +1,42 @@
+---
+- name: Read disabled launch agents for uid {{ ranch_uid }}
+  ansible.builtin.command: launchctl print-disabled gui/{{ ranch_uid }}
+  register: disabled_out
+  changed_when: false
+  check_mode: false
+
+- name: Disable noisy per-user agents (effective at next login/reboot)
+  ansible.builtin.command: launchctl disable gui/{{ ranch_uid }}/{{ item }}
+  loop: "{{ disabled_agents }}"
+  when: ('"' ~ item ~ '" => disabled') not in (disabled_out.stdout ~ disabled_out.stderr)
+
+- name: Siri off
+  community.general.osx_defaults:
+    domain: com.apple.assistant.support
+    key: Assistant Enabled
+    type: bool
+    value: false
+
+- name: Which disabled agents are still running
+  ansible.builtin.command: pgrep -u {{ ranch_user }} -x {{ item }}
+  register: pg
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  loop: "{{ quiet_process_names }}"
+
+- name: Still-running list
+  ansible.builtin.set_fact:
+    quiet_still_running: "{{ pg.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+
+- name: Report (reboot pending)
+  ansible.builtin.debug:
+    msg: "Still running until next reboot: {{ quiet_still_running }}"
+  when: quiet_still_running | length > 0 and not strict_quiet
+
+- name: Assert quiet (strict mode, after reboot)
+  ansible.builtin.assert:
+    that: quiet_still_running | length == 0
+    fail_msg: "Disabled agents still running after reboot: {{ quiet_still_running }}"
+    success_msg: "All {{ quiet_process_names | length }} agents absent."
+  when: strict_quiet

@@ -1,0 +1,48 @@
+---
+- name: Homebrew present (run infra/bootstrap.sh first)
+  ansible.builtin.stat:
+    path: "{{ brew_prefix }}/bin/brew"
+  register: brew_bin
+  failed_when: not brew_bin.stat.exists
+
+- name: Config dir
+  ansible.builtin.file:
+    path: /Users/{{ ranch_user }}/.config/ranch
+    state: directory
+    mode: "0755"
+
+- name: Brewfile
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../Brewfile"
+    dest: /Users/{{ ranch_user }}/.config/ranch/Brewfile
+    mode: "0644"
+
+- name: brew bundle check
+  ansible.builtin.command: "{{ brew_prefix }}/bin/brew bundle check --file=/Users/{{ ranch_user }}/.config/ranch/Brewfile"
+  register: bundle_check
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  environment: { HOMEBREW_NO_AUTO_UPDATE: "1", HOMEBREW_NO_ENV_HINTS: "1" }
+
+- name: brew bundle install
+  ansible.builtin.command: "{{ brew_prefix }}/bin/brew bundle install --file=/Users/{{ ranch_user }}/.config/ranch/Brewfile --no-upgrade"
+  when: bundle_check.rc != 0
+  environment: { HOMEBREW_NO_AUTO_UPDATE: "1", HOMEBREW_NO_ENV_HINTS: "1" }
+
+- name: Shell profile loads brew and fnm
+  ansible.builtin.blockinfile:
+    path: /Users/{{ ranch_user }}/.zprofile
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED: ranch shell env"
+    block: |
+      eval "$({{ brew_prefix }}/bin/brew shellenv)"
+      eval "$({{ brew_prefix }}/bin/fnm env --use-on-cd)"
+
+- name: Node {{ node_major }} installed via fnm
+  ansible.builtin.shell: |
+    {{ brew_prefix }}/bin/fnm ls | grep -q "v{{ node_major }}\." && exit 0
+    {{ brew_prefix }}/bin/fnm install {{ node_major }} && {{ brew_prefix }}/bin/fnm default {{ node_major }} && echo CHANGED
+  register: fnm_out
+  changed_when: "'CHANGED' in fnm_out.stdout"

@@ -1,0 +1,5 @@
+ranch:
+  hosts:
+    ranch-ai:
+      ansible_host: ranch-ai.local   # switch to the Tailscale MagicDNS name once joined
+      ansible_user: ranch

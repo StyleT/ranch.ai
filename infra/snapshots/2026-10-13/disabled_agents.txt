@@ -1,0 +1,28 @@
+
+	disabled services = {
+		"com.apple.photolibraryd" => disabled
+		"com.apple.knowledgeconstructiond" => disabled
+		"com.apple.cloudd" => disabled
+		"com.apple.intelligencetasksd" => disabled
+		"com.apple.Siri.agent" => disabled
+		"com.apple.FolderActionsDispatcher" => disabled
+		"com.apple.imdpersistence.IMDPersistenceAgent" => disabled
+		"com.apple.intelligenceflowd" => disabled
+		"com.apple.photoanalysisd" => disabled
+		"com.apple.imagent" => disabled
+		"com.apple.spotlightknowledged" => disabled
+		"com.apple.spotlightknowledged.importer" => disabled
+		"com.apple.siriactionsd" => disabled
+		"com.apple.siriknowledged" => disabled
+		"com.apple.suggestd" => disabled
+		"com.apple.appleseed.seedusaged.postinstall" => disabled
+		"com.apple.mediaanalysisd" => disabled
+		"com.apple.visualintelligenced" => disabled
+		"com.apple.intelligencecontextd" => disabled
+		"com.apple.siriinferenced" => disabled
+		"com.apple.ScriptMenuApp" => disabled
+		"com.apple.itunescloudd" => disabled
+		"com.apple.spotlightknowledged.updater" => disabled
+		"com.apple.corespotlightd" => disabled
+		"com.apple.sirittsd" => disabled
+	}

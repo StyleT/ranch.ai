@@ -1,0 +1,110 @@
+---
+- name: Read current names
+  ansible.builtin.command: scutil --get {{ item }}
+  register: scutil_names
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  loop: [ComputerName, HostName, LocalHostName]
+
+- name: Set names to {{ ranch_hostname }}
+  ansible.builtin.command: scutil --set {{ item.item }} {{ ranch_hostname }}
+  become: true
+  loop: "{{ scutil_names.results }}"
+  loop_control: { label: "{{ item.item }}" }
+  when: item.stdout | default('') != ranch_hostname
+
+- name: Read timezone
+  ansible.builtin.command: systemsetup -gettimezone
+  become: true
+  register: tz
+  changed_when: false
+  check_mode: false
+
+- name: Set timezone
+  ansible.builtin.command: systemsetup -settimezone {{ timezone }}
+  become: true
+  when: timezone not in tz.stdout
+
+- name: Read pmset
+  ansible.builtin.command: pmset -g
+  register: pm
+  changed_when: false
+  check_mode: false
+
+- name: Apply pmset settings
+  ansible.builtin.command: pmset -a {{ item.key }} {{ item.value }}
+  become: true
+  loop: "{{ pmset_settings | dict2items }}"
+  loop_control: { label: "{{ item.key }}={{ item.value }}" }
+  when: not (pm.stdout is regex('^\s*' ~ item.key ~ '\s+' ~ item.value ~ '(\s|$)', multiline=True))
+
+- name: Read Remote Login state
+  ansible.builtin.command: systemsetup -getremotelogin
+  become: true
+  register: rl
+  changed_when: false
+  check_mode: false
+
+- name: Enable Remote Login (SSH)
+  ansible.builtin.command: systemsetup -setremotelogin on
+  become: true
+  when: "'On' not in rl.stdout"
+
+- name: Check Screen Sharing daemon
+  ansible.builtin.command: launchctl print system/com.apple.screensharing
+  become: true
+  register: ss
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Enable Screen Sharing
+  ansible.builtin.shell: |
+    launchctl enable system/com.apple.screensharing
+    launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.screensharing.plist
+  become: true
+  when: ss.rc != 0
+
+- name: Read Spotlight state
+  ansible.builtin.command: mdutil -s /
+  register: md
+  changed_when: false
+  check_mode: false
+
+- name: Disable Spotlight indexing on all volumes
+  ansible.builtin.command: mdutil -a -i off
+  become: true
+  when: "'Indexing disabled' not in md.stdout"
+
+# Time Machine: both `tmutil disable` and writing com.apple.TimeMachine need Full Disk Access,
+# which an SSH session never has. Off == no destination configured; we only verify that.
+- name: Time Machine destinations
+  ansible.builtin.command: tmutil destinationinfo
+  register: tm
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Warn if Time Machine has a destination
+  ansible.builtin.debug:
+    msg: "Time Machine destination configured; remove it in System Settings (not scriptable over SSH)."
+  when: "'No destinations configured' not in tm.stdout"
+
+- name: Software update policy
+  community.general.osx_defaults:
+    domain: /Library/Preferences/com.apple.SoftwareUpdate
+    key: "{{ item.key }}"
+    type: bool
+    value: "{{ item.value }}"
+  become: true
+  loop: "{{ softwareupdate_settings | dict2items }}"
+  loop_control: { label: "{{ item.key }}={{ item.value }}" }
+
+- name: App Store auto-update off
+  community.general.osx_defaults:
+    domain: /Library/Preferences/com.apple.commerce
+    key: AutoUpdate
+    type: bool
+    value: false
+  become: true

@@ -1,0 +1,80 @@
+---
+ranch_user: ranch
+ranch_uid: 501
+ranch_hostname: ranch-ai
+timezone: America/New_York
+
+# Design decision (PLAN.md 4.2): no GUI session. Tailscale runs as a system daemon,
+# so nothing needs auto-login. Set true only if a future surface needs a logged-in user.
+autologin: false
+
+# make verify sets this true after a reboot: the quiet role then fails if any
+# disabled agent is still running.
+strict_quiet: false
+
+laptop_pubkey: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
+
+pmset_settings:
+  sleep: "0"
+  displaysleep: "0"
+  disksleep: "0"
+  autorestart: "1"
+  womp: "1"
+
+softwareupdate_settings:
+  AutomaticCheckEnabled: true
+  AutomaticDownload: true
+  CriticalUpdateInstall: true
+  ConfigDataInstall: true
+  AutomaticallyInstallMacOSUpdates: false   # the box never reboots on Apple's schedule
+
+# Per-user launch agents that burned CPU/RAM on a fresh headless install (13 Oct 2026 diagnosis).
+# Each is `launchctl disable gui/<uid>/<label>`; takes effect at next login/reboot.
+disabled_agents:
+  - com.apple.mediaanalysisd
+  - com.apple.visualintelligenced
+  - com.apple.photoanalysisd
+  - com.apple.photolibraryd
+  - com.apple.imagent
+  - com.apple.imdpersistence.IMDPersistenceAgent
+  - com.apple.cloudd
+  - com.apple.itunescloudd
+  - com.apple.spotlightknowledged
+  - com.apple.spotlightknowledged.updater
+  - com.apple.spotlightknowledged.importer
+  - com.apple.corespotlightd
+  - com.apple.knowledgeconstructiond
+  - com.apple.intelligenceflowd
+  - com.apple.intelligencecontextd
+  - com.apple.intelligencetasksd
+  - com.apple.siriactionsd
+  - com.apple.sirittsd
+  - com.apple.siriknowledged
+  - com.apple.siriinferenced
+  - com.apple.suggestd
+
+# Process names to assert absent (pgrep -x -u ranch) once the disables are live.
+quiet_process_names:
+  - mediaanalysisd
+  - visualintelligenced
+  - photoanalysisd
+  - photolibraryd
+  - imagent
+  - IMDPersistenceAgent
+  - cloudd
+  - itunescloudd
+  - spotlightknowledged
+  - corespotlightd
+  - knowledgeconstructiond
+  - intelligenceflowd
+  - intelligencecontextd
+  - intelligencetasksd
+  - siriactionsd
+  - sirittsd
+  - siriknowledged
+  - siriinferenced
+  - suggestd
+
+brew_prefix: /opt/homebrew
+tailscale_state_dir: /var/db/ranch-tailscale
+node_major: "24"

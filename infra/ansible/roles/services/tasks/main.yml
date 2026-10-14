@@ -1,0 +1,33 @@
+---
+# Each name here is a template infra/launchd/<name>.plist.j2 -> /Library/LaunchDaemons/<name>.plist
+- name: Daemon list
+  ansible.builtin.set_fact:
+    ranch_daemons:
+      - com.ranch.caffeinate
+
+- name: Install daemon plists
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../launchd/{{ item }}.plist.j2"
+    dest: /Library/LaunchDaemons/{{ item }}.plist
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  loop: "{{ ranch_daemons }}"
+  notify: reload launchd daemons
+
+- name: Daemons loaded?
+  ansible.builtin.command: launchctl print system/{{ item }}
+  become: true
+  register: ld
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  loop: "{{ ranch_daemons }}"
+
+- name: Bootstrap missing daemons
+  ansible.builtin.command: launchctl bootstrap system /Library/LaunchDaemons/{{ item.item }}.plist
+  become: true
+  loop: "{{ ld.results }}"
+  loop_control: { label: "{{ item.item }}" }
+  when: item.rc != 0

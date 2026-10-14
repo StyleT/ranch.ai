@@ -1,0 +1,33 @@
+---
+- name: ~/.ssh exists
+  ansible.builtin.file:
+    path: /Users/{{ ranch_user }}/.ssh
+    state: directory
+    mode: "0700"
+
+- name: Laptop public key authorized
+  ansible.builtin.lineinfile:
+    path: /Users/{{ ranch_user }}/.ssh/authorized_keys
+    line: "{{ laptop_pubkey | trim }}"
+    create: true
+    mode: "0600"
+
+- name: sshd keys-only drop-in
+  ansible.builtin.copy:
+    src: 010-keys-only.conf
+    dest: /etc/ssh/sshd_config.d/010-keys-only.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: restart sshd
+
+- name: Passwordless sudo for {{ ranch_user }}
+  ansible.builtin.template:
+    src: ranch-nopasswd.j2
+    dest: /etc/sudoers.d/ranch-nopasswd
+    owner: root
+    group: wheel
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  become: true

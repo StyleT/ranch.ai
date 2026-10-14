@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.tailscaled</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{ brew_prefix }}/bin/tailscaled</string>
+    <string>--state={{ tailscale_state_dir }}/tailscaled.state</string>
+    <string>--socket=/var/run/tailscaled.socket</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/var/log/ranch-tailscaled.log</string>
+  <key>StandardErrorPath</key><string>/var/log/ranch-tailscaled.log</string>
+</dict>
+</plist>

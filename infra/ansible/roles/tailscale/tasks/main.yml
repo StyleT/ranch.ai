@@ -1,0 +1,60 @@
+---
+# tailscaled as our own system LaunchDaemon (not `sudo brew services`, which cannot use the
+# user's Homebrew API cache as root). Up at boot with nobody logged in.
+- name: State dir
+  ansible.builtin.file:
+    path: "{{ tailscale_state_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0700"
+  become: true
+
+- name: tailscaled LaunchDaemon plist
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../launchd/com.ranch.tailscaled.plist.j2"
+    dest: /Library/LaunchDaemons/com.ranch.tailscaled.plist
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: reload tailscaled
+
+- name: tailscaled loaded?
+  ansible.builtin.command: launchctl print system/com.ranch.tailscaled
+  become: true
+  register: ts_daemon
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Bootstrap tailscaled
+  ansible.builtin.command: launchctl bootstrap system /Library/LaunchDaemons/com.ranch.tailscaled.plist
+  become: true
+  when: ts_daemon.rc != 0
+
+- name: Tailscale backend state
+  ansible.builtin.command: "{{ brew_prefix }}/bin/tailscale status --json"
+  become: true
+  register: ts_status
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  retries: 10
+  delay: 2
+  until: ts_status.rc == 0
+
+- name: Parse state
+  ansible.builtin.set_fact:
+    ts_state: "{{ (ts_status.stdout | from_json).BackendState | default('Unknown') if ts_status.rc == 0 else 'Unavailable' }}"
+
+- name: Join tailnet with auth key (when tailscale_authkey is provided)
+  ansible.builtin.command: "{{ brew_prefix }}/bin/tailscale up --authkey={{ tailscale_authkey }} --hostname={{ ranch_hostname }}"
+  become: true
+  when: ts_state == 'NeedsLogin' and tailscale_authkey is defined
+  no_log: true
+
+- name: Manual login needed
+  ansible.builtin.debug:
+    msg: "Tailscale is {{ ts_state }}. Run once on the mini: sudo tailscale up --hostname={{ ranch_hostname }}  (or pass -e tailscale_authkey=...)"
+  when: ts_state != 'Running' and tailscale_authkey is not defined

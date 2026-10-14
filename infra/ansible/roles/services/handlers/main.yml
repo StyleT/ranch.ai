@@ -1,0 +1,10 @@
+---
+- name: reload launchd daemons
+  ansible.builtin.shell: |
+    if launchctl print system/{{ item }} >/dev/null 2>&1; then
+      launchctl kickstart -k system/{{ item }}
+    else
+      launchctl bootstrap system /Library/LaunchDaemons/{{ item }}.plist
+    fi
+  become: true
+  loop: "{{ ranch_daemons }}"
