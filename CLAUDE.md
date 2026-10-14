@@ -25,6 +25,10 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   Target interpreter is `/usr/bin/python3` (3.9.6 from Xcode CLT).
 - Secrets never enter the repo. Device credentials live on the mini in `~/.config/ranch/*.env` (mode 600);
   Ansible Vault for anything the playbook needs (`infra/ansible/.vault_pass` is git-ignored).
+- Git is the system of record. Remote: `git@github.com:StyleT/ranch.ai.git` (`origin`, branch `main`). Commit every
+  major change (code, infra role, doc or plan edit, snapshot) as its own commit with a message that says why, and
+  push to `origin main` before starting the next piece of work. Never leave finished work uncommitted at the end of
+  a session. The repo is public: no secrets, no credentials, no device tokens, ever.
 - Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` (or the current model).
 
 ## Architecture rules (see docs/PLAN.md §4)

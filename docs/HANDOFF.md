@@ -5,7 +5,7 @@ Phase 0 (headless, reproducible Mac mini) is **complete and closed**. Phase 1 (c
 **not started**; it is blocked on inputs from Vlad listed at the end. The erase-and-reprovision timing run was
 skipped by decision; convergence proof stands in for it.
 
-Repo: this directory (`~/job_hunt_2026/projects/ranch`), 9 commits on `main`, no remote yet.
+Repo: this directory (`~/job_hunt_2026/projects/ranch`), pushed to `git@github.com:StyleT/ranch.ai.git` (`origin/main`) on 14 Oct.
 Canonical plan: `docs/PLAN.md`. A mirror copy exists at `../horse-watch/PLAN.md`; keep `docs/PLAN.md` as the
 source of truth and copy over it if you edit.
 
@@ -89,7 +89,7 @@ Order of work:
 - Decision on the external SSD once disk size is known.
 
 ## Open threads
-- Push the repo to GitHub (public, MIT) before Post 0; strip nothing, there are no secrets in it.
+- ~~Push the repo to GitHub~~ done 14 Oct (`StyleT/ranch.ai`). Add a LICENSE (MIT) before Post 0.
 - First unattended reboot with the audiomxd watchdog from cold has not been observed (it was deployed onto an
   already-paused daemon). `make verify` after the next reboot confirms it.
 - Install Tailscale on Vlad's phone before Phase 2 (alert links).
