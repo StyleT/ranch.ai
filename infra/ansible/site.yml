@@ -1,5 +1,5 @@
 ---
-# Phase 0: headless, reproducible Mac mini.
+# Phase 0: headless, reproducible Mac mini. Phase 1: Wyze bridge + Mosquitto.
 #   make provision   -> apply
 #   make check       -> drift (--check --diff)
 #   make verify      -> post-reboot assertions (strict_quiet=true)
@@ -12,4 +12,6 @@
     - quiet
     - packages
     - tailscale
+    - mosquitto
+    - wyze_bridge
     - services

@@ -5,6 +5,8 @@
     ranch_daemons:
       - com.ranch.caffeinate
       - com.ranch.quiet-audiomxd
+      - com.ranch.mosquitto
+      - com.ranch.wyze-bridge
 
 - name: Ranch bin dir
   ansible.builtin.file:
@@ -25,7 +27,22 @@
   become: true
   loop:
     - quiet-audiomxd.sh
+    - wyze-bridge.sh
   notify: reload launchd daemons
+
+- name: Log files for daemons that run as {{ ranch_user }} (launchd opens StandardOutPath as that user; /var/log is root 755)
+  ansible.builtin.file:
+    path: /var/log/{{ item }}.log
+    state: touch
+    owner: "{{ ranch_user }}"
+    group: wheel
+    mode: "0644"
+    access_time: preserve
+    modification_time: preserve
+  become: true
+  loop:
+    - ranch-mosquitto
+    - ranch-wyze-bridge
 
 - name: Install daemon plists
   ansible.builtin.template:

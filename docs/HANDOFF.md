@@ -1,8 +1,9 @@
-# Handoff — state as of 14 Oct 2026, 19:10 ET
+# Handoff — state as of 14 Oct 2026, 19:50 ET
 
 ## Where things stand
-Phase 0 (headless, reproducible Mac mini) is **complete and closed**. Phase 1 (camera ingest + detector) has
-**not started**; it is blocked on inputs from Vlad listed at the end. The erase-and-reprovision timing run was
+Phase 0 (headless, reproducible Mac mini) is **complete and closed**. Phase 1 (camera ingest + detector) is
+**in progress**: the Wyze bridge and Mosquitto run as LaunchDaemons (14 Oct), five of eight cameras stream over
+RTSP on the mini, three are offline at the camera end. Details and per-camera table in `docs/CAMERAS.md`. The erase-and-reprovision timing run was
 skipped by decision; convergence proof stands in for it.
 
 Repo: this directory (`~/job_hunt_2026/projects/ranch`), pushed to `git@github.com:StyleT/ranch.ai.git` (`origin/main`) on 14 Oct.
@@ -18,7 +19,9 @@ source of truth and copy over it if you edit.
 | User | `ranch`, uid 501, admin, password in Vlad's password manager, FileVault off, auto-login off |
 | Access | `ssh ranch` (Tailscale) / `ssh ranch-lan` (LAN); laptop key `~/.ssh/id_ed25519`; sshd keys-only; `sudo -n` works |
 | Installed | Xcode CLT (python 3.9.6), Homebrew 7.0.9, git, jq, ffmpeg, mosquitto (installed, not started), tailscale, fnm + Node 24, uv |
-| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd` (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge` (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |
+| Ports (LAN + tailnet, no auth) | RTSP 8554, go2rtc API 1984, bridge UI 5080, WebRTC 8889 + 8189/udp, HLS 8888; Mosquitto 1883 on loopback only |
 | Measured headless, 10 min uptime | load 1.30, 91% memory free, 0 swap, ~212 processes, reboot→SSH 25–28 s |
 
 ## Operating it
@@ -53,6 +56,11 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
    The mini has no python3 until CLT is installed, so Ansible cannot run before `infra/bootstrap.sh`.
 8. **Apple Intelligence off** has no confirmed `defaults` key; it is a manual checklist item.
 9. **Magic Keyboard at Setup Assistant** pairs instantly over a USB-C cable when Bluetooth pairing stalls.
+10. **LaunchDaemons with `UserName`:** launchd opens `StandardOutPath` as that user, and `/var/log` is root 755,
+    so the job dies with `spawn failed`, `last exit code = 78: EX_CONFIG` and no log. The services role touches
+    `/var/log/ranch-<name>.log` owned by `ranch` before installing the plist.
+11. **`brew info`/`brew bundle` need `/opt/homebrew/bin` on PATH** in non-interactive SSH; the playbook sets PATH
+    explicitly. go2rtc is not in Homebrew; it is a pinned release zip with a sha256 in `group_vars`.
 
 ## Decisions (why, in one line each)
 - Ansible from the laptop over nix-darwin or shell: mature, idempotent, zero agent on the mini, low risk on a
@@ -72,21 +80,22 @@ Goal: Wyze streams → ffmpeg frame sampler → CoreML detector on the Neural En
 transformer detector on the Neural Engine" with an fps/memory/recall table (RF-DETR vs YOLO11).
 
 Order of work:
-1. Check the mini's disk size (`diskutil info /`) → decide SSD/retention.
-2. Bridge: IDisposable/docker-wyze-bridge (Go, chosen 14 Oct; see `docs/CAMERAS.md`). Build with `go build`, run
-   with the `go2rtc_darwin_arm64` binary as `com.ranch.wyze-bridge`; credentials from `~/.config/ranch/wyze.env`.
-3. Start Mosquitto as `com.ranch.mosquitto` (Brewfile already has it).
-4. 48 h of 1 fps keyframes per camera to disk as the seed dataset.
+1. ~~Disk size~~ 245 GB, 200 GB free (14 Oct). SSD optional.
+2. ~~Bridge~~ done 14 Oct: `roles/wyze_bridge` builds IDisposable/docker-wyze-bridge v4.5.0 with Homebrew go and
+   installs go2rtc 1.9.14 (`go2rtc_mac_arm64.zip`); `com.ranch.wyze-bridge` runs as `ranch`, env from the plist,
+   credentials sourced by `infra/bin/wyze-bridge.sh`. Converges to `changed=0`; `make check` clean.
+3. ~~Mosquitto~~ done 14 Oct: `roles/mosquitto` + `com.ranch.mosquitto`, loopback 1883, anonymous, persistence in
+   `/usr/local/ranch/var/mosquitto`. The bridge publishes under `wyzebridge/`.
+4. 48 h of 1 fps keyframes per camera to disk as the seed dataset (ffmpeg from the RTSP streams, or the bridge's
+   `SNAPSHOT_INTERVAL`; decide and measure CPU). Wait for Back Pasture Cam to come back first.
 5. `packages/events` schema + SQLite migrations; `apps/ingest` sampler; `apps/detector` CoreML runner (native,
    outside any container — the ANE is unreachable from Docker).
 6. Benchmark RF-DETR and YOLO11 CoreML on 100 hand-checked frames; emit `horse_count` per camera per minute.
 
 **Blocked on Vlad:**
-- ~~Wyze camera inventory~~ done 14 Oct: 6× Cam v4 (4.52.17.26), 1× Cam v3 Pro (4.58.17.21), 1× Cam v3
-  (4.36.17.21), in `docs/CAMERAS.md`. Still missing: what each camera points at, and a reachability check on
-  Tractor Cam and Back Pasture Cam (app showed "status unknown").
-- Wyze Developer API ID + key, placed on the mini at `~/.config/ranch/wyze.env` (never in chat or the repo).
-- Decision on the external SSD once disk size is known.
+- Tractor Cam and Back Pasture Cam are off the LAN (no ARP entry); power / Wi-Fi at the camera end.
+- Confirm the "In scope" column in `docs/CAMERAS.md`; which camera watches the trough.
+- ~~Camera inventory~~, ~~Wyze API credentials~~, ~~SSD decision~~: all closed 14 Oct.
 
 ## Open threads
 - ~~Push the repo to GitHub~~ done 14 Oct (`StyleT/ranch.ai`). Add a LICENSE (MIT) before Post 0.

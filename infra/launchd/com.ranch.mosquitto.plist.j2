@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.mosquitto</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{ brew_prefix }}/opt/mosquitto/sbin/mosquitto</string>
+    <string>-c</string>
+    <string>{{ brew_prefix }}/etc/mosquitto/mosquitto.conf</string>
+  </array>
+  <key>UserName</key><string>{{ ranch_user }}</string>
+  <key>WorkingDirectory</key><string>{{ ranch_var_dir }}/mosquitto</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/var/log/ranch-mosquitto.log</string>
+  <key>StandardErrorPath</key><string>/var/log/ranch-mosquitto.log</string>
+</dict>
+</plist>

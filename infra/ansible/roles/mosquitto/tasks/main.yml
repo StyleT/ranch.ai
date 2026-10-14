@@ -1,0 +1,17 @@
+---
+# Mosquitto config and persistence dir. The daemon (com.ranch.mosquitto) is registered in roles/services.
+- name: Persistence dir
+  ansible.builtin.file:
+    path: "{{ ranch_var_dir }}/mosquitto"
+    state: directory
+    owner: "{{ ranch_user }}"
+    group: staff
+    mode: "0755"
+  become: true
+
+- name: mosquitto.conf
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../mosquitto/mosquitto.conf.j2"
+    dest: "{{ brew_prefix }}/etc/mosquitto/mosquitto.conf"
+    mode: "0644"
+  notify: restart mosquitto

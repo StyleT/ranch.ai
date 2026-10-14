@@ -6,4 +6,5 @@ brew "mosquitto"
 brew "tailscale"
 brew "fnm"
 brew "uv"
+brew "go"          # builds the Wyze bridge (IDisposable fork) natively
 # cask "orbstack"   # only if a container is ever needed; cap its VM at 1 GB

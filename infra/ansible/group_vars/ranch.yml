@@ -90,3 +90,22 @@ brew_prefix: /opt/homebrew
 tailscale_state_dir: /var/db/ranch-tailscale
 ranch_bin_dir: /usr/local/ranch/bin
 node_major: "24"
+
+# ---- Phase 1: camera ingest -------------------------------------------------
+ranch_src_dir: /usr/local/ranch/src       # source checkouts, owned by ranch
+ranch_var_dir: /usr/local/ranch/var       # daemon state (bridge state file, mosquitto persistence)
+ranch_media_dir: /usr/local/ranch/media   # snapshots and recordings (same disk; 200 GB free on 14 Oct)
+
+# Wyze bridge: IDisposable's Go rewrite on top of go2rtc (docs/CAMERAS.md). Pure Go, no cgo, built on
+# the mini with Homebrew go. Pinned to a release tag; bump deliberately and re-measure.
+wyze_bridge_repo: https://github.com/IDisposable/docker-wyze-bridge.git
+wyze_bridge_version: v4.5.0
+# go2rtc is the bridge's managed sidecar. The fork's Dockerfile pins this version; the macOS arm64
+# build is a zip on the GitHub release. Checksum of the zip, computed 14 Oct 2026.
+go2rtc_version: 1.9.14
+go2rtc_url: "https://github.com/AlexxIT/go2rtc/releases/download/v{{ go2rtc_version }}/go2rtc_mac_arm64.zip"
+go2rtc_sha256: 919b78adc759d6b3883d1e1b2ac915ac0985bb903ff1897b4d228527bd64690c
+
+# Mosquitto: loopback only for now. The bridge, the sampler and the brain all run on this box.
+mosquitto_listen: 127.0.0.1
+mosquitto_port: 1883

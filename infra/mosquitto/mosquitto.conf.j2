@@ -1,0 +1,9 @@
+# Managed by Ansible (infra/mosquitto/mosquitto.conf.j2). Runs as com.ranch.mosquitto, user {{ ranch_user }}.
+listener {{ mosquitto_port }} {{ mosquitto_listen }}
+allow_anonymous true
+persistence true
+persistence_location {{ ranch_var_dir }}/mosquitto/
+log_dest stdout
+log_type error
+log_type warning
+log_type notice

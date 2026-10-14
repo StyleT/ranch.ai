@@ -1,0 +1,7 @@
+---
+- name: restart wyze-bridge
+  ansible.builtin.shell: |
+    if launchctl print system/com.ranch.wyze-bridge >/dev/null 2>&1; then
+      launchctl kickstart -k system/com.ranch.wyze-bridge
+    fi
+  become: true

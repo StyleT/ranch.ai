@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.wyze-bridge</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>{{ ranch_bin_dir }}/wyze-bridge.sh</string></array>
+  <key>UserName</key><string>{{ ranch_user }}</string>
+  <key>WorkingDirectory</key><string>{{ ranch_var_dir }}/wyze-bridge</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/{{ ranch_user }}</string>
+    <key>PATH</key><string>{{ ranch_bin_dir }}:{{ brew_prefix }}/bin:/usr/bin:/bin</string>
+    <key>STATE_DIR</key><string>{{ ranch_var_dir }}/wyze-bridge</string>
+    <key>SNAPSHOT_PATH</key><string>{{ ranch_media_dir }}/snapshots/{cam_name}/%Y-%m-%d</string>
+    <key>RECORD_PATH</key><string>{{ ranch_media_dir }}/recordings/{cam_name}/%Y/%m/%d</string>
+    <key>MQTT_HOST</key><string>{{ mosquitto_listen }}</string>
+    <key>MQTT_PORT</key><string>{{ mosquitto_port }}</string>
+    <key>MQTT_TOPIC</key><string>wyzebridge</string>
+    <key>LOG_LEVEL</key><string>info</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>15</integer>
+  <key>StandardOutPath</key><string>/var/log/ranch-wyze-bridge.log</string>
+  <key>StandardErrorPath</key><string>/var/log/ranch-wyze-bridge.log</string>
+</dict>
+</plist>

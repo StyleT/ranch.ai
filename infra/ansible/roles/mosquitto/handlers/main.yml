@@ -1,0 +1,7 @@
+---
+- name: restart mosquitto
+  ansible.builtin.shell: |
+    if launchctl print system/com.ranch.mosquitto >/dev/null 2>&1; then
+      launchctl kickstart -k system/com.ranch.mosquitto
+    fi
+  become: true

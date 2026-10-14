@@ -1,0 +1,109 @@
+---
+# Build the Wyze bridge (IDisposable Go fork) from a pinned tag and install go2rtc beside it.
+# The daemon itself (plist + wrapper script) is registered in roles/services like every other daemon.
+- name: Go toolchain present (packages role, Brewfile)
+  ansible.builtin.stat:
+    path: "{{ brew_prefix }}/bin/go"
+  register: go_bin
+  failed_when: not go_bin.stat.exists
+
+- name: Ranch dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ranch_user }}"
+    group: staff
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ ranch_src_dir }}"
+    - "{{ ranch_var_dir }}"
+    - "{{ ranch_var_dir }}/wyze-bridge"
+    - "{{ ranch_media_dir }}"
+
+- name: Bridge source at {{ wyze_bridge_version }}
+  ansible.builtin.git:
+    repo: "{{ wyze_bridge_repo }}"
+    dest: "{{ ranch_src_dir }}/wyze-bridge"
+    version: "{{ wyze_bridge_version }}"
+    depth: 1
+    force: true
+  register: wb_src
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/bin:/bin"
+
+- name: Installed bridge binary
+  ansible.builtin.stat:
+    path: "{{ ranch_bin_dir }}/wyze-bridge"
+  register: wb_bin
+
+- name: Built-from stamp
+  ansible.builtin.command: cat {{ ranch_bin_dir }}/wyze-bridge.commit
+  register: wb_stamp
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Build bridge (go build, ~1 min first time)
+  ansible.builtin.command:
+    cmd: "{{ brew_prefix }}/bin/go build -trimpath -o {{ ranch_src_dir }}/wyze-bridge.build ./cmd/wyze-bridge"
+    chdir: "{{ ranch_src_dir }}/wyze-bridge"
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/bin:/bin"
+    HOME: /Users/{{ ranch_user }}
+    CGO_ENABLED: "0"
+    GOTOOLCHAIN: local
+    GOFLAGS: -mod=mod
+  when: not wb_bin.stat.exists or wb_stamp.stdout != wb_src.after
+
+- name: Install bridge binary
+  ansible.builtin.copy:
+    src: "{{ ranch_src_dir }}/wyze-bridge.build"
+    dest: "{{ ranch_bin_dir }}/wyze-bridge"
+    remote_src: true
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+  when: not wb_bin.stat.exists or wb_stamp.stdout != wb_src.after
+  notify: restart wyze-bridge
+
+- name: Record built commit
+  ansible.builtin.copy:
+    content: "{{ wb_src.after }}"
+    dest: "{{ ranch_bin_dir }}/wyze-bridge.commit"
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+
+- name: go2rtc {{ go2rtc_version }} zip
+  ansible.builtin.get_url:
+    url: "{{ go2rtc_url }}"
+    dest: "{{ ranch_src_dir }}/go2rtc_mac_arm64_{{ go2rtc_version }}.zip"
+    checksum: "sha256:{{ go2rtc_sha256 }}"
+    mode: "0644"
+
+- name: go2rtc unpack dir
+  ansible.builtin.file:
+    path: "{{ ranch_src_dir }}/go2rtc_{{ go2rtc_version }}"
+    state: directory
+    mode: "0755"
+
+- name: Unpack go2rtc
+  ansible.builtin.unarchive:
+    src: "{{ ranch_src_dir }}/go2rtc_mac_arm64_{{ go2rtc_version }}.zip"
+    dest: "{{ ranch_src_dir }}/go2rtc_{{ go2rtc_version }}"
+    remote_src: true
+    creates: "{{ ranch_src_dir }}/go2rtc_{{ go2rtc_version }}/go2rtc"
+
+- name: Install go2rtc
+  ansible.builtin.copy:
+    src: "{{ ranch_src_dir }}/go2rtc_{{ go2rtc_version }}/go2rtc"
+    dest: "{{ ranch_bin_dir }}/go2rtc"
+    remote_src: true
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+  notify: restart wyze-bridge
