@@ -110,7 +110,7 @@ Event classes for Phase 1–2: `horse_down_prolonged`, `horse_count_mismatch`, `
 | Console user | `ranch` (auto-login) | none |
 | Reboot to SSH back | n/a | 25–28 s |
 
-Findings that changed the design: Apple GUI agents marked disabled still start inside a logged-in session, so the real fix was turning auto-login off; `audiomxd` and `configd` spin at ~75% and ~40% CPU on a headless macOS 27.0.1 with no console user and ignore `launchctl disable`, so a watchdog LaunchDaemon pauses `audiomxd` (SIGSTOP) while nobody is logged in and resumes it when someone is. Open: one manual `tailscale login`; the timed erase-and-reprovision run; `make verify` at next unattended reboot to see the watchdog act from cold.
+Findings that changed the design: Apple GUI agents marked disabled still start inside a logged-in session, so the real fix was turning auto-login off; `audiomxd` and `configd` spin at ~75% and ~40% CPU on a headless macOS 27.0.1 with no console user and ignore `launchctl disable`, so a watchdog LaunchDaemon pauses `audiomxd` (SIGSTOP) while nobody is logged in and resumes it when someone is. Tailscale joined 14 Oct (`ranch-ai.tail6d04cd.ts.net`); inventory and `ssh ranch` use the MagicDNS name. The timed erase-and-reprovision run was skipped by decision on 14 Oct; the convergence proof (`changed=0`, clean `--check`, green `make verify` across three reboots) stands in for it, and Post 0 will say so rather than claim a from-scratch timing.
 
 ### 5.1 Manual checklist (`infra/MANUAL.md`, ~10 min, one screenshot each)
 
@@ -155,7 +155,7 @@ VS Code Remote-SSH from the laptop, Claude Code on the mini, the `ranch` repo cl
 1. Playbook run 1 is green against the current mini.
 2. Run 2 reports `changed=0`.
 3. Reboot. After ten minutes: load average under 2, none of the 21 agents in `ps`, SSH over Tailscale works with nobody logged in, Screen Sharing shows the login window, `memory_pressure` baseline recorded.
-4. **Full re-erase → manual checklist → bootstrap → playbook**, timed on video. Target under 45 minutes hands-on. Do it now, while the disk holds nothing.
+4. ~~Full re-erase → manual checklist → bootstrap → playbook, timed.~~ Skipped (14 Oct). Revisit only if a future macOS update breaks the box.
 
 **Post 0.** "A $600 Mac mini is the best AI edge box nobody talks about" — erase to working in 45 minutes on video, load average before and after the quiet role (11 → under 2), the memory baseline, the FileVault trade-off, why you do not need a dummy plug or auto-login. Platform: Substack long-form, LinkedIn summary, X thread of the playbook.
 
