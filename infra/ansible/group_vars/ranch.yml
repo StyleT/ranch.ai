@@ -22,7 +22,7 @@ pmset_settings:
   womp: "1"
 
 softwareupdate_settings:
-  AutomaticCheckEnabled: true
+  # AutomaticCheckEnabled is left alone: softwareupdated rewrites it at every boot (default on)
   AutomaticDownload: true
   CriticalUpdateInstall: true
   ConfigDataInstall: true

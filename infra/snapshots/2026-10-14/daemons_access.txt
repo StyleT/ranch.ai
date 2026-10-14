@@ -1,0 +1,31 @@
+/Library/LaunchDaemons:
+total 16
+drwxr-xr-x   4 root  wheel   128 Oct 13 22:52 .
+drwxr-xr-x  66 root  wheel  2112 Oct 14 07:18 ..
+-rw-r--r--   1 root  wheel   410 Oct 13 22:52 com.ranch.caffeinate.plist
+-rw-r--r--   1 root  wheel   684 Oct 13 22:52 com.ranch.tailscaled.plist
+
+/etc/ssh/sshd_config.d:
+total 16
+drwxr-xr-x   4 root  wheel  128 Oct 13 22:49 .
+drwxr-xr-x  15 root  wheel  480 Oct 13 21:41 ..
+-rw-r--r--   1 root  wheel  168 Oct 13 22:49 010-keys-only.conf
+-rw-r--r--   1 root  wheel  133 Apr  1  2023 100-macos.conf
+
+/etc/sudoers.d:
+total 8
+drwxr-xr-x   3 root  wheel    96 Oct 13 22:49 .
+drwxr-xr-x  78 root  wheel  2496 Oct 14 07:19 ..
+-r--r-----   1 root  wheel    80 Oct 13 22:49 ranch-nopasswd
+
+# Managed by Ansible (infra/ansible/roles/access). Keys only; no passwords over SSH.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+# Options set by macOS that differ from the OpenSSH defaults.
+UsePAM yes
+AcceptEnv LANG LC_*
+Subsystem	sftp	/usr/libexec/sftp-server
+
+# Managed by Ansible (infra/ansible/roles/access)
+ranch ALL=(ALL) NOPASSWD: ALL

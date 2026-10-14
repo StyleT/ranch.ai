@@ -1,22 +1,31 @@
 ---
+# With nobody logged in the gui/<uid> domain does not exist and print-disabled fails; that is the
+# desired headless state, so the disable loop is skipped (nothing in that domain can run).
 - name: Read disabled launch agents for uid {{ ranch_uid }}
   ansible.builtin.command: launchctl print-disabled gui/{{ ranch_uid }}
   register: disabled_out
   changed_when: false
+  failed_when: false
   check_mode: false
+
+- name: No GUI session
+  ansible.builtin.debug:
+    msg: "gui/{{ ranch_uid }} domain absent: nobody is logged in on the console (expected headless state)."
+  when: disabled_out.rc != 0
 
 - name: Parse disabled labels
   ansible.builtin.set_fact:
-    disabled_labels: "{{ (disabled_out.stdout ~ '\n' ~ disabled_out.stderr) | regex_findall('\"([^\"]+)\" => disabled') }}"
+    disabled_labels: "{{ ((disabled_out.stdout | default('')) ~ '\n' ~ (disabled_out.stderr | default(''))) | regex_findall('\"([^\"]+)\" => disabled') }}"
 
 - name: Disabled labels found
   ansible.builtin.debug:
     msg: "{{ disabled_labels | length }} labels disabled in gui/{{ ranch_uid }}"
+  when: disabled_out.rc == 0
 
 - name: Disable noisy per-user agents (effective at next login/reboot)
   ansible.builtin.command: launchctl disable gui/{{ ranch_uid }}/{{ item }}
   loop: "{{ disabled_agents }}"
-  when: item not in disabled_labels
+  when: disabled_out.rc == 0 and item not in disabled_labels
 
 - name: Siri off
   community.general.osx_defaults:

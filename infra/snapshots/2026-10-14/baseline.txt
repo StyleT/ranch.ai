@@ -1,0 +1,32 @@
+ 7:24  up 2 mins, 0 users, load averages: 2.76 1.64 0.69
+
+
+System-wide memory free percentage: 92%
+
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                   220197.
+Pages active:                                 115629.
+Pages inactive:                                85604.
+Pages speculative:                             33113.
+Pages throttled:                                   0.
+Pages wired down:                              37728.
+Pages purgeable:                                4031.
+
+vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
+
+PID   COMMAND          %CPU MEM  
+1091  tail             0.0  1040K
+1090  top              0.0  2288K
+1083  zsh              0.0  1504K
+1082  sshd-session     0.0  2608K
+1079  sshd-session     0.0  3969K
+479   IOUserBluetoothS 0.0  912K 
+444   cfprefsd         0.0  2144K
+436   sshd-session     0.0  4096K
+433   sshd-session     0.0  3937K
+426   StandaloneHIDAud 0.0  2768K
+425   ioupsd           0.0  2160K
+424   modelcatalogd    0.0  2448K
+390   GSSCred          0.0  2528K
+389   distnoted        0.0  1584K
+382   countryd         0.0  2544K

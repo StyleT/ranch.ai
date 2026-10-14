@@ -1,0 +1,15 @@
+System-wide power settings:
+Currently in use:
+ standby              0
+ Sleep On Power Button 1
+ autorestartatconnect 0
+ autorestart          1
+ powernap             1
+ networkoversleep     0
+ disksleep            0
+ sleep                0 (sleep prevented by powerd, caffeinate, caffeinate)
+ ttyskeepawake        1
+ displaysleep         0 (display sleep prevented by caffeinate)
+ tcpkeepalive         1
+ lowpowermode         0
+ womp                 1
