@@ -1,32 +1,32 @@
- 7:39  up 6 mins, 0 users, load averages: 1.27 1.54 0.93
+18:58  up 11:25, 1 user, load averages: 1.05 1.10 1.08
 
 
-System-wide memory free percentage: 92%
+System-wide memory free percentage: 91%
 
 Mach Virtual Memory Statistics: (page size of 16384 bytes)
-Pages free:                                   177433.
-Pages active:                                 131173.
-Pages inactive:                                82384.
-Pages speculative:                             63259.
+Pages free:                                   153572.
+Pages active:                                 146967.
+Pages inactive:                                88402.
+Pages speculative:                             64790.
 Pages throttled:                                   0.
-Pages wired down:                              38022.
-Pages purgeable:                                4222.
+Pages wired down:                              38540.
+Pages purgeable:                                5385.
 
 vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
 
-PID   COMMAND          %CPU MEM  
-1930  tail             0.0  1040K
-1929  top              0.0  2272K
-1922  zsh              0.0  1504K
-1921  sshd-session     0.0  2576K
-1918  sshd-session     0.0  3937K
-1305  sleep            0.0  1008K
-1269  bash             0.0  1344K
-1262  caffeinate       0.0  2000K
-901   ASPCarryLog      0.0  2256K
-842   sshd-session     0.0  4320K
-839   sshd-session     0.0  3889K
-805   IOUserBluetoothS 0.0  944K 
-804   iconservicesagen 0.0  2384K
-801   AirPlayXPCHelper 0.0  3056K
-800   audiomxd         0.0  3680K
+PID    COMMAND          %CPU MEM  
+17913  tail             0.0  1040K
+17912  top              0.0  2320K
+17905  zsh              0.0  1504K
+17904  sshd-session     0.0  2576K
+17901  sshd-session     0.0  3937K
+17716  sleep            0.0  1008K
+17543  zsh              0.0  2224K
+17542  sshd-session     0.0  2544K
+17539  sshd-session     0.0  4113K
+5473   com.apple.Stream 0.0  5216K
+5472   AssetCacheTether 0.0  2112K
+5471   AssetCache       0.0  3200K
+5470   AssetCacheLocato 0.0  3168K
+5469   fpassetmanagerd  0.0  2512K
+5468   assetsubscriptio 0.0  3680K
