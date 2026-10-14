@@ -39,6 +39,28 @@
   loop_control: { label: "{{ item.key }}={{ item.value }}" }
   when: not (pm.stdout is regex('^\s*' ~ item.key ~ '\s+' ~ item.value ~ '(\s|$)', multiline=True))
 
+# Auto-login: off by default (PLAN.md 4.2: no GUI session; tailscaled is a system daemon).
+- name: Read auto-login user
+  ansible.builtin.command: defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser
+  become: true
+  register: autologin_user
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Disable auto-login
+  ansible.builtin.shell: |
+    defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser
+    rm -f /etc/kcpassword
+  become: true
+  when: not autologin and autologin_user.rc == 0
+
+- name: Enable auto-login (only if autologin is true and vault_ranch_password is set)
+  ansible.builtin.command: sysadminctl -autologin set -userName {{ ranch_user }} -password {{ vault_ranch_password }}
+  become: true
+  no_log: true
+  when: autologin and autologin_user.rc != 0 and vault_ranch_password is defined
+
 - name: Read Remote Login state
   ansible.builtin.command: systemsetup -getremotelogin
   become: true

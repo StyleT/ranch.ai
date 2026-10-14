@@ -5,10 +5,18 @@
   changed_when: false
   check_mode: false
 
+- name: Parse disabled labels
+  ansible.builtin.set_fact:
+    disabled_labels: "{{ (disabled_out.stdout ~ '\n' ~ disabled_out.stderr) | regex_findall('\"([^\"]+)\" => disabled') }}"
+
+- name: Disabled labels found
+  ansible.builtin.debug:
+    msg: "{{ disabled_labels | length }} labels disabled in gui/{{ ranch_uid }}"
+
 - name: Disable noisy per-user agents (effective at next login/reboot)
   ansible.builtin.command: launchctl disable gui/{{ ranch_uid }}/{{ item }}
   loop: "{{ disabled_agents }}"
-  when: ('"' ~ item ~ '" => disabled') not in (disabled_out.stdout ~ disabled_out.stderr)
+  when: item not in disabled_labels
 
 - name: Siri off
   community.general.osx_defaults:
@@ -32,11 +40,19 @@
 - name: Report (reboot pending)
   ansible.builtin.debug:
     msg: "Still running until next reboot: {{ quiet_still_running }}"
-  when: quiet_still_running | length > 0 and not strict_quiet
+  when: quiet_still_running | length > 0 and not (strict_quiet | bool)
+
+- name: Console session?
+  ansible.builtin.shell: who | awk '$2=="console"{print $1}'
+  register: console_user
+  changed_when: false
+  check_mode: false
 
 - name: Assert quiet (strict mode, after reboot)
   ansible.builtin.assert:
-    that: quiet_still_running | length == 0
-    fail_msg: "Disabled agents still running after reboot: {{ quiet_still_running }}"
-    success_msg: "All {{ quiet_process_names | length }} agents absent."
-  when: strict_quiet
+    that:
+      - console_user.stdout | trim == ''
+      - quiet_still_running | length == 0
+    fail_msg: "console user: '{{ console_user.stdout | trim }}'; disabled agents still running: {{ quiet_still_running }}"
+    success_msg: "No console session; all {{ quiet_process_names | length }} agents absent."
+  when: strict_quiet | bool
