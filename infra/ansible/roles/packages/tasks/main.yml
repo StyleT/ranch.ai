@@ -18,7 +18,7 @@
     mode: "0644"
 
 - name: brew bundle check
-  ansible.builtin.command: "{{ brew_prefix }}/bin/brew bundle check --file=/Users/{{ ranch_user }}/.config/ranch/Brewfile"
+  ansible.builtin.command: "{{ brew_prefix }}/bin/brew bundle check --no-upgrade --file=/Users/{{ ranch_user }}/.config/ranch/Brewfile"
   register: bundle_check
   changed_when: false
   check_mode: false
