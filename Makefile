@@ -1,5 +1,5 @@
 ANSIBLE_PLAYBOOK ?= $(HOME)/.local/bin/ansible-playbook
-HOST ?= ranch@ranch-ai.local
+HOST ?= ranch@ranch-ai.tail6d04cd.ts.net
 
 .PHONY: bootstrap provision check verify snapshot
 

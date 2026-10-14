@@ -15,7 +15,7 @@ Target: under 10 minutes hands-on. Take one screenshot per step for Post 0.
 The playbook starts `tailscaled`; joining the tailnet is one manual step because it needs your
 Tailscale account: `ssh ranch-ai.local`, then `sudo tailscale login --hostname=ranch-ai` and open the URL.
 Current node: `ranch-ai.tail6d04cd.ts.net` (100.72.239.2). Install the Tailscale client on the laptop and
-phone to reach the mini off the ranch LAN; then point `ansible_host` and `~/.ssh/config` at the MagicDNS name.
+phone to reach the mini off the ranch LAN; `ansible_host`, the Makefile `HOST` and the laptop's `ssh ranch` alias use the MagicDNS name; fall back to `ranch-ai.local` on the LAN if the tailnet is down.
 
 Then from the laptop:
 

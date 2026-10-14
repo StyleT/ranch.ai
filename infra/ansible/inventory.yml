@@ -1,7 +1,7 @@
 ranch:
   hosts:
     ranch-ai:
-      # LAN name. Once the laptop is on the tailnet, switch to the MagicDNS name so
-      # provisioning works from anywhere: ranch-ai.tail6d04cd.ts.net (100.72.239.2)
-      ansible_host: ranch-ai.local
+      # Tailscale MagicDNS name (100.72.239.2): provisioning works from anywhere on the tailnet.
+      # Fallback when the tailnet is unavailable: ranch-ai.local on the ranch LAN.
+      ansible_host: ranch-ai.tail6d04cd.ts.net
       ansible_user: ranch
