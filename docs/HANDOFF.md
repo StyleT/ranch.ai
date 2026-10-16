@@ -128,7 +128,22 @@ Order of work:
 - ~~`ANTHROPIC_API_KEY`~~ placed 15 Oct on the **mini** at `~/.config/ranch/anthropic.env` (mode 600). The account
   has limited credits: estimate first (free), smoke-test on 2 frames, Batch API only. Labeling runs on the mini:
   `set -a; . ~/.config/ranch/anthropic.env; set +a; node evals/label/claude.ts ...` from `/usr/local/ranch/app`.
+  Smoke test 15 Oct 22:10 ET (batch `msgbatch_01EUgqh7cC1KWFFQnjjkdcXR`, 2 frames, $0.031): schema-valid, car
+  boxes within a few percent of the detectors', horse at the feeder found, gate/trough read. Real cost is ~1.5 ¢
+  per frame (3.7k input tokens: image + system + output schema), so 100 frames ≈ $1.60.
   Day frames exist from the morning of 16 Oct onward, so the 100-frame pick should wait for one daylight cycle.
+  **Next session, on the mini, from `/usr/local/ranch/app`:**
+  ```
+  N="/usr/local/ranch/bin/node --no-warnings=ExperimentalWarning"; set -a; . ~/.config/ranch/anthropic.env; set +a
+  $N evals/label/select.ts --n 100 --out evals/golden            # check the day/night split it prints
+  $N evals/label/claude.ts estimate && $N evals/label/claude.ts submit
+  $N evals/label/claude.ts collect --batch <id>                   # → evals/golden/labels.claude.jsonl
+  M=/usr/local/ranch/models; $N apps/detector/src/bench.ts --labels evals/golden/labels.claude.jsonl \
+     --model $M/yolo11n.mlpackage --model $M/yolo11s.mlpackage --model $M/rfdetr-nano-float16.mlpackage \
+     --compute ane --threshold 0.25 --out evals/detector/bench-recall-$(date +%F).json
+  ```
+  then rsync `evals/golden/{frames.jsonl,labels.claude.jsonl}` and the bench JSON back into the laptop checkout
+  and commit (the tree on the mini is an rsync target, not a git clone).
 - Tractor Cam and Back Pasture Cam are off the LAN (no ARP entry); power / Wi-Fi at the camera end.
 - Confirm the "In scope" column in `docs/CAMERAS.md`; which camera watches the trough.
 - ~~Camera inventory~~, ~~Wyze API credentials~~, ~~SSD decision~~: all closed 14 Oct.
