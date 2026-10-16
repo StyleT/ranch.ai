@@ -19,7 +19,7 @@ source of truth and copy over it if you edit.
 | User | `ranch`, uid 501, admin, password in Vlad's password manager, FileVault off, auto-login off |
 | Access | `ssh ranch` (Tailscale) / `ssh ranch-lan` (LAN); laptop key `~/.ssh/id_ed25519`; sshd keys-only; `sudo -n` works |
 | Installed | Xcode CLT (python 3.9.6), Homebrew 7.0.9, git, jq, ffmpeg, mosquitto (installed, not started), tailscale, fnm + Node 24, uv |
-| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge` (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (temporary) (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
 | Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |
 | Ports (LAN + tailnet, no auth) | RTSP 8554, go2rtc API 1984, bridge UI 5080, WebRTC 8889 + 8189/udp, HLS 8888; Mosquitto 1883 on loopback only |
 | Measured headless, 10 min uptime | load 1.30, 91% memory free, 0 swap, ~212 processes, reboot→SSH 25–28 s |
@@ -88,8 +88,13 @@ Order of work:
    credentials sourced by `infra/bin/wyze-bridge.sh`. Converges to `changed=0`; `make check` clean.
 3. ~~Mosquitto~~ done 14 Oct: `roles/mosquitto` + `com.ranch.mosquitto`, loopback 1883, anonymous, persistence in
    `/usr/local/ranch/var/mosquitto`. The bridge publishes under `wyzebridge/`.
-4. 48 h of 1 fps keyframes per camera to disk as the seed dataset (ffmpeg from the RTSP streams, or the bridge's
-   `SNAPSHOT_INTERVAL`; decide and measure CPU). Wait for Back Pasture Cam to come back first.
+4. ~~Seed dataset~~ recording since 15 Oct 20:32 ET: `com.ranch.seed-recorder` (`infra/bin/seed-recorder.sh`), one
+   keyframe-only ffmpeg per camera, one native-resolution JPEG every 10 s into `/usr/local/ranch/media/seed/<cam>/`
+   (UTC timestamps in the file names). 1 fps at 2K would have been ~50 GB per camera per 48 h, so 1/10 s it is
+   (~5 GB per camera). Pauses below 40 GB free. Offline cameras are retried every minute and join on their own.
+   Measured steady state: ~0.1 % CPU per puller, but 155–257 MB RSS each (2K H.264 decoder buffers); five pullers
+   ≈ 1.1 GB. Fine for a temporary recorder, not for the Phase 1 sampler: budget for a single decode path there.
+   Stop it after 48 h (`sudo launchctl bootout system/com.ranch.seed-recorder` and drop it from `ranch_daemons`).
 5. `packages/events` schema + SQLite migrations; `apps/ingest` sampler; `apps/detector` CoreML runner (native,
    outside any container — the ANE is unreachable from Docker).
 6. Claude labels 100 seed frames first (`claude-opus-5-5`, structured outputs, Batch API) → `evals/golden/*.jsonl`
@@ -104,6 +109,8 @@ Order of work:
 - ~~Camera inventory~~, ~~Wyze API credentials~~, ~~SSD decision~~: all closed 14 Oct.
 
 ## Open threads
+- The services role's `reload launchd daemons` handler kickstarts every daemon in `ranch_daemons` when any plist or
+  script changes, which restarts the bridge (and drops the streams for ~10 s) on unrelated changes. Make it per-item.
 - ~~Push the repo to GitHub~~ done 14 Oct (`StyleT/ranch.ai`). Add a LICENSE (MIT) before Post 0.
 - First unattended reboot with the audiomxd watchdog from cold has not been observed (it was deployed onto an
   already-paused daemon). `make verify` after the next reboot confirms it.

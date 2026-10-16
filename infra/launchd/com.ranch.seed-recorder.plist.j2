@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.seed-recorder</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>{{ ranch_bin_dir }}/seed-recorder.sh</string></array>
+  <key>UserName</key><string>{{ ranch_user }}</string>
+  <key>WorkingDirectory</key><string>{{ ranch_media_dir }}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>{{ brew_prefix }}/bin:/usr/bin:/bin</string>
+    <key>SEED_CAMERAS</key><string>{{ seed_cameras | join(' ') }}</string>
+    <key>SEED_DIR</key><string>{{ ranch_media_dir }}/seed</string>
+    <key>SEED_INTERVAL</key><string>{{ seed_interval_s }}</string>
+    <key>SEED_JPEG_Q</key><string>{{ seed_jpeg_q }}</string>
+    <key>SEED_MIN_FREE_GB</key><string>{{ seed_min_free_gb }}</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>/var/log/ranch-seed-recorder.log</string>
+  <key>StandardErrorPath</key><string>/var/log/ranch-seed-recorder.log</string>
+</dict>
+</plist>

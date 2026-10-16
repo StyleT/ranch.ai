@@ -109,3 +109,18 @@ go2rtc_sha256: 919b78adc759d6b3883d1e1b2ac915ac0985bb903ff1897b4d228527bd64690c
 # Mosquitto: loopback only for now. The bridge, the sampler and the brain all run on this box.
 mosquitto_listen: 127.0.0.1
 mosquitto_port: 1883
+
+# Seed recorder (Phase 1 step 4): one native-resolution JPEG every seed_interval_s per camera, pulled
+# keyframe-only from the bridge's RTSP. Arithmetic (14 Oct): 1 fps at 2K is ~50 GB per camera per 48 h, so no;
+# 1 frame / 10 s at JPEG q4 is ~5 GB per camera per 48 h. Stops writing when the disk has < seed_min_free_gb.
+seed_cameras:            # all except living_room_cam (15 Oct); offline cameras are retried every minute
+  - back_yard_cam
+  - wash_stall
+  - donkey_cam
+  - mops_cam
+  - front_porch_cam
+  - tractor_cam
+  - back_pasture_cam
+seed_interval_s: 10
+seed_jpeg_q: 4
+seed_min_free_gb: 40

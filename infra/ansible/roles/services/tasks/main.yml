@@ -7,6 +7,7 @@
       - com.ranch.quiet-audiomxd
       - com.ranch.mosquitto
       - com.ranch.wyze-bridge
+      - com.ranch.seed-recorder
 
 - name: Ranch bin dir
   ansible.builtin.file:
@@ -28,6 +29,7 @@
   loop:
     - quiet-audiomxd.sh
     - wyze-bridge.sh
+    - seed-recorder.sh
   notify: reload launchd daemons
 
 - name: Log files for daemons that run as {{ ranch_user }} (launchd opens StandardOutPath as that user; /var/log is root 755)
@@ -43,6 +45,7 @@
   loop:
     - ranch-mosquitto
     - ranch-wyze-bridge
+    - ranch-seed-recorder
 
 - name: Install daemon plists
   ansible.builtin.template:
