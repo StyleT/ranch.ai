@@ -1,0 +1,3 @@
+{ "name": "@ranch/cli", "version": "0.0.1", "private": true, "type": "module",
+  "bin": { "ranch": "./src/main.ts" },
+  "dependencies": { "@ranch/config": "*", "@ranch/events": "*" } }

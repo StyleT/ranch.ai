@@ -1,0 +1,5 @@
+#!/bin/bash
+# `ranch` CLI wrapper: runs apps/cli from the deployed tree with the launchd Node (type-stripping, no build step).
+export RANCH_DB="${RANCH_DB:-/usr/local/ranch/var/ranch-events.sqlite}"
+export RANCH_MEDIA="${RANCH_MEDIA:-/usr/local/ranch/media}"
+exec /usr/local/ranch/bin/node --no-warnings=ExperimentalWarning /usr/local/ranch/app/apps/cli/src/main.ts "$@"

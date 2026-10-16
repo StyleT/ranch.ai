@@ -1,0 +1,99 @@
+---
+# Deploys the TypeScript apps and the Swift detector runner to the mini.
+#   - working tree → {{ ranch_app_dir }} (rsync, so the laptop's checkout is what runs; git is the record)
+#   - npm ci when the lockfile changed; Node 24 from fnm, symlinked to {{ ranch_bin_dir }}/node for launchd
+#   - swiftc build of apps/detector/swift/main.swift → {{ ranch_bin_dir }}/detector when the source changed
+#   - CoreML models (not in git; produced by apps/detector/export on the laptop) → {{ ranch_models_dir }}
+# Daemons that run these are registered in roles/services like everything else.
+- name: App, models and DB dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ranch_user }}"
+    group: staff
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ ranch_app_dir }}"
+    - "{{ ranch_models_dir }}"
+    - "{{ ranch_var_dir }}"
+    - "{{ ranch_var_dir }}/build"
+
+- name: Node 24 binary path (fnm)
+  ansible.builtin.command: "{{ brew_prefix }}/bin/fnm exec --using={{ node_major }} -- node -e 'console.log(process.execPath)'"
+  register: node_path
+  changed_when: false
+  check_mode: false
+  environment: { HOME: "/Users/{{ ranch_user }}" }
+
+- name: node symlink for launchd
+  ansible.builtin.file:
+    src: "{{ node_path.stdout | trim }}"
+    dest: "{{ ranch_bin_dir }}/node"
+    state: link
+  become: true
+
+- name: Sync working tree to the mini
+  ansible.builtin.command: >-
+    rsync -ai --delete {{ '--dry-run' if ansible_check_mode else '' }}
+    --exclude .git --exclude node_modules --exclude .scratch --exclude .venv --exclude infra/snapshots
+    --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store
+    -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_app_dir }}/
+  delegate_to: localhost
+  register: app_sync
+  changed_when: app_sync.stdout_lines | select('match', '^[<>ch.*]') | reject('match', '^\.d') | list | length > 0
+  check_mode: false
+
+- name: Sync CoreML models
+  ansible.builtin.command: >-
+    rsync -ai --delete {{ '--dry-run' if ansible_check_mode else '' }}
+    --include '*.mlpackage' --include '*.mlpackage/**' --exclude '*'
+    -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../apps/detector/export/ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_models_dir }}/
+  delegate_to: localhost
+  register: models_sync
+  changed_when: models_sync.stdout_lines | select('match', '^[<>ch.*]') | reject('match', '^\.d') | list | length > 0
+  check_mode: false
+
+- name: node_modules present?
+  ansible.builtin.stat:
+    path: "{{ ranch_app_dir }}/node_modules/.package-lock.json"
+  register: nm
+
+- name: npm ci (lockfile changed or first deploy)
+  ansible.builtin.command:
+    cmd: "{{ ranch_bin_dir }}/node {{ node_path.stdout | trim | dirname }}/npm ci --omit=dev --no-audit --no-fund"
+    chdir: "{{ ranch_app_dir }}"
+  environment: { HOME: "/Users/{{ ranch_user }}", PATH: "{{ node_path.stdout | trim | dirname }}:/usr/bin:/bin" }
+  when: not nm.stat.exists or (app_sync.stdout is search('package-lock\.json'))
+  notify: restart app daemons
+
+- name: Detector binary present?
+  ansible.builtin.stat:
+    path: "{{ ranch_bin_dir }}/detector"
+  register: det_bin
+
+- name: Build detector (swiftc, ~35 s)
+  ansible.builtin.command:
+    cmd: "/usr/bin/swiftc -O -o {{ ranch_var_dir }}/build/detector {{ ranch_app_dir }}/apps/detector/swift/main.swift"
+  environment: { HOME: "/Users/{{ ranch_user }}" }
+  when: not det_bin.stat.exists or (app_sync.stdout is search('apps/detector/swift/main\.swift'))
+  register: det_build
+
+- name: Install detector
+  ansible.builtin.copy:
+    src: "{{ ranch_var_dir }}/build/detector"
+    dest: "{{ ranch_bin_dir }}/detector"
+    remote_src: true
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+  when: det_build is changed
+  notify: restart app daemons
+
+- name: App daemons restart when the tree changed
+  ansible.builtin.debug:
+    msg: "working tree changed; app daemons will restart"
+  when: app_sync is changed
+  changed_when: app_sync is changed
+  notify: restart app daemons

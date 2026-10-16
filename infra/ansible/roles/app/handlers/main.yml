@@ -1,0 +1,8 @@
+---
+- name: restart app daemons
+  ansible.builtin.shell: |
+    for d in {{ ranch_app_daemons | join(' ') }}; do
+      launchctl print system/$d >/dev/null 2>&1 && launchctl kickstart -k system/$d
+    done
+    true
+  become: true

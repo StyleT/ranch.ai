@@ -1,0 +1,13 @@
+[project]
+name = "ranch-detector-export"
+version = "0.0.1"
+description = "Exports detector checkpoints to CoreML for the Neural Engine. Tooling only, runs on the laptop; the mini never needs torch."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "ultralytics>=8.3.200",
+  "coremltools>=8.3",
+  "rfdetr>=1.3",
+  "torch>=2.6",
+  "pillow",
+  "numpy<2.3",
+]

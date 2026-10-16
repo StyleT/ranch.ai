@@ -124,3 +124,9 @@ seed_cameras:            # all except living_room_cam (15 Oct); offline cameras 
 seed_interval_s: 10
 seed_jpeg_q: 4
 seed_min_free_gb: 40
+
+# ---- Phase 1: apps --------------------------------------------------------------
+ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)
+ranch_models_dir: /usr/local/ranch/models   # CoreML packages, not in git
+ranch_app_daemons:                           # restarted by roles/app when the tree changes
+  - com.ranch.ingest

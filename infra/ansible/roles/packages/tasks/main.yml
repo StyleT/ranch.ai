@@ -39,6 +39,7 @@
     block: |
       eval "$({{ brew_prefix }}/bin/brew shellenv)"
       eval "$({{ brew_prefix }}/bin/fnm env --use-on-cd)"
+      export PATH="{{ ranch_bin_dir }}:$PATH"
 
 - name: Node {{ node_major }} installed via fnm
   ansible.builtin.shell: |

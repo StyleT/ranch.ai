@@ -3,3 +3,8 @@
 infra/ansible/.vault_pass
 node_modules/
 .venv/
+.scratch/
+*.mlpackage
+*.mlmodelc
+*.pt
+.venv/
