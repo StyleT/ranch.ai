@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.status</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{ ranch_bin_dir }}/node</string>
+    <string>--no-warnings=ExperimentalWarning</string>
+    <string>--max-old-space-size=64</string>
+    <string>{{ ranch_app_dir }}/apps/status/src/main.ts</string>
+  </array>
+  <key>UserName</key><string>{{ ranch_user }}</string>
+  <key>WorkingDirectory</key><string>{{ ranch_app_dir }}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/{{ ranch_user }}</string>
+    <key>PATH</key><string>{{ ranch_bin_dir }}:{{ brew_prefix }}/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>RANCH_DB</key><string>{{ ranch_var_dir }}/ranch-events.sqlite</string>
+    <key>RANCH_MEDIA</key><string>{{ ranch_media_dir }}</string>
+    <key>RANCH_MQTT_URL</key><string>mqtt://{{ mosquitto_listen }}:{{ mosquitto_port }}</string>
+    <key>RANCH_CAMERAS_EXCLUDE</key><string>living_room_cam</string>
+    <key>RANCH_STATUS_PORT</key><string>{{ status_port }}</string>
+    <key>SEED_START_EPOCH</key><string>{{ seed_start_epoch }}</string>
+    <key>SEED_HOURS</key><string>{{ seed_hours }}</string>
+    <key>RANCH_TZ</key><string>{{ timezone }}</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>15</integer>
+  <key>StandardOutPath</key><string>/var/log/ranch-status.log</string>
+  <key>StandardErrorPath</key><string>/var/log/ranch-status.log</string>
+</dict>
+</plist>

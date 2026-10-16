@@ -1,6 +1,6 @@
 # Status dashboard (`apps/status`, `com.ranch.status`)
 
-*Plan written 15 Oct 2026, before implementation. One page on the mini that replaces the `ssh ranch '...'`
+*Plan written 15 Oct 2026, before implementation; built the same evening (`apps/status`, `com.ranch.status`). One page on the mini that replaces the `ssh ranch '...'`
 one-liners used to track the Phase 1 pipeline.*
 
 ## What it is
@@ -52,3 +52,26 @@ refreshing phone does not hammer SQLite.
 
 Auth, write actions (verdict buttons come with Phase 2's phone flow), historical charts, Frigate-style
 timelines, anything that opens camera streams. The page reads what the pipeline already produced.
+
+## As built (15 Oct 2026)
+
+URL: http://ranch-ai.tail6d04cd.ts.net:5090/ (tailnet) or http://ranch-ai.local:5090/ (ranch LAN).
+
+| Panel | Shows | Source |
+|---|---|---|
+| Header | uptime, load, free/total disk, totals of frames/detections/events, seed frames and % of the 48 h window | `os`, `df -g /`, SQLite, seed dir, `SEED_START_EPOCH`/`SEED_HOURS` from the plist |
+| Daemons | every `com.ranch.*`: pid or **down**, last exit code, the retained MQTT status (rss, processed, dropped) for ingest/detector, last log line | `sudo -n launchctl list`, `ranch/status/#`, tail of `/var/log/ranch-<name>.log` |
+| Cameras | thumbnail (latest kept frame), online/offline, last-frame age, frames/min over 10 min, horse count in the last 3 min, seed frame count, model/firmware/IP | `frames`, `camera_counts`, seed dir, bridge `/api/cameras` (cached 60 s) |
+| Detections, last hour | label, count, mean confidence, bar | `detections` ⋈ `frames` |
+| Events | latest 10 with tier and verdict (empty until Phase 2) | `events` |
+| Live MQTT | last 30 messages on `ranch/#`, newest first; badge shows SSE state | `@ranch/bus` → SSE |
+
+Endpoints: `GET /` page · `GET /api/status` JSON (5 s cache) · `GET /api/frame/<camera>` latest kept JPEG ·
+`GET /api/events` SSE with `mqtt` events for every message and a `status` event every 15 s (keep-alive comment
+every 20 s). Page refreshes from the `status` events, no reload.
+
+Measured on first deploy: 123 MB RSS, idle CPU. Capping the V8 heap at 64 MB (`--max-old-space-size`) changed
+nothing, so this is the Node 24 + `node:sqlite` + MQTT baseline, not page data; the 80 MB target was missed and the
+number is noted in the memory budget (PLAN.md 4.3 "Node services" line).
+Port 5090, `0.0.0.0`, no auth: the same trade-off as the bridge UI and go2rtc; add auth before anything untrusted
+joins the LAN.

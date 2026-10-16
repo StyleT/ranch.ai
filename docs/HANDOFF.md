@@ -19,10 +19,11 @@ source of truth and copy over it if you edit.
 | User | `ranch`, uid 501, admin, password in Vlad's password manager, FileVault off, auto-login off |
 | Access | `ssh ranch` (Tailscale) / `ssh ranch-lan` (LAN); laptop key `~/.ssh/id_ed25519`; sshd keys-only; `sudo -n` works |
 | Installed | Xcode CLT (python 3.9.6), Homebrew 7.0.9, git, jq, ffmpeg, mosquitto (installed, not started), tailscale, fnm + Node 24, uv |
-| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (temporary), `com.ranch.ingest`, `com.ranch.detector` (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (temporary), `com.ranch.ingest`, `com.ranch.detector`, `com.ranch.status` (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| Status page | `com.ranch.status`, `apps/status`, port 5090 on all interfaces, no auth; ~1 Node process, `node:http` + SSE, reads SQLite/MQTT/launchd/logs/seed dir |
 | App paths | tree `/usr/local/ranch/app` (rsync of the laptop checkout), models `/usr/local/ranch/models`, DB `/usr/local/ranch/var/ranch-events.sqlite`, frames `/usr/local/ranch/media/frames/<cam>/<date>/` |
 | Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |
-| Ports (LAN + tailnet, no auth) | RTSP 8554, go2rtc API 1984, bridge UI 5080, WebRTC 8889 + 8189/udp, HLS 8888; Mosquitto 1883 on loopback only |
+| Ports (LAN + tailnet, no auth) | RTSP 8554, go2rtc API 1984, bridge UI 5080, status page 5090, WebRTC 8889 + 8189/udp, HLS 8888; Mosquitto 1883 on loopback only |
 | Measured headless, 10 min uptime | load 1.30, 91% memory free, 0 swap, ~212 processes, reboot→SSH 25–28 s |
 
 ## Operating it
@@ -33,6 +34,13 @@ make verify      # after a reboot: asserts no console user, no noisy agents, aud
 make snapshot    # infra/snapshots/<date>/ ; commit the result
 make bootstrap   # only on a freshly erased mini (Xcode CLT + Homebrew), see infra/MANUAL.md
 ```
+**Tracking the pipeline:** the status page at http://ranch-ai.tail6d04cd.ts.net:5090/ (`ranch-ai.local:5090` on the
+LAN) replaces the ssh one-liners: daemon pids and last log lines, per-camera thumbnail / last-frame age / frames
+per minute / horse count / online (= a kept frame in the last 60 s; the bridge's "streaming" is not liveness),
+detections by label for the last hour, latest events, seed-recorder progress, free disk, and a live MQTT ticker over
+server-sent events. JSON at `/api/status`, thumbnails at `/api/frame/<camera>`, stream at `/api/events`. No auth,
+same trade-off as the bridge UI. Design note: `docs/STATUS-DASHBOARD.md`. The CLI (`ranch status|frames|counts|
+cameras|events`) and `tail -f /var/log/ranch-*.log` still work over `ssh ranch` for scripting.
 Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the login window; log out after use.
 
 ## Gotchas learned the hard way (all encoded in the playbook)

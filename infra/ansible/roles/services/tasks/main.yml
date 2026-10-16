@@ -10,6 +10,7 @@
       - com.ranch.seed-recorder
       - com.ranch.ingest
       - com.ranch.detector
+      - com.ranch.status
 
 - name: Ranch bin dir
   ansible.builtin.file:
@@ -53,6 +54,7 @@
     - ranch-seed-recorder
     - ranch-ingest
     - ranch-detector
+    - ranch-status
 
 - name: Install daemon plists
   ansible.builtin.template:
