@@ -68,6 +68,9 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
 10. **LaunchDaemons with `UserName`:** launchd opens `StandardOutPath` as that user, and `/var/log` is root 755,
     so the job dies with `spawn failed`, `last exit code = 78: EX_CONFIG` and no log. The services role touches
     `/var/log/ranch-<name>.log` owned by `ranch` before installing the plist.
+14. **go2rtc never drops a dead producer.** When a camera's TUTK session dies, the stream keeps its producer, new
+    consumers attach and hang, consumers leak (624 after 12 h), and the bridge still reports `streaming`. The
+    sampler's stall watchdog recreates the stream after 180 s without a frame (docs/CAMERAS.md incident, 16 Oct).
 11. **`brew info`/`brew bundle` need `/opt/homebrew/bin` on PATH** in non-interactive SSH; the playbook sets PATH
     explicitly. go2rtc is not in Homebrew; it is a pinned release zip with a sha256 in `group_vars`.
 

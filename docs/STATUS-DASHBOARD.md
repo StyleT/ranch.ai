@@ -95,3 +95,7 @@ Not ruled out: a delay between camera power-on and TUTK discovery inside the bri
 discovery on every consumer connect (the seed recorder reconnects every 60 s) and refreshes the Wyze camera list
 every 30 min; nothing on the mini records when the cameras actually booted. If a long gap is ever observed
 again, compare the Wyze app's "online since" with the first seed file timestamp.
+
+Follow-up, same day: the "cameras still offline" report after the fix was correct and was a different fault. The five
+original cameras had been dead inside go2rtc since 23:24 ET the night before (docs/CAMERAS.md, incident); only the two
+newly powered ones were delivering. The page showed exactly that. The stall watchdog in the sampler is the fix.

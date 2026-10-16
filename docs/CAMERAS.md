@@ -65,3 +65,36 @@ network for TUTK LAN mode and for WebRTC ICE to go direct.
 2. ~~Confirm the "In scope" column~~ 15 Oct: all cameras except Living Room are in scope. Trough camera TBD once
    Back Pasture and Tractor are back and their views are known.
 3. Power / Wi-Fi on Tractor Cam and Back Pasture Cam (Vlad, later; the bridge picks them up automatically).
+
+## Incident, 15–16 Oct: five streams dead for 12 h while the bridge reported "streaming"
+
+At 23:24 ET on 15 Oct the TUTK sessions of all five attached cameras (Back Yard, Wash Stall, Donkey, Mops, Front
+Porch) stopped delivering, within the same second. Cause on the camera or Wi-Fi side unknown; the bridge logged
+nothing, `error_count` stayed 0 and `/api/cameras` kept saying `streaming` until the bridge was restarted at 12:11 ET
+on 16 Oct. Meanwhile go2rtc kept each dead producer alive and every new consumer attached to it and hung: the seed
+recorder's ffmpeg timed out and reconnected once a minute, the sampler's `frame.jpeg` grabs timed out every
+backoff, and by noon each stream had 624 leaked consumers and the two newly powered cameras were the only ones
+delivering. The status page was right the whole time (five offline, two online); the stale-page fix from the
+morning was a separate, real, bug.
+
+Recovery: `sudo launchctl kickstart -k system/com.ranch.wyze-bridge`; all eight cameras re-attached in 60 s.
+
+Fix: a stall watchdog in `apps/ingest`. A camera with no successful grab for 180 s gets its go2rtc stream deleted
+and re-created from the bridge's `go2rtc.yaml` (`DELETE /api/streams?src=<cam>` then `PUT /api/streams?name=<cam>&src=<wyze://…>`),
+at most once per 5 min. That drops the dead producer and the leaked consumers for that camera only; the
+others keep streaming. Reset counts are in `ranch/status/ingest` (`resets`) and on the status page. A camera
+that is really off just gets a fresh idle stream.
+
+Lesson for the plan: the bridge's camera `state` is the state of its own bookkeeping, not of the video. The
+only liveness signal worth using is "a frame arrived recently", which is what the status page and the
+watchdog use.
+
+Live test, 16 Oct 12:34–12:55 ET: deleting the Wash Stall stream by hand was repaired by the bridge's HealthCheck
+in ~10 s (it reconnects a camera whose stream has 0 producers; it never notices a producer that exists but sends
+nothing, which is the failure above). Front Porch (the V3) stalled again at 12:31 ET on its own; the watchdog
+fired at 12:48:55, the bridge logged "stream lost, will retry" 21 s later and "connected successfully", and the
+camera still produced nothing: it answers ping but TUTK discovery times out, so this one is wedged on the camera
+side and needs a power cycle. Two bugs found and fixed in the watchdog during the test: template-string escaping
+ate the `\s` in the YAML lookup, and the bridge rewrites `go2rtc.yaml` on reconnect (mtime moved), so the
+lookup can race it; the reset now deletes, waits up to 12 s for the bridge to re-add, and only then PUTs its own
+copy.
