@@ -125,9 +125,10 @@ Order of work:
    changes when scored on human labels. Post 1b. See PLAN.md Phase 1.
 
 **Blocked on Vlad:**
-- `ANTHROPIC_API_KEY` for the labeling run (laptop side; `evals/label/claude.ts` uses the SDK's default env
-  lookup). About $1 for 100 frames at Batch API rates. Day frames exist from the morning of 16 Oct onward, so the
-  100-frame pick should wait for at least one daylight cycle (the selector stratifies day/night).
+- ~~`ANTHROPIC_API_KEY`~~ placed 15 Oct on the **mini** at `~/.config/ranch/anthropic.env` (mode 600). The account
+  has limited credits: estimate first (free), smoke-test on 2 frames, Batch API only. Labeling runs on the mini:
+  `set -a; . ~/.config/ranch/anthropic.env; set +a; node evals/label/claude.ts ...` from `/usr/local/ranch/app`.
+  Day frames exist from the morning of 16 Oct onward, so the 100-frame pick should wait for one daylight cycle.
 - Tractor Cam and Back Pasture Cam are off the LAN (no ARP entry); power / Wi-Fi at the camera end.
 - Confirm the "In scope" column in `docs/CAMERAS.md`; which camera watches the trough.
 - ~~Camera inventory~~, ~~Wyze API credentials~~, ~~SSD decision~~: all closed 14 Oct.
