@@ -41,6 +41,16 @@
       eval "$({{ brew_prefix }}/bin/fnm env --use-on-cd)"
       export PATH="{{ ranch_bin_dir }}:$PATH"
 
+# zsh reads ~/.zshenv for every shell, including `ssh ranch 'cmd'`; .zprofile only for login shells.
+- name: PATH for non-interactive SSH commands
+  ansible.builtin.blockinfile:
+    path: /Users/{{ ranch_user }}/.zshenv
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED: ranch PATH"
+    block: |
+      export PATH="{{ ranch_bin_dir }}:{{ brew_prefix }}/bin:{{ brew_prefix }}/sbin:$PATH"
+
 - name: Node {{ node_major }} installed via fnm
   ansible.builtin.shell: |
     {{ brew_prefix }}/bin/fnm ls | grep -q "v{{ node_major }}\." && exit 0
