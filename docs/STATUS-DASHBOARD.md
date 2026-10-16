@@ -75,3 +75,23 @@ nothing, so this is the Node 24 + `node:sqlite` + MQTT baseline, not page data; 
 number is noted in the memory budget (PLAN.md 4.3 "Node services" line).
 Port 5090, `0.0.0.0`, no auth: the same trade-off as the bridge UI and go2rtc; add auth before anything untrusted
 joins the LAN.
+
+## Incident, 16 Oct: page never showed the two cameras coming online
+
+Tractor Cam and Back Pasture Cam were powered on the morning of 16 Oct. The backend had them within about a
+minute of the bridge's TUTK discovery succeeding (last `discovery timeout` 11:03:17 ET, first kept frames
+11:04:23 ET, seed recorder 11:04:33 ET) and `/api/status` reported `online: true`. The open browser page did not.
+
+Root cause: the page created one `EventSource` at load and from then on updated only from that stream. There was
+no fallback polling, no watchdog and no visible "last updated" signal. A device that sleeps or a tab that goes to
+the background can leave the SSE connection silently dead (Safari in particular never reopens it), so the page
+freezes at its last render while still showing "live".
+
+Fix (commit below): an "updated N s ago" badge ticking every 5 s and turning red past 45 s; `/api/status`
+polled every 30 s regardless of the stream; the `EventSource` rebuilt when no status event arrived for 45 s;
+`visibilitychange` and `pageshow` force a refresh and reconnect. The server was unchanged.
+
+Not ruled out: a delay between camera power-on and TUTK discovery inside the bridge. The bridge retries
+discovery on every consumer connect (the seed recorder reconnects every 60 s) and refreshes the Wyze camera list
+every 30 min; nothing on the mini records when the cameras actually booted. If a long gap is ever observed
+again, compare the Wyze app's "online since" with the first seed file timestamp.
