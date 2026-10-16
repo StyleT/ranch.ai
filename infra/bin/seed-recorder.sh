@@ -11,6 +11,8 @@ SEED_INTERVAL="${SEED_INTERVAL:-10}"
 SEED_JPEG_Q="${SEED_JPEG_Q:-4}"
 SEED_MIN_FREE_GB="${SEED_MIN_FREE_GB:-40}"
 RTSP="${RTSP_BASE:-rtsp://127.0.0.1:8554}"
+SEED_START_EPOCH="${SEED_START_EPOCH:-$(date +%s)}"
+SEED_HOURS="${SEED_HOURS:-48}"
 log() { echo "$(date -u '+%FT%TZ') $*"; }
 
 free_gb() { df -g "$SEED_DIR" | awk 'NR==2{print $4}'; }
@@ -19,6 +21,10 @@ pull() {
   local cam=$1 dir="$SEED_DIR/$1"
   mkdir -p "$dir"
   while true; do
+    if [ "$(date +%s)" -ge $((SEED_START_EPOCH + SEED_HOURS * 3600)) ]; then
+      log "$cam: seed window of $SEED_HOURS h is over, idle"
+      sleep 86400; continue
+    fi
     if [ "$(free_gb)" -lt "$SEED_MIN_FREE_GB" ]; then
       log "$cam: free disk $(free_gb) GB < $SEED_MIN_FREE_GB GB, paused"
       sleep 600; continue

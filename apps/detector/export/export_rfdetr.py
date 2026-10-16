@@ -23,6 +23,7 @@ cls = {"nano": RFDETRNano, "small": RFDETRSmall, "medium": RFDETRMedium}[size]
 m = cls()
 res = m.model.resolution
 inner = deepcopy(m.model.model).cpu()
+inner.export()  # LWDETR.export(): swaps in forward_export and the rank<=5 deformable-attention path
 graph = prepare_export_graph(inner, m.model_config, shape=(res, res), device="cpu")
 
 

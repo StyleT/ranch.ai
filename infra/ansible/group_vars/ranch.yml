@@ -124,6 +124,8 @@ seed_cameras:            # all except living_room_cam (15 Oct); offline cameras 
 seed_interval_s: 10
 seed_jpeg_q: 4
 seed_min_free_gb: 40
+seed_start_epoch: 1792110720   # 2026-10-16T00:32Z, when recording began
+seed_hours: 48               # after this the daemon idles; remove it from ranch_daemons when the set is final
 
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)
