@@ -3,6 +3,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
+import { existsSync } from 'node:fs';
 
 export interface RunnerDetection { label: string; confidence: number; x: number; y: number; w: number; h: number }
 export interface RunnerResult { id: string; path: string; ms: number; rss_mb: number; detections: RunnerDetection[] }
@@ -15,8 +16,11 @@ export class Runner {
   private chain: Promise<unknown> = Promise.resolve();
   readonly info: Promise<RunnerInfo>;
 
-  constructor(opts: { bin?: string; model: string; compute?: 'all' | 'ane' | 'gpu' | 'cpu'; threshold?: number }) {
+  constructor(opts: { bin?: string; model: string; compute?: 'all' | 'ane' | 'gpu' | 'cpu'; threshold?: number; labels?: string }) {
     const args = ['--model', opts.model, '--compute', opts.compute ?? 'ane', '--threshold', String(opts.threshold ?? 0.25)];
+    // Raw-output models (RF-DETR) ship a class table next to the package: <name>.labels.json
+    const labels = opts.labels ?? opts.model.replace(/\.(mlpackage|mlmodelc)$/, '') + '.labels.json';
+    if (existsSync(labels)) args.push('--labels', labels);
     this.proc = spawn(opts.bin ?? '/usr/local/ranch/bin/detector', args, { stdio: ['pipe', 'pipe', 'inherit'] });
     let compiledMs: number | undefined;
     this.info = new Promise<RunnerInfo>((resolve, reject) => {

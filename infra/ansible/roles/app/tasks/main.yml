@@ -47,7 +47,7 @@
 - name: Sync CoreML models
   ansible.builtin.command: >-
     rsync -ai --delete {{ '--dry-run' if ansible_check_mode else '' }}
-    --include '*.mlpackage' --include '*.mlpackage/**' --exclude '*'
+    --include '*.mlpackage' --include '*.mlpackage/**' --include '*.labels.json' --exclude '*'
     -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../apps/detector/export/ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_models_dir }}/
   delegate_to: localhost
   register: models_sync
