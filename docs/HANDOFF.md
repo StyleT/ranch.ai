@@ -93,7 +93,10 @@ Order of work:
    (UTC timestamps in the file names). 1 fps at 2K would have been ~50 GB per camera per 48 h, so 1/10 s it is
    (~5 GB per camera). Pauses below 40 GB free. Offline cameras are retried every minute and join on their own.
    Measured steady state: ~0.1 % CPU per puller, but 155–257 MB RSS each (2K H.264 decoder buffers); five pullers
-   ≈ 1.1 GB. Fine for a temporary recorder, not for the Phase 1 sampler: budget for a single decode path there.
+   ≈ 1.1 GB. Tried on donkey_cam for 60 s (15 Oct): default 125 MB, `-threads 1` 111 MB, `-hwaccel videotoolbox`
+   151 MB, both 134 MB; so no cheap fix, and RSS keeps growing for minutes after start. Fine for a temporary
+   recorder, not for the Phase 1 sampler: that one should take frames from one short-lived process per sample
+   (or the go2rtc `frame.jpeg` endpoint) rather than hold seven decoders open.
    Stop it after 48 h (`sudo launchctl bootout system/com.ranch.seed-recorder` and drop it from `ranch_daemons`).
 5. `packages/events` schema + SQLite migrations; `apps/ingest` sampler; `apps/detector` CoreML runner (native,
    outside any container — the ANE is unreachable from Docker).
