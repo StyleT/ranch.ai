@@ -19,7 +19,8 @@ source of truth and copy over it if you edit.
 | User | `ranch`, uid 501, admin, password in Vlad's password manager, FileVault off, auto-login off |
 | Access | `ssh ranch` (Tailscale) / `ssh ranch-lan` (LAN); laptop key `~/.ssh/id_ed25519`; sshd keys-only; `sudo -n` works |
 | Installed | Xcode CLT (python 3.9.6), Homebrew 7.0.9, git, jq, ffmpeg, mosquitto (installed, not started), tailscale, fnm + Node 24, uv |
-| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (temporary) (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (temporary), `com.ranch.ingest`, `com.ranch.detector` (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| App paths | tree `/usr/local/ranch/app` (rsync of the laptop checkout), models `/usr/local/ranch/models`, DB `/usr/local/ranch/var/ranch-events.sqlite`, frames `/usr/local/ranch/media/frames/<cam>/<date>/` |
 | Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |
 | Ports (LAN + tailnet, no auth) | RTSP 8554, go2rtc API 1984, bridge UI 5080, WebRTC 8889 + 8189/udp, HLS 8888; Mosquitto 1883 on loopback only |
 | Measured headless, 10 min uptime | load 1.30, 91% memory free, 0 swap, ~212 processes, reboot→SSH 25–28 s |
@@ -98,8 +99,22 @@ Order of work:
    recorder, not for the Phase 1 sampler: that one should take frames from one short-lived process per sample
    (or the go2rtc `frame.jpeg` endpoint) rather than hold seven decoders open.
    Stop it after 48 h (`sudo launchctl bootout system/com.ranch.seed-recorder` and drop it from `ranch_daemons`).
-5. `packages/events` schema + SQLite migrations; `apps/ingest` sampler; `apps/detector` CoreML runner (native,
-   outside any container — the ANE is unreachable from Docker).
+5. ~~Code~~ done 15 Oct, all running as LaunchDaemons and converging in Ansible (`roles/app` rsyncs the working
+   tree to `/usr/local/ranch/app`, runs `npm ci`, builds the Swift runner, syncs CoreML models):
+   - `packages/events`: `node:sqlite` store, schema v1 (frames, detections, events, camera_counts), tests.
+   - `packages/bus`: MQTT topics `ranch/frames|detections|counts|events|status`.
+   - `apps/ingest` (`com.ranch.ingest`): one-shot go2rtc JPEG grabs every 5 s, kept on scene change or a 10 s
+     floor, 7-day retention. ~195 MB RSS (node + sharp). go2rtc grabs take ~2 s each (next keyframe).
+   - `apps/detector` (`com.ranch.detector`): Swift Core ML runner over stdin/stdout (Vision for YOLO's built-in
+     NMS, own sigmoid/top-k decode for RF-DETR raw outputs), TS wrapper subscribes to frames, writes detections,
+     publishes per-minute counts. yolo11n on the ANE: ~7 ms/frame, 62 MB. The 2 cars in the back yard are found
+     at 0.93; horses at night not yet (expected at 640 px input; the benchmark decides).
+   - `apps/cli`: `ranch events|frames|counts|verdict|cameras|status` (on the mini's PATH).
+   - `apps/detector/export`: uv project on the laptop; `export_yolo.py` (n, s exported), `export_rfdetr.py`
+     (image input with ImageNet normalization folded in, so Vision can feed it). Models are not in git; `make
+     provision` syncs `*.mlpackage` + `*.labels.json` to `/usr/local/ranch/models`.
+   - `evals/label`: `select.ts` (stratified pick), `claude.ts` (Batch API + structured outputs). Needs
+     `ANTHROPIC_API_KEY` on the laptop; the mini has no key and does not need one for this.
 6. Claude labels 100 seed frames first (`claude-opus-5-5`, structured outputs, Batch API) → `evals/golden/*.jsonl`
    with `labeler: claude`. Decided 15 Oct: AI labels are the Phase 1 ground truth, no human review yet.
 7. Benchmark RF-DETR and YOLO11 CoreML against those labels; emit `horse_count` per camera per minute. Post 1.
