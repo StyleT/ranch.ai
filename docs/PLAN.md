@@ -166,9 +166,12 @@ VS Code Remote-SSH from the laptop, Claude Code on the mini, the `ranch` repo cl
 - Inventory cameras: done 14 Oct, see `docs/CAMERAS.md` (6× Cam v4 on 4.52.17.26, 1× Cam v3 Pro, 1× Cam v3; no Battery Cam Pro or Floodlight Pro). Bridge: IDisposable/docker-wyze-bridge, the Go rewrite on go2rtc; v4s on 2025+ firmware lose TUTK and the fork promotes them to WebRTC automatically.
 - Run the bridge, confirm one RTSP stream per camera, record 48 hours of 1 fps keyframes to disk as the seed dataset.
 - Tier 0 sampler: ffmpeg scene-change gate plus a fixed 1 frame / 10 s floor so nothing is missed at night.
-- Tier 1 detector: export RF-DETR and YOLO11 to CoreML, run on ANE, log fps, memory, and `horse` recall on 100 hand-checked frames. Emit `horse_count` per camera to MQTT every minute.
+- Labels first, by Claude (decided 15 Oct). Pick 100 frames from the seed set, stratified by camera and day/night. `claude-opus-5-5` labels them with structured outputs (bounding boxes + class for horse / donkey / person / vehicle / other animal, plus posture) through the Batch API. These AI labels are the ground truth for the whole of Phase 1; no human touches them yet. Store as JSONL in `evals/golden/` with a `labeler` field.
+- Tier 1 detector: export RF-DETR and YOLO11 to CoreML, run on ANE, log fps, memory, and `horse` recall against the AI labels. Emit `horse_count` per camera to MQTT every minute.
 - Deliverable: `ranch-events.sqlite` filling up, a CLI `ranch events --since 24h`.
-- **Post 1.** "Liberating Wyze cameras and running a transformer detector on the Neural Engine": the bridge, the ANE-outside-Docker constraint, detector benchmark table.
+- **Post 1.** "Liberating Wyze cameras and running a transformer detector on the Neural Engine": the bridge, the ANE-outside-Docker constraint, detector benchmark table, with the caveat stated plainly that the ground truth is AI-labeled.
+- **Phase 1b, after Post 1: human labels, same frames.** Vlad labels the same 100 frames blind (without seeing Claude's boxes) in a small local labeling page. Then two comparisons: label agreement (per-class precision/recall of Claude's labels against Vlad's, and box IoU), and whether the detector benchmark changes its answer when scored against human labels instead of AI labels. If the ranking flips or recall moves by more than a few points, the AI labels were not good enough to decide a model swap, and that is the headline. Feeds straight into Phase 3's labeling protocol.
+- **Post 1b.** "I let Claude label my ground truth, then checked its work": agreement table, the frames it got wrong (night IR, donkeys vs horses, horses lying down), and what changed in the benchmark.
 
 ### Phase 2 — understand what you see (2–3 weekends)
 
@@ -180,7 +183,7 @@ VS Code Remote-SSH from the laptop, Claude Code on the mini, the `ranch` repo cl
 
 ### Phase 3 — prove it works (2 weekends)
 
-- Golden set: 300–500 frames stratified by camera, day/night, event class. First-pass labels from Claude (Batch API), every label human-reviewed. Store labels as JSONL in the repo.
+- Golden set: 300–500 frames stratified by camera, day/night, event class. First-pass labels from Claude (Batch API), every label human-reviewed, using the review protocol that Phase 1b's agreement numbers justify (full review of every frame, or spot checks only on the classes Claude got wrong). Store labels as JSONL in the repo.
 - Eval harness in TypeScript: per-class precision/recall for tier 1, JSON-field accuracy for tier 2, LLM-judge score for digests with a 50-item human calibration set. Use promptfoo for VLM prompt regression (it supports image inputs and runs in CI); keep detector metrics in our own script.
 - Wire into GitHub Actions on a self-hosted runner on the mini. A model or prompt change that drops recall on `horse_down_prolonged` fails the PR.
 - **Post 3.** "I run evals on my barn." The numbers, the night-IR failure modes, how the human calibration set changed the judge. This is the hiring-manager post.
@@ -259,6 +262,7 @@ Create the `ranch` git repo now at `~/job_hunt_2026/projects/ranch` with `infra/
 |---|---|---|---|---|
 | 0 | The $600 AI edge box | Substack | LinkedIn, X playbook thread | Erase-to-working in 45 min on video; load 11 → <2 |
 | 1 | Wyze liberation + ANE detector | Substack | X benchmark table | fps/memory table |
+| 1b | I let Claude label my ground truth, then checked its work | LinkedIn | Substack | AI-vs-human label agreement, did the benchmark answer change |
 | 2 | Four VLMs on 8 GB, judged on my horses | Substack | LinkedIn | Agreement-with-Claude chart |
 | 3 | I run evals on my barn | LinkedIn | Substack, HN | Precision/recall by class, day vs night |
 | 4 | MCP for the physical world | Substack | X thread on tool design | One tool surface diagram |

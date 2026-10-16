@@ -77,7 +77,9 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
 ## Phase 1 — what to build next (docs/PLAN.md §6)
 Goal: Wyze streams → ffmpeg frame sampler → CoreML detector on the Neural Engine → events in SQLite, MQTT
 `ranch/events/<camera>/<type>`, CLI `ranch events --since 24h`. Post 1: "Liberating Wyze cameras and running a
-transformer detector on the Neural Engine" with an fps/memory/recall table (RF-DETR vs YOLO11).
+transformer detector on the Neural Engine" with an fps/memory/recall table (RF-DETR vs YOLO11), scored against
+Claude-made labels. Then Phase 1b: human labels on the same frames, compare (Post 1b).
+Cameras in scope (15 Oct): all except Living Room.
 
 Order of work:
 1. ~~Disk size~~ 245 GB, 200 GB free (14 Oct). SSD optional.
@@ -90,7 +92,11 @@ Order of work:
    `SNAPSHOT_INTERVAL`; decide and measure CPU). Wait for Back Pasture Cam to come back first.
 5. `packages/events` schema + SQLite migrations; `apps/ingest` sampler; `apps/detector` CoreML runner (native,
    outside any container — the ANE is unreachable from Docker).
-6. Benchmark RF-DETR and YOLO11 CoreML on 100 hand-checked frames; emit `horse_count` per camera per minute.
+6. Claude labels 100 seed frames first (`claude-opus-5-5`, structured outputs, Batch API) → `evals/golden/*.jsonl`
+   with `labeler: claude`. Decided 15 Oct: AI labels are the Phase 1 ground truth, no human review yet.
+7. Benchmark RF-DETR and YOLO11 CoreML against those labels; emit `horse_count` per camera per minute. Post 1.
+8. Phase 1b: Vlad labels the same 100 frames blind; compare label agreement and whether the benchmark ranking
+   changes when scored on human labels. Post 1b. See PLAN.md Phase 1.
 
 **Blocked on Vlad:**
 - Tractor Cam and Back Pasture Cam are off the LAN (no ARP entry); power / Wi-Fi at the camera end.
