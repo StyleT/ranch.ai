@@ -1,0 +1,139 @@
+{
+  "ts": "2026-10-16T01:24:33.220Z",
+  "threshold": 0.3,
+  "iou": 0.5,
+  "results": [
+    {
+      "model": "yolo11n.mlpackage",
+      "compute": "ane",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 8.04,
+      "p95_ms": 14.7,
+      "mean_ms": 8.516499999999999,
+      "fps_wall": 114.61318051575932,
+      "peak_rss_mb": 51
+    },
+    {
+      "model": "yolo11n.mlpackage",
+      "compute": "gpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 14.14,
+      "p95_ms": 20.47,
+      "mean_ms": 15.239750000000006,
+      "fps_wall": 64.62035541195476,
+      "peak_rss_mb": 70
+    },
+    {
+      "model": "yolo11n.mlpackage",
+      "compute": "cpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 17.71,
+      "p95_ms": 18.4,
+      "mean_ms": 17.583999999999996,
+      "fps_wall": 56.49717514124294,
+      "peak_rss_mb": 61
+    },
+    {
+      "model": "yolo11s.mlpackage",
+      "compute": "ane",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 18.47,
+      "p95_ms": 25.08,
+      "mean_ms": 17.222250000000003,
+      "fps_wall": 56.577086280056584,
+      "peak_rss_mb": 51
+    },
+    {
+      "model": "yolo11s.mlpackage",
+      "compute": "gpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 24.65,
+      "p95_ms": 27.75,
+      "mean_ms": 23.455,
+      "fps_wall": 42.016806722689076,
+      "peak_rss_mb": 84
+    },
+    {
+      "model": "yolo11s.mlpackage",
+      "compute": "cpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 31.16,
+      "p95_ms": 31.89,
+      "mean_ms": 31.071250000000003,
+      "fps_wall": 32.02562049639712,
+      "peak_rss_mb": 80
+    },
+    {
+      "model": "rfdetr-nano-float16.mlpackage",
+      "compute": "ane",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 31,
+      "p95_ms": 32.17,
+      "mean_ms": 30.932750000000006,
+      "fps_wall": 32.232070910556,
+      "peak_rss_mb": 47
+    },
+    {
+      "model": "rfdetr-nano-float16.mlpackage",
+      "compute": "gpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 36.16,
+      "p95_ms": 36.74,
+      "mean_ms": 36.02775,
+      "fps_wall": 27.681660899653977,
+      "peak_rss_mb": 157
+    },
+    {
+      "model": "rfdetr-nano-float16.mlpackage",
+      "compute": "cpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 41.06,
+      "p95_ms": 41.71,
+      "mean_ms": 40.965499999999984,
+      "fps_wall": 24.3161094224924,
+      "peak_rss_mb": 94
+    },
+    {
+      "model": "rfdetr-nano-float32.mlpackage",
+      "compute": "ane",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 47.28,
+      "p95_ms": 48.85,
+      "mean_ms": 47.226,
+      "fps_wall": 20.356234096692113,
+      "peak_rss_mb": 163
+    },
+    {
+      "model": "rfdetr-nano-float32.mlpackage",
+      "compute": "gpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 25.94,
+      "p95_ms": 26.52,
+      "mean_ms": 25.67225,
+      "fps_wall": 38.72216844143272,
+      "peak_rss_mb": 206
+    },
+    {
+      "model": "rfdetr-nano-float32.mlpackage",
+      "compute": "cpu",
+      "frames": 40,
+      "compiled_ms": null,
+      "p50_ms": 46.94,
+      "p95_ms": 47.43,
+      "mean_ms": 46.756,
+      "fps_wall": 21.310602024507194,
+      "peak_rss_mb": 152
+    }
+  ]
+}

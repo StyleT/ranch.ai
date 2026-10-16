@@ -1,4 +1,4 @@
-# Handoff — state as of 14 Oct 2026, 19:50 ET
+# Handoff — state as of 15 Oct 2026, 21:40 ET
 
 ## Where things stand
 Phase 0 (headless, reproducible Mac mini) is **complete and closed**. Phase 1 (camera ingest + detector) is
@@ -117,11 +117,17 @@ Order of work:
      `ANTHROPIC_API_KEY` on the laptop; the mini has no key and does not need one for this.
 6. Claude labels 100 seed frames first (`claude-opus-5-5`, structured outputs, Batch API) → `evals/golden/*.jsonl`
    with `labeler: claude`. Decided 15 Oct: AI labels are the Phase 1 ground truth, no human review yet.
-7. Benchmark RF-DETR and YOLO11 CoreML against those labels; emit `horse_count` per camera per minute. Post 1.
+7. Benchmark: latency/fps/RSS half **done 15 Oct** (`evals/detector/README.md`): yolo11n 8 ms, yolo11s 18 ms,
+   RF-DETR nano fp16 31 ms on the ANE; RF-DETR fp32 + `.cpuAndNeuralEngine` returns all-zero logits (GPU/CPU
+   fine). Recall half waits for the labels (step 6). `horse_count` per minute is already published by
+   `com.ranch.detector` (yolo11n placeholder). Post 1.
 8. Phase 1b: Vlad labels the same 100 frames blind; compare label agreement and whether the benchmark ranking
    changes when scored on human labels. Post 1b. See PLAN.md Phase 1.
 
 **Blocked on Vlad:**
+- `ANTHROPIC_API_KEY` for the labeling run (laptop side; `evals/label/claude.ts` uses the SDK's default env
+  lookup). About $1 for 100 frames at Batch API rates. Day frames exist from the morning of 16 Oct onward, so the
+  100-frame pick should wait for at least one daylight cycle (the selector stratifies day/night).
 - Tractor Cam and Back Pasture Cam are off the LAN (no ARP entry); power / Wi-Fi at the camera end.
 - Confirm the "In scope" column in `docs/CAMERAS.md`; which camera watches the trough.
 - ~~Camera inventory~~, ~~Wyze API credentials~~, ~~SSD decision~~: all closed 14 Oct.
