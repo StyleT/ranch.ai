@@ -98,3 +98,10 @@ side and needs a power cycle. Two bugs found and fixed in the watchdog during th
 ate the `\s` in the YAML lookup, and the bridge rewrites `go2rtc.yaml` on reconnect (mtime moved), so the
 lookup can race it; the reset now deletes, waits up to 12 s for the bridge to re-add, and only then PUTs its own
 copy.
+
+Afternoon, 16 Oct: Wash Stall stalled again at 12:51 ET and most cameras dropped ICMP at the same time while the
+router answered in 2 ms and the mini's own 5 GHz link was clean (-18 dBm, ~30 % channel busy, 10 Mbit/s in). The
+cameras are 2.4 GHz only and the seed recorder plus the sampler kept seven HD streams open continuously, so the
+working theory is 2.4 GHz airtime exhaustion at the camera end, with the go2rtc dead-producer bug turning each
+dropout into a permanent one. Seed recorder stopped (16 h of data is enough). Next: measure per-camera signal in
+the Wyze app, and sample from the SD sub-stream.

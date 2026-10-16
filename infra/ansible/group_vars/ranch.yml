@@ -125,7 +125,7 @@ seed_interval_s: 10
 seed_jpeg_q: 4
 seed_min_free_gb: 40
 seed_start_epoch: 1792110720   # 2026-10-16T00:32Z, when recording began
-seed_hours: 48               # after this the daemon idles; remove it from ranch_daemons when the set is final
+seed_hours: 16               # was 48; cut short 16 Oct 13:00 ET: seven continuous HD RTSP pulls were saturating the cameras' 2.4 GHz Wi-Fi; the sampler keeps a frame every 10 s anyway
 
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)

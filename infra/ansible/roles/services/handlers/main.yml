@@ -1,4 +1,18 @@
 ---
+# plist changed: unload and load again so launchd reads the new definition. bootstrap right after bootout
+# can return EIO (HANDOFF gotcha 5), hence the retry.
+- name: rebootstrap launchd daemons
+  ansible.builtin.shell: |
+    launchctl bootout system/{{ item }} 2>/dev/null || true
+    for i in 1 2 3 4 5; do
+      launchctl bootstrap system /Library/LaunchDaemons/{{ item }}.plist && exit 0
+      sleep 2
+    done
+    exit 1
+  become: true
+  loop: "{{ daemons_to_rebootstrap | difference(daemons_to_reload) }}"
+
+# script changed: a restart of the running definition is enough.
 - name: reload launchd daemons
   ansible.builtin.shell: |
     if launchctl print system/{{ item }} >/dev/null 2>&1; then

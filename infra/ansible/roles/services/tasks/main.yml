@@ -68,13 +68,16 @@
   register: plists
 
 # Only daemons whose plist or script changed get restarted (a kickstart of the bridge drops every stream).
+# A changed plist needs bootout + bootstrap: `kickstart -k` restarts the job with the definition launchd
+# already loaded, so new EnvironmentVariables or ProgramArguments would never take effect (seen 16 Oct).
 - name: Daemons to reload
   ansible.builtin.set_fact:
-    daemons_to_reload: >-
-      {{ (plists.results | selectattr('changed') | map(attribute='item') | list
-          + scripts.results | selectattr('changed') | map(attribute='item.daemon') | reject('equalto', '') | list) | unique }}
-  changed_when: daemons_to_reload | length > 0
-  notify: reload launchd daemons
+    daemons_to_reload: "{{ scripts.results | selectattr('changed') | map(attribute='item.daemon') | reject('equalto', '') | list | unique }}"
+    daemons_to_rebootstrap: "{{ plists.results | selectattr('changed') | map(attribute='item') | list | unique }}"
+  changed_when: (daemons_to_reload | length + daemons_to_rebootstrap | length) > 0
+  notify:
+    - rebootstrap launchd daemons
+    - reload launchd daemons
 
 - name: Daemons loaded?
   ansible.builtin.command: launchctl print system/{{ item }}

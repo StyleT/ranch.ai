@@ -71,6 +71,16 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
 14. **go2rtc never drops a dead producer.** When a camera's TUTK session dies, the stream keeps its producer, new
     consumers attach and hang, consumers leak (624 after 12 h), and the bridge still reports `streaming`. The
     sampler's stall watchdog recreates the stream after 180 s without a frame (docs/CAMERAS.md incident, 16 Oct).
+15. **`launchctl kickstart -k` restarts the definition launchd already holds.** A changed plist (new
+    EnvironmentVariables, ProgramArguments) only takes effect after `bootout` + `bootstrap`. The seed recorder ran
+    for 16 h without the 48 h window it was supposedly given. The services role now re-bootstraps daemons whose
+    plist changed and kickstarts those whose script changed (16 Oct).
+16. **The cameras' 2.4 GHz Wi-Fi is the scarce resource, not the mini.** Mini: 5 GHz, -18 dBm, 1200 Mbit/s link,
+    channel ~30 % busy, 10 Mbit/s inbound with all seven HD streams open. Wyze cams are 2.4 GHz only; with seven
+    continuous HD pulls (seed recorder + sampler) their TUTK sessions dropped in bunches (five at once on 15 Oct
+    23:24, Front Porch and Wash Stall again on 16 Oct). Seed recorder stopped at 16 h; the sampler's one frame per
+    10 s is the same data. Next lever: SD sub-stream for sampling, HD on demand. Signal per camera is in the
+    Wyze app (Device Info), which is where the next measurement comes from.
 11. **`brew info`/`brew bundle` need `/opt/homebrew/bin` on PATH** in non-interactive SSH; the playbook sets PATH
     explicitly. go2rtc is not in Homebrew; it is a pinned release zip with a sha256 in `group_vars`.
 
@@ -109,7 +119,9 @@ Order of work:
    151 MB, both 134 MB; so no cheap fix, and RSS keeps growing for minutes after start. Fine for a temporary
    recorder, not for the Phase 1 sampler: that one should take frames from one short-lived process per sample
    (or the go2rtc `frame.jpeg` endpoint) rather than hold seven decoders open.
-   Stop it after 48 h (`sudo launchctl bootout system/com.ranch.seed-recorder` and drop it from `ranch_daemons`).
+   **Stopped after 16 h (16 Oct 13:00 ET, `seed_hours: 16`)**: 7,434 frames, 3.2 GB, five cameras for the whole
+   window and two for the last 2 h. The daemon idles; the sampler's frames table (`ranch frames`, 7-day retention)
+   continues the dataset at the same cadence. See gotcha 16 for why.
 5. ~~Code~~ done 15 Oct, all running as LaunchDaemons and converging in Ansible (`roles/app` rsyncs the working
    tree to `/usr/local/ranch/app`, runs `npm ci`, builds the Swift runner, syncs CoreML models):
    - `packages/events`: `node:sqlite` store, schema v1 (frames, detections, events, camera_counts), tests.
