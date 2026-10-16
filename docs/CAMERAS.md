@@ -62,5 +62,6 @@ network for TUTK LAN mode and for WebRTC ICE to go direct.
 ## Still needed from Vlad
 
 1. ~~Wyze Developer API ID and key~~ done 14 Oct (`~/.config/ranch/wyze.env`, mode 600, password stored as `md5:` hash).
-2. Confirm the "In scope" column; say which camera is meant to watch the trough.
-3. Power / Wi-Fi on Tractor Cam and Back Pasture Cam.
+2. ~~Confirm the "In scope" column~~ 15 Oct: all cameras except Living Room are in scope. Trough camera TBD once
+   Back Pasture and Tractor are back and their views are known.
+3. Power / Wi-Fi on Tractor Cam and Back Pasture Cam (Vlad, later; the bridge picks them up automatically).
