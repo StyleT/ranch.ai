@@ -130,3 +130,10 @@ ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/a
 ranch_models_dir: /usr/local/ranch/models   # CoreML packages, not in git
 ranch_app_daemons:                           # restarted by roles/app when the tree changes
   - com.ranch.ingest
+  - com.ranch.detector
+
+# Tier-1 detector (com.ranch.detector). Model file lives in ranch_models_dir (synced from apps/detector/export).
+# yolo11n is the placeholder until the Post 1 benchmark picks the winner.
+detector_model: yolo11n.mlpackage
+detector_compute: ane            # all | ane | gpu | cpu
+detector_threshold: "0.25"

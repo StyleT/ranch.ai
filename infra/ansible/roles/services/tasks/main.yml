@@ -9,6 +9,7 @@
       - com.ranch.wyze-bridge
       - com.ranch.seed-recorder
       - com.ranch.ingest
+      - com.ranch.detector
 
 - name: Ranch bin dir
   ansible.builtin.file:
@@ -19,20 +20,22 @@
     mode: "0755"
   become: true
 
+# script -> daemon that runs it (empty = no daemon, e.g. the CLI wrapper)
 - name: Ranch scripts
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../bin/{{ item }}"
-    dest: "{{ ranch_bin_dir }}/{{ item }}"
+    src: "{{ playbook_dir }}/../bin/{{ item.name }}"
+    dest: "{{ ranch_bin_dir }}/{{ item.name }}"
     owner: root
     group: wheel
     mode: "0755"
   become: true
   loop:
-    - quiet-audiomxd.sh
-    - wyze-bridge.sh
-    - seed-recorder.sh
-    - ranch
-  notify: reload launchd daemons
+    - { name: quiet-audiomxd.sh, daemon: com.ranch.quiet-audiomxd }
+    - { name: wyze-bridge.sh, daemon: com.ranch.wyze-bridge }
+    - { name: seed-recorder.sh, daemon: com.ranch.seed-recorder }
+    - { name: ranch, daemon: "" }
+  loop_control: { label: "{{ item.name }}" }
+  register: scripts
 
 - name: Log files for daemons that run as {{ ranch_user }} (launchd opens StandardOutPath as that user; /var/log is root 755)
   ansible.builtin.file:
@@ -49,6 +52,7 @@
     - ranch-wyze-bridge
     - ranch-seed-recorder
     - ranch-ingest
+    - ranch-detector
 
 - name: Install daemon plists
   ansible.builtin.template:
@@ -59,6 +63,15 @@
     mode: "0644"
   become: true
   loop: "{{ ranch_daemons }}"
+  register: plists
+
+# Only daemons whose plist or script changed get restarted (a kickstart of the bridge drops every stream).
+- name: Daemons to reload
+  ansible.builtin.set_fact:
+    daemons_to_reload: >-
+      {{ (plists.results | selectattr('changed') | map(attribute='item') | list
+          + scripts.results | selectattr('changed') | map(attribute='item.daemon') | reject('equalto', '') | list) | unique }}
+  changed_when: daemons_to_reload | length > 0
   notify: reload launchd daemons
 
 - name: Daemons loaded?

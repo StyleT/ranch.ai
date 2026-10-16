@@ -8,3 +8,5 @@ node_modules/
 *.mlmodelc
 *.pt
 .venv/
+evals/golden/frames/
+evals/golden/batches/

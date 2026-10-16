@@ -7,4 +7,4 @@
       launchctl bootstrap system /Library/LaunchDaemons/{{ item }}.plist
     fi
   become: true
-  loop: "{{ ranch_daemons }}"
+  loop: "{{ daemons_to_reload }}"
