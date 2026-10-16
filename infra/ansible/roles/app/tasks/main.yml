@@ -91,9 +91,10 @@
   when: det_build is changed
   notify: restart app daemons
 
-- name: App daemons restart when the tree changed
+# Only code the daemons load triggers a restart; docs, infra and eval data do not.
+- name: App daemons restart when their code changed
   ansible.builtin.debug:
-    msg: "working tree changed; app daemons will restart"
-  when: app_sync is changed
-  changed_when: app_sync is changed
+    msg: "app code changed; app daemons will restart"
+  when: app_sync.stdout is search('(^|\s)[<>ch.*][^\s]*\s+(apps/|packages/|package(-lock)?\.json)')
+  changed_when: true
   notify: restart app daemons
