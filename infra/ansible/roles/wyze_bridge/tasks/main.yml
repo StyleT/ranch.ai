@@ -44,9 +44,18 @@
   check_mode: false
   failed_when: false
 
+# Same linker flags as the project's Dockerfile: without -X main.Version the binary reports the placeholder
+# "4.0-beta" (seen 16 Oct). The stamp records commit + version so a flag change rebuilds too.
+- name: Expected build stamp
+  ansible.builtin.set_fact:
+    wb_stamp_expected: "{{ wb_src.after }} {{ wyze_bridge_version }}"
+
 - name: Build bridge (go build, ~1 min first time)
   ansible.builtin.command:
-    cmd: "{{ brew_prefix }}/bin/go build -trimpath -o {{ ranch_src_dir }}/wyze-bridge.build ./cmd/wyze-bridge"
+    cmd: >-
+      {{ brew_prefix }}/bin/go build -trimpath
+      -ldflags "-s -w -X main.Version={{ wyze_bridge_version | regex_replace('^v', '') }}"
+      -o {{ ranch_src_dir }}/wyze-bridge.build ./cmd/wyze-bridge
     chdir: "{{ ranch_src_dir }}/wyze-bridge"
   environment:
     PATH: "{{ brew_prefix }}/bin:/usr/bin:/bin"
@@ -54,7 +63,7 @@
     CGO_ENABLED: "0"
     GOTOOLCHAIN: local
     GOFLAGS: -mod=mod
-  when: not wb_bin.stat.exists or wb_stamp.stdout != wb_src.after
+  when: not wb_bin.stat.exists or wb_stamp.stdout != wb_stamp_expected
 
 - name: Install bridge binary
   ansible.builtin.copy:
@@ -65,12 +74,12 @@
     group: wheel
     mode: "0755"
   become: true
-  when: not wb_bin.stat.exists or wb_stamp.stdout != wb_src.after
+  when: not wb_bin.stat.exists or wb_stamp.stdout != wb_stamp_expected
   notify: restart wyze-bridge
 
 - name: Record built commit
   ansible.builtin.copy:
-    content: "{{ wb_src.after }}"
+    content: "{{ wb_stamp_expected }}"
     dest: "{{ ranch_bin_dir }}/wyze-bridge.commit"
     owner: root
     group: wheel
