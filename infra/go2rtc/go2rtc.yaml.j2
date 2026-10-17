@@ -1,0 +1,20 @@
+# Managed by Ansible (infra/go2rtc/go2rtc.yaml.j2). go2rtc runs as com.ranch.go2rtc under launchd (KeepAlive,
+# stderr captured in /var/log/ranch-go2rtc.log); the Wyze bridge talks to it over the API (GO2RTC_URL) and
+# registers one wyze:// stream per camera at runtime, so there is no streams: section here.
+log:
+  level: info
+  streams: debug      # producer connect/disconnect, keyframe waits: the evidence for camera dropouts
+  api: warn
+  rtsp: info
+  webrtc: warn
+api:
+  listen: :{{ go2rtc_api_port }}
+  origin: '*'
+rtsp:
+  listen: :8554
+webrtc:
+  listen: :8889
+  ice_servers:
+    - urls: [ stun:stun.l.google.com:19302 ]
+ffmpeg:
+  bin: {{ brew_prefix }}/bin/ffmpeg

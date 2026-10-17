@@ -81,6 +81,16 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
     23:24, Front Porch and Wash Stall again on 16 Oct). Seed recorder stopped at 16 h; the sampler's one frame per
     10 s is the same data. Next lever: SD sub-stream for sampling, HD on demand. Signal per camera is in the
     Wyze app (Device Info), which is where the next measurement comes from.
+17. **The bridge did not supervise its go2rtc child.** go2rtc exited with status 2 at 17:27:49 ET on 16 Oct (right
+    after a DTLS handshake timeout), the bridge logged `connection refused` from its health check 431 times over
+    3.6 h and never restarted it; its stderr (the panic) was not captured. go2rtc now runs as `com.ranch.go2rtc`
+    (KeepAlive, own log at debug for `streams`), the bridge uses it through `GO2RTC_URL`.
+18. **go2rtc writes API-added streams into its first `-config` file.** With one managed file that meant a
+    template change on every provision and a restart loop. It now gets `-config state.yaml` (scratch, created
+    once) followed by the managed `go2rtc.yaml`.
+19. **Logs rotate by copy-truncate.** launchd opens `StandardOutPath` with O_APPEND, so `com.ranch.logrotate`
+    copies, gzips and truncates in place (verified: no NUL prefix after truncation). newsyslog's rename would
+    leave every daemon writing into the rotated file.
 11. **`brew info`/`brew bundle` need `/opt/homebrew/bin` on PATH** in non-interactive SSH; the playbook sets PATH
     explicitly. go2rtc is not in Homebrew; it is a pinned release zip with a sha256 in `group_vars`.
 

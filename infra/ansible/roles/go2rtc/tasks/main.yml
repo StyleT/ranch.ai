@@ -1,0 +1,37 @@
+---
+# go2rtc as our own daemon (com.ranch.go2rtc, registered in roles/services). Until 16 Oct the bridge spawned it
+# as a child: when it crashed (exit status 2, 17:27 ET) nothing restarted it for 3.6 h and its stderr was lost.
+# The binary itself is installed by roles/wyze_bridge (pinned release zip).
+- name: go2rtc dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ranch_user }}"
+    group: staff
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ ranch_etc_dir }}"
+    - "{{ ranch_var_dir }}/go2rtc"
+
+# go2rtc writes streams added through the API back into its *first* config file. That file is a scratch state
+# file we only create once; the managed go2rtc.yaml is passed second and never rewritten by go2rtc.
+- name: go2rtc state.yaml (created once, go2rtc owns its content)
+  ansible.builtin.copy:
+    content: "# go2rtc writes API-added streams here; managed settings live in {{ ranch_etc_dir }}/go2rtc.yaml\n"
+    dest: "{{ ranch_var_dir }}/go2rtc/state.yaml"
+    owner: "{{ ranch_user }}"
+    group: staff
+    mode: "0644"
+    force: false
+  become: true
+
+- name: go2rtc.yaml
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../go2rtc/go2rtc.yaml.j2"
+    dest: "{{ ranch_etc_dir }}/go2rtc.yaml"
+    owner: "{{ ranch_user }}"
+    group: staff
+    mode: "0644"
+  become: true
+  notify: restart go2rtc

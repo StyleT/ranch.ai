@@ -1,0 +1,7 @@
+---
+- name: restart go2rtc
+  ansible.builtin.shell: |
+    if launchctl print system/com.ranch.go2rtc >/dev/null 2>&1; then
+      launchctl kickstart -k system/com.ranch.go2rtc
+    fi
+  become: true

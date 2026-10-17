@@ -12,6 +12,7 @@
     <key>HOME</key><string>/Users/{{ ranch_user }}</string>
     <key>PATH</key><string>{{ ranch_bin_dir }}:{{ brew_prefix }}/bin:/usr/bin:/bin</string>
     <key>STATE_DIR</key><string>{{ ranch_var_dir }}/wyze-bridge</string>
+    <key>GO2RTC_URL</key><string>http://127.0.0.1:{{ go2rtc_api_port }}</string>
     <key>SNAPSHOT_PATH</key><string>{{ ranch_media_dir }}/snapshots/{cam_name}/%Y-%m-%d</string>
     <key>RECORD_PATH</key><string>{{ ranch_media_dir }}/recordings/{cam_name}/%Y/%m/%d</string>
     <key>MQTT_HOST</key><string>{{ mosquitto_listen }}</string>

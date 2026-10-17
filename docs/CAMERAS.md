@@ -105,3 +105,25 @@ cameras are 2.4 GHz only and the seed recorder plus the sampler kept seven HD st
 working theory is 2.4 GHz airtime exhaustion at the camera end, with the go2rtc dead-producer bug turning each
 dropout into a permanent one. Seed recorder stopped (16 h of data is enough). Next: measure per-camera signal in
 the Wyze app, and sample from the SD sub-stream.
+
+## Evidence pass, 16 Oct evening (what the logs prove, and what they do not)
+
+Per-camera gap timeline from the `frames` table (gaps > 60 s) against the bridge log:
+
+- **17:27:49 ET: go2rtc exited (`exit status 2`).** All seven cameras' frames stop in that second and stay
+  stopped for 13,000 s. The bridge's health check logged `dial tcp 127.0.0.1:1984: connection refused` every
+  30 s, 431 times, and never restarted its child. Recovery at 21:03 ET is my provision restarting the bridge.
+  The seconds before the crash show `dtls: client handshake failed: context deadline exceeded` and discovery
+  timeouts; the panic text itself was never captured. **Proven: the long outage was a go2rtc crash with no
+  supervision.** Fixed structurally (go2rtc under launchd, own log). Not proven: why it crashed.
+- **The 60–400 s gaps before and after** (dozens per hour, often several cameras within the same second,
+  "empty" grab results at ~200 per 30 min) are not explained by any line in the old logs: go2rtc ran at `warn`,
+  the bridge logged nothing per gap. Three hypotheses, all open: 2.4 GHz loss at the cameras; TUTK reconnect
+  churn because every one-shot `frame.jpeg` grab starts and stops a producer (go2rtc debug now shows
+  `start producer` / `stop producer` every few seconds per camera and `[OOO] ... reset` packet-order resets by
+  the hundreds); go2rtc/wyze-source instability. **Instrumentation added to decide it:** go2rtc at `streams:
+  debug` in its own rotated log, `com.ranch.netprobe` (per-camera producer/consumer state, ping, mini Wi-Fi
+  RSSI/noise/rate every 15 s, retained on `ranch/status/netprobe`), and the sampler now logs gap edges
+  (`grab failing` / `grab recovered` with error class and duration).
+- A first experiment with a no-decode persistent RTSP consumer to keep one producer alive raced with the
+  restarts of that same provision and is void; repeat it when the logs are quiet.

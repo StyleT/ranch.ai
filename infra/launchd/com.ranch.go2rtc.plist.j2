@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.go2rtc</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{ ranch_bin_dir }}/go2rtc</string>
+    <string>-config</string>
+    <string>{{ ranch_var_dir }}/go2rtc/state.yaml</string>
+    <string>-config</string>
+    <string>{{ ranch_etc_dir }}/go2rtc.yaml</string>
+  </array>
+  <key>UserName</key><string>{{ ranch_user }}</string>
+  <key>WorkingDirectory</key><string>{{ ranch_var_dir }}/go2rtc</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/{{ ranch_user }}</string>
+    <key>PATH</key><string>{{ ranch_bin_dir }}:{{ brew_prefix }}/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>StandardOutPath</key><string>/var/log/ranch-go2rtc.log</string>
+  <key>StandardErrorPath</key><string>/var/log/ranch-go2rtc.log</string>
+</dict>
+</plist>

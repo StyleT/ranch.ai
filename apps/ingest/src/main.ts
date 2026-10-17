@@ -77,7 +77,8 @@ function meanAbsDiff(a: Buffer, b: Buffer): number {
 
 async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: { v: boolean }): Promise<void> {
   let lastThumb: Buffer | undefined; let lastKept = 0; let failures = 0;
-  let lastOk = Date.now(); let lastReset = 0;
+  let lastOk = Date.now(); let lastReset = 0; let failingSince = 0; let failClass = '';
+  const classify = (e: unknown) => { const m = String(e); return /Timeout/.test(m) ? 'timeout' : /empty/.test(m) ? 'empty' : /404/.test(m) ? '404' : /fetch failed/.test(m) ? 'unreachable' : m.slice(0, 40); };
   while (!stop.v) {
     const t0 = Date.now();
     try {
@@ -98,10 +99,15 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
         await bus.publish(topics.frames(camera), { id, ts, camera, path, reason, change, width: meta.width, height: meta.height });
         lastThumb = thumb; lastKept = now.getTime();
       }
+      if (failingSince) { log('grab recovered', { camera, down_s: Math.round((Date.now() - failingSince) / 1000), failures, last_error: failClass }); failingSince = 0; }
       failures = 0; lastOk = Date.now();
     } catch (e) {
       failures++;
-      if (failures === 1 || failures % 12 === 0) log('grab failed', { camera, failures, error: String(e) });
+      const cls = classify(e);
+      // Log the edges (first failure, class change) and a heartbeat every 12th, not every retry.
+      if (!failingSince) { failingSince = Date.now(); failClass = cls; log('grab failing', { camera, error: cls }); }
+      else if (cls !== failClass) { log('grab error changed', { camera, from: failClass, to: cls, failures }); failClass = cls; }
+      else if (failures % 12 === 0) log('grab still failing', { camera, failures, error: cls, down_s: Math.round((Date.now() - failingSince) / 1000) });
       const now = Date.now();
       if (now - lastOk > STALL_RESET_S * 1000 && now - lastReset > STALL_COOLDOWN_S * 1000) {
         lastReset = now; resets++;

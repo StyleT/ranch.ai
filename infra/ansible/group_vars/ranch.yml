@@ -95,6 +95,12 @@ node_major: "24"
 ranch_src_dir: /usr/local/ranch/src       # source checkouts, owned by ranch
 ranch_var_dir: /usr/local/ranch/var       # daemon state (bridge state file, mosquitto persistence)
 ranch_media_dir: /usr/local/ranch/media   # snapshots and recordings (same disk; 200 GB free on 14 Oct)
+ranch_etc_dir: /usr/local/ranch/etc       # config files we template (go2rtc.yaml)
+# Log rotation for /var/log/ranch-*.log (com.ranch.logrotate, hourly, copy-truncate; infra/bin/logrotate.sh)
+logrotate_max_mb: 20
+logrotate_keep: 7
+logrotate_daily_hour: 3
+go2rtc_api_port: 1984
 
 # Wyze bridge: IDisposable's Go rewrite on top of go2rtc (docs/CAMERAS.md). Pure Go, no cgo, built on
 # the mini with Homebrew go. Pinned to a release tag; bump deliberately and re-measure.
@@ -135,6 +141,7 @@ ranch_models_dir: /usr/local/ranch/models   # CoreML packages, not in git
 ranch_app_daemons:                           # restarted by roles/app when the tree changes
   - com.ranch.ingest
   - com.ranch.detector
+  - com.ranch.netprobe
   - com.ranch.status
 
 # Tier-1 detector (com.ranch.detector). Model file lives in ranch_models_dir (synced from apps/detector/export).
