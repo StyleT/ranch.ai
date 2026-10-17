@@ -4,10 +4,12 @@
 <dict>
   <key>Label</key><string>com.ranch.quiet-audiomxd</string>
   <key>ProgramArguments</key>
-  <array><string>/bin/bash</string><string>{{ ranch_bin_dir }}/quiet-audiomxd.sh</string></array>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '/bin/bash' '{{ ranch_bin_dir }}/quiet-audiomxd.sh' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.quiet-audiomxd -p user.notice</string>
+  </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/var/log/ranch-quiet-audiomxd.log</string>
-  <key>StandardErrorPath</key><string>/var/log/ranch-quiet-audiomxd.log</string>
 </dict>
 </plist>

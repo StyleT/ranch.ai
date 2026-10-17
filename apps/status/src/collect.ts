@@ -2,7 +2,7 @@
 // produces: SQLite, launchd, the daemon logs, the seed directory, df, the bridge API and retained MQTT status.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readdirSync, openSync, readSync, closeSync, statSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { hostname, loadavg, uptime } from 'node:os';
 import { config } from '@ranch/config';
@@ -22,15 +22,28 @@ export interface Status {
   events: RanchEvent[]; totals: { frames: number; detections: number; events: number };
 }
 
-/** Last non-empty line of a file, reading only its tail. */
-function lastLine(path: string): string {
+/** Last unified-log line per daemon. Daemon output goes through `logger -t ranch.<name>`; the tag is not stored,
+ *  so lines are attributed by the logger process pid (ps shows the tag in its args). Cached for 30 s: `log show`
+ *  costs ~0.7 s. */
+let logCache: { at: number; lines: Map<string, string> } = { at: 0, lines: new Map() };
+async function lastLogLines(): Promise<Map<string, string>> {
+  if (Date.now() - logCache.at < 30_000) return logCache.lines;
+  const lines = new Map<string, string>();
   try {
-    const size = statSync(path).size; if (size === 0) return '';
-    const fd = openSync(path, 'r'); const len = Math.min(size, 4096); const buf = Buffer.alloc(len);
-    readSync(fd, buf, 0, len, size - len); closeSync(fd);
-    const lines = buf.toString('utf8').split('\n').filter((l) => l.trim());
-    return (lines[lines.length - 1] ?? '').slice(0, 300);
-  } catch { return ''; }
+    const { stdout: ps } = await exec('/bin/ps', ['-axo', 'pid=,args='], { timeout: 5000 });
+    const pidToName = new Map<number, string>();
+    for (const l of ps.split('\n')) { const m = /^\s*(\d+)\s+\/usr\/bin\/logger -t ranch\.(\S+)/.exec(l); if (m) pidToName.set(Number(m[1]), m[2]!); }
+    // compact style carries the pid as `logger[<pid>:<tid>]`; the json style leaves processIdentifier null.
+    const { stdout } = await exec('/usr/bin/sudo', ['-n', '/usr/bin/log', 'show', '--last', '5m', '--predicate', 'process == "logger"', '--style', 'compact'], { timeout: 20000, maxBuffer: 64 * 1024 * 1024 });
+    for (const l of stdout.split('\n')) {
+      const m = /^\S+ \S+ \S+ logger\[(\d+):[0-9a-f]+\] (.*)$/.exec(l);
+      if (!m) continue;
+      const name = pidToName.get(Number(m[1]));
+      if (name) lines.set(name, m[2]!.slice(0, 300)); // chronological; last wins
+    }
+  } catch { /* keep the previous cache */ return logCache.lines; }
+  logCache = { at: Date.now(), lines };
+  return lines;
 }
 
 async function launchd(): Promise<{ label: string; pid: number | null; last_exit: number }[]> {
@@ -71,7 +84,7 @@ function seedCounts(): Record<string, number> {
 export async function collect(store: EventStore, mqttStatus: Map<string, Record<string, unknown>>): Promise<Status> {
   const now = new Date();
   const iso = (msAgo: number) => new Date(now.getTime() - msAgo).toISOString();
-  const [daemons, df, bridge] = await Promise.all([launchd(), disk(), bridgeCameras()]);
+  const [daemons, df, bridge, logLines] = await Promise.all([launchd(), disk(), bridgeCameras(), lastLogLines()]);
   const seed = seedCounts();
   const db = store.db;
   const camNames = new Set<string>([
@@ -95,7 +108,7 @@ export async function collect(store: EventStore, mqttStatus: Map<string, Record<
     ts: now.toISOString(), host: hostname(), uptime_s: Math.round(uptime()), load: loadavg().map((v) => Math.round(v * 100) / 100),
     disk_free_gb: df.free, disk_total_gb: df.total,
     seed: { total: Object.values(seed).reduce((s, v) => s + v, 0), window_start: seedStart, window_hours: process.env.SEED_HOURS ? Number(process.env.SEED_HOURS) : null },
-    daemons: daemons.map((d) => ({ ...d, log: lastLine(`/var/log/ranch-${d.label.replace('com.ranch.', '')}.log`), status: mqttStatus.get(d.label.replace('com.ranch.', '')) })),
+    daemons: daemons.map((d) => ({ ...d, log: logLines.get(d.label.replace('com.ranch.', '')) ?? '', status: mqttStatus.get(d.label.replace('com.ranch.', '')) })),
     cameras, labels_1h: labels, events: store.events({ limit: 10 }), totals: { frames: n('frames'), detections: n('detections'), events: n('events') },
   };
 }

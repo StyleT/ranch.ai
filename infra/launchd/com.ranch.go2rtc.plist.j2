@@ -5,11 +5,9 @@
   <key>Label</key><string>com.ranch.go2rtc</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{{ ranch_bin_dir }}/go2rtc</string>
-    <string>-config</string>
-    <string>{{ ranch_var_dir }}/go2rtc/state.yaml</string>
-    <string>-config</string>
-    <string>{{ ranch_etc_dir }}/go2rtc.yaml</string>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '{{ ranch_bin_dir }}/go2rtc' '-config' '{{ ranch_var_dir }}/go2rtc/state.yaml' '-config' '{{ ranch_etc_dir }}/go2rtc.yaml' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.go2rtc -p user.notice</string>
   </array>
   <key>UserName</key><string>{{ ranch_user }}</string>
   <key>WorkingDirectory</key><string>{{ ranch_var_dir }}/go2rtc</string>
@@ -21,7 +19,5 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>5</integer>
-  <key>StandardOutPath</key><string>/var/log/ranch-go2rtc.log</string>
-  <key>StandardErrorPath</key><string>/var/log/ranch-go2rtc.log</string>
 </dict>
 </plist>

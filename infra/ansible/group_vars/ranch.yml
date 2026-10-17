@@ -96,10 +96,6 @@ ranch_src_dir: /usr/local/ranch/src       # source checkouts, owned by ranch
 ranch_var_dir: /usr/local/ranch/var       # daemon state (bridge state file, mosquitto persistence)
 ranch_media_dir: /usr/local/ranch/media   # snapshots and recordings (same disk; 200 GB free on 14 Oct)
 ranch_etc_dir: /usr/local/ranch/etc       # config files we template (go2rtc.yaml)
-# Log rotation for /var/log/ranch-*.log (com.ranch.logrotate, hourly, copy-truncate; infra/bin/logrotate.sh)
-logrotate_max_mb: 20
-logrotate_keep: 7
-logrotate_daily_hour: 3
 go2rtc_api_port: 1984
 
 # Wyze bridge: IDisposable's Go rewrite on top of go2rtc (docs/CAMERAS.md). Pure Go, no cgo, built on
@@ -138,6 +134,10 @@ seed_hours: 16               # was 48; cut short 16 Oct 13:00 ET: seven continuo
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)
 ranch_models_dir: /usr/local/ranch/models   # CoreML packages, not in git
+ranch_daemons_retired:                       # unloaded and deleted by roles/services
+  - com.ranch.logrotate                      # 16 Oct: custom rotation replaced by the unified log
+ranch_scripts_retired:
+  - logrotate.sh
 ranch_app_daemons:                           # restarted by roles/app when the tree changes
   - com.ranch.ingest
   - com.ranch.detector

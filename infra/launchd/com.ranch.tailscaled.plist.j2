@@ -5,13 +5,11 @@
   <key>Label</key><string>com.ranch.tailscaled</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{{ brew_prefix }}/bin/tailscaled</string>
-    <string>--state={{ tailscale_state_dir }}/tailscaled.state</string>
-    <string>--socket=/var/run/tailscaled.socket</string>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '{{ brew_prefix }}/bin/tailscaled' '--state={{ tailscale_state_dir }}/tailscaled.state' '--socket=/var/run/tailscaled.socket' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.tailscaled -p user.notice</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/var/log/ranch-tailscaled.log</string>
-  <key>StandardErrorPath</key><string>/var/log/ranch-tailscaled.log</string>
 </dict>
 </plist>

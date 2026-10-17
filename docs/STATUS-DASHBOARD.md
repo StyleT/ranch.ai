@@ -17,7 +17,7 @@ bridge UI on 5080 and go2rtc on 1984; revisit before anything else joins the LAN
 | MQTT on loopback | `@ranch/bus` `connectBus`, subscribe `ranch/#` | live ticker, retained `ranch/status/ingest` and `ranch/status/detector` (pid, RSS, processed, dropped) |
 | Bridge API `:5080/api/cameras` | `fetch`, cached 60 s | camera model, firmware, IP. Its `state: streaming` is not liveness |
 | launchd | `sudo -n launchctl list` (passwordless sudo), every 15 s | pid and last exit status per `com.ranch.*` daemon |
-| `/var/log/ranch-<name>.log` | tail last line, every 15 s | last log line per daemon |
+| unified log (`log show --last 5m --predicate 'process == "logger"'`, attributed by logger pid) | every 30 s | last log line per daemon |
 | `/usr/local/ranch/media/seed/<camera>/` | `readdir` count, every 60 s | seed recorder progress |
 | `df -g /` | every 60 s | free disk |
 | Latest kept frame file | path from the `frames` table, served as `image/jpeg` | per-camera thumbnail, no go2rtc load |
@@ -60,7 +60,7 @@ URL: http://ranch-ai.tail6d04cd.ts.net:5090/ (tailnet) or http://ranch-ai.local:
 | Panel | Shows | Source |
 |---|---|---|
 | Header | uptime, load, free/total disk, totals of frames/detections/events, seed frames and % of the 48 h window | `os`, `df -g /`, SQLite, seed dir, `SEED_START_EPOCH`/`SEED_HOURS` from the plist |
-| Daemons | every `com.ranch.*`: pid or **down**, last exit code, the retained MQTT status (rss, processed, dropped) for ingest/detector, last log line | `sudo -n launchctl list`, `ranch/status/#`, tail of `/var/log/ranch-<name>.log` |
+| Daemons | every `com.ranch.*`: pid or **down**, last exit code, the retained MQTT status (rss, processed, dropped) for ingest/detector, last log line | `sudo -n launchctl list`, `ranch/status/#`, unified log via `log show` |
 | Cameras | thumbnail (latest kept frame), online/offline, last-frame age, frames/min over 10 min, horse count in the last 3 min, seed frame count, model/firmware/IP | `frames`, `camera_counts`, seed dir, bridge `/api/cameras` (cached 60 s) |
 | Detections, last hour | label, count, mean confidence, bar | `detections` ⋈ `frames` |
 | Events | latest 10 with tier and verdict (empty until Phase 2) | `events` |

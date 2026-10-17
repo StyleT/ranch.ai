@@ -19,7 +19,7 @@ source of truth and copy over it if you edit.
 | User | `ranch`, uid 501, admin, password in Vlad's password manager, FileVault off, auto-login off |
 | Access | `ssh ranch` (Tailscale) / `ssh ranch-lan` (LAN); laptop key `~/.ssh/id_ed25519`; sshd keys-only; `sudo -n` works |
 | Installed | Xcode CLT (python 3.9.6), Homebrew 7.0.9, git, jq, ffmpeg, mosquitto (installed, not started), tailscale, fnm + Node 24, uv |
-| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (temporary), `com.ranch.ingest`, `com.ranch.detector`, `com.ranch.status` (all `/Library/LaunchDaemons`, logs `/var/log/ranch-*.log`) |
+| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (idle), `com.ranch.ingest`, `com.ranch.detector`, `com.ranch.netprobe`, `com.ranch.status` (all `/Library/LaunchDaemons`; output in the unified log via `logger`) |
 | Status page | `com.ranch.status`, `apps/status`, port 5090 on all interfaces, no auth; ~1 Node process, `node:http` + SSE, reads SQLite/MQTT/launchd/logs/seed dir |
 | App paths | tree `/usr/local/ranch/app` (rsync of the laptop checkout), models `/usr/local/ranch/models`, DB `/usr/local/ranch/var/ranch-events.sqlite`, frames `/usr/local/ranch/media/frames/<cam>/<date>/` |
 | Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |
@@ -32,6 +32,7 @@ make provision   # apply; must end changed=0 on the second run
 make check       # drift report, changes nothing
 make verify      # after a reboot: asserts no console user, no noisy agents, audiomxd paused
 make snapshot    # infra/snapshots/<date>/ ; commit the result
+make logs        # live tail of every daemon (unified log); make logs-last H=3 for the last 3 hours
 make bootstrap   # only on a freshly erased mini (Xcode CLT + Homebrew), see infra/MANUAL.md
 ```
 **Tracking the pipeline:** the status page at http://ranch-ai.tail6d04cd.ts.net:5090/ (`ranch-ai.local:5090` on the
@@ -40,7 +41,7 @@ per minute / horse count / online (= a kept frame in the last 60 s; the bridge's
 detections by label for the last hour, latest events, seed-recorder progress, free disk, and a live MQTT ticker over
 server-sent events. JSON at `/api/status`, thumbnails at `/api/frame/<camera>`, stream at `/api/events`. No auth,
 same trade-off as the bridge UI. Design note: `docs/STATUS-DASHBOARD.md`. The CLI (`ranch status|frames|counts|
-cameras|events`) and `tail -f /var/log/ranch-*.log` still work over `ssh ranch` for scripting.
+cameras|events`) and `make logs` / `make logs-last H=3` (unified log) are the scripting path.
 Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the login window; log out after use.
 
 ## Gotchas learned the hard way (all encoded in the playbook)
@@ -67,7 +68,7 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
 9. **Magic Keyboard at Setup Assistant** pairs instantly over a USB-C cable when Bluetooth pairing stalls.
 10. **LaunchDaemons with `UserName`:** launchd opens `StandardOutPath` as that user, and `/var/log` is root 755,
     so the job dies with `spawn failed`, `last exit code = 78: EX_CONFIG` and no log. The services role touches
-    `/var/log/ranch-<name>.log` owned by `ranch` before installing the plist.
+    the log file before installing the plist. Superseded 16 Oct: there are no log files any more (gotcha 19).
 14. **go2rtc never drops a dead producer.** When a camera's TUTK session dies, the stream keeps its producer, new
     consumers attach and hang, consumers leak (624 after 12 h), and the bridge still reports `streaming`. The
     sampler's stall watchdog recreates the stream after 180 s without a frame (docs/CAMERAS.md incident, 16 Oct).
@@ -88,9 +89,12 @@ Reboot: `ssh ranch 'sudo -n reboot'`, back in ~30 s. Screen Sharing shows the lo
 18. **go2rtc writes API-added streams into its first `-config` file.** With one managed file that meant a
     template change on every provision and a restart loop. It now gets `-config state.yaml` (scratch, created
     once) followed by the managed `go2rtc.yaml`.
-19. **Logs rotate by copy-truncate.** launchd opens `StandardOutPath` with O_APPEND, so `com.ranch.logrotate`
-    copies, gzips and truncates in place (verified: no NUL prefix after truncation). newsyslog's rename would
-    leave every daemon writing into the rotated file.
+19. **Logs are the OS's.** Daemon stdout/stderr go through `logger` into the unified log; `logger -t` tags are
+    *not* stored (verified 16 Oct), so attribute lines by the logger pid (`ps -axo pid,args | grep 'logger -t'`)
+    or by content (`"svc":"ingest"`, bridge lines start with `{"level"`, go2rtc lines with a timestamp). ASL
+    file modules in `/etc/asl` no longer receive logger output on macOS 27 (tested), and newsyslog cannot make a
+    launchd-held file reopen, which is why files were dropped. Query: `sudo log show --last 1h --predicate
+    'process == "logger"' --style compact`; JSON: `--style json`, field `eventMessage`.
 11. **`brew info`/`brew bundle` need `/opt/homebrew/bin` on PATH** in non-interactive SSH; the playbook sets PATH
     explicitly. go2rtc is not in Homebrew; it is a pinned release zip with a sha256 in `group_vars`.
 

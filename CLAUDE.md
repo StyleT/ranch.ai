@@ -20,10 +20,13 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
 - A change is done when a second `make provision` reports `changed=0` and `make check` is clean.
 - Read-only `command`/`shell` tasks carry `changed_when: false` **and** `check_mode: false`.
 - **Every long-running process is a LaunchDaemon under launchd supervision (KeepAlive), never a child of another
-  daemon and never a bare background process**, with stdout/stderr in `/var/log/ranch-<name>.log`, which
-  `com.ranch.logrotate` rotates (copy-truncate, hourly check, 20 MB or daily, 7 gzipped generations). Template in
-  `infra/launchd/<label>.plist.j2`, scripts in `infra/bin/`, registered in `roles/services/tasks/main.yml`
-  (`ranch_daemons`). A changed plist is re-bootstrapped (kickstart would keep the old definition).
+  daemon and never a bare background process.** Logging is the OS's: each plist runs the program through
+  `/bin/bash -c 'exec <cmd> 2>&1 | exec /usr/bin/logger -t ranch.<name> -p user.notice'`, so output lands in the
+  unified log (`log show` / `log stream`, `make logs`, `make logs-last H=3`); retention and rotation are the
+  system's, there are no log files and no custom rotation. launchd kills the whole process group on stop, so the
+  pipe is safe. Template in `infra/launchd/<label>.plist.j2`, scripts in `infra/bin/`, registered in
+  `roles/services/tasks/main.yml` (`ranch_daemons`). A changed plist is re-bootstrapped (kickstart would keep the
+  old definition).
 - Ansible runs from the laptop: `~/.local/bin/ansible-playbook` (installed with `uv tool`).
   Target interpreter is `/usr/bin/python3` (3.9.6 from Xcode CLT).
 - Secrets never enter the repo. Device credentials live on the mini in `~/.config/ranch/*.env` (mode 600);

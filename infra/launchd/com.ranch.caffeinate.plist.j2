@@ -4,7 +4,11 @@
 <dict>
   <key>Label</key><string>com.ranch.caffeinate</string>
   <key>ProgramArguments</key>
-  <array><string>/usr/bin/caffeinate</string><string>-dims</string></array>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '/usr/bin/caffeinate' '-dims' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.caffeinate -p user.notice</string>
+  </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
 </dict>

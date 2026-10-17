@@ -12,7 +12,6 @@
       - com.ranch.ingest
       - com.ranch.detector
       - com.ranch.netprobe
-      - com.ranch.logrotate
       - com.ranch.status
 
 - name: Ranch bin dir
@@ -38,29 +37,34 @@
     - { name: wyze-bridge.sh, daemon: com.ranch.wyze-bridge }
     - { name: seed-recorder.sh, daemon: com.ranch.seed-recorder }
     - { name: ranch, daemon: "" }
-    - { name: logrotate.sh, daemon: com.ranch.logrotate }
   loop_control: { label: "{{ item.name }}" }
   register: scripts
 
-- name: Log files for daemons that run as {{ ranch_user }} (launchd opens StandardOutPath as that user; /var/log is root 755)
-  ansible.builtin.file:
-    path: /var/log/{{ item }}.log
-    state: touch
-    owner: "{{ ranch_user }}"
-    group: wheel
-    mode: "0644"
-    access_time: preserve
-    modification_time: preserve
+# Daemon output goes through logger(1) into the unified log (see CLAUDE.md); the old per-daemon files are gone.
+- name: Old /var/log/ranch-*.log files removed
+  ansible.builtin.shell: |
+    set -e; removed=0
+    for f in /var/log/ranch-*.log /var/log/ranch-*.log.*.gz; do [ -e "$f" ] && rm -f "$f" && removed=$((removed+1)); done
+    echo "removed=$removed"
+  register: oldlogs
+  changed_when: "'removed=0' not in oldlogs.stdout"
   become: true
-  loop:
-    - ranch-mosquitto
-    - ranch-go2rtc
-    - ranch-netprobe
-    - ranch-wyze-bridge
-    - ranch-seed-recorder
-    - ranch-ingest
-    - ranch-detector
-    - ranch-status
+
+# Daemons that existed once and must not come back (plist and script removed, job unloaded).
+- name: Retired daemons unloaded
+  ansible.builtin.shell: |
+    if launchctl print system/{{ item }} >/dev/null 2>&1; then launchctl bootout system/{{ item }}; echo UNLOADED; fi
+  register: retired
+  changed_when: "'UNLOADED' in retired.stdout"
+  become: true
+  loop: "{{ ranch_daemons_retired }}"
+
+- name: Retired daemon plists and scripts absent
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop: "{{ ranch_daemons_retired | map('regex_replace', '^(.*)$', '/Library/LaunchDaemons/\\1.plist') | list + ranch_scripts_retired | map('regex_replace', '^(.*)$', ranch_bin_dir ~ '/\\1') | list }}"
 
 - name: Install daemon plists
   ansible.builtin.template:

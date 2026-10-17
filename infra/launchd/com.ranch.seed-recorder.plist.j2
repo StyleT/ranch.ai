@@ -4,7 +4,11 @@
 <dict>
   <key>Label</key><string>com.ranch.seed-recorder</string>
   <key>ProgramArguments</key>
-  <array><string>/bin/bash</string><string>{{ ranch_bin_dir }}/seed-recorder.sh</string></array>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '/bin/bash' '{{ ranch_bin_dir }}/seed-recorder.sh' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.seed-recorder -p user.notice</string>
+  </array>
   <key>UserName</key><string>{{ ranch_user }}</string>
   <key>WorkingDirectory</key><string>{{ ranch_media_dir }}</string>
   <key>EnvironmentVariables</key>
@@ -21,7 +25,5 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>30</integer>
-  <key>StandardOutPath</key><string>/var/log/ranch-seed-recorder.log</string>
-  <key>StandardErrorPath</key><string>/var/log/ranch-seed-recorder.log</string>
 </dict>
 </plist>

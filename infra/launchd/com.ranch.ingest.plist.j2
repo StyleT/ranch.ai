@@ -5,9 +5,9 @@
   <key>Label</key><string>com.ranch.ingest</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{{ ranch_bin_dir }}/node</string>
-    <string>--no-warnings=ExperimentalWarning</string>
-    <string>{{ ranch_app_dir }}/apps/ingest/src/main.ts</string>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '{{ ranch_bin_dir }}/node' '--no-warnings=ExperimentalWarning' '{{ ranch_app_dir }}/apps/ingest/src/main.ts' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.ingest -p user.notice</string>
   </array>
   <key>UserName</key><string>{{ ranch_user }}</string>
   <key>WorkingDirectory</key><string>{{ ranch_app_dir }}</string>
@@ -24,7 +24,5 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>15</integer>
-  <key>StandardOutPath</key><string>/var/log/ranch-ingest.log</string>
-  <key>StandardErrorPath</key><string>/var/log/ranch-ingest.log</string>
 </dict>
 </plist>

@@ -5,15 +5,13 @@
   <key>Label</key><string>com.ranch.mosquitto</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{{ brew_prefix }}/opt/mosquitto/sbin/mosquitto</string>
+    <string>/bin/bash</string>
     <string>-c</string>
-    <string>{{ brew_prefix }}/etc/mosquitto/mosquitto.conf</string>
+    <string>exec '{{ brew_prefix }}/opt/mosquitto/sbin/mosquitto' '-c' '{{ brew_prefix }}/etc/mosquitto/mosquitto.conf' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.mosquitto -p user.notice</string>
   </array>
   <key>UserName</key><string>{{ ranch_user }}</string>
   <key>WorkingDirectory</key><string>{{ ranch_var_dir }}/mosquitto</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/var/log/ranch-mosquitto.log</string>
-  <key>StandardErrorPath</key><string>/var/log/ranch-mosquitto.log</string>
 </dict>
 </plist>
