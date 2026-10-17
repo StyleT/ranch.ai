@@ -21,11 +21,31 @@
     - "{{ ranch_var_dir }}/wyze-bridge"
     - "{{ ranch_media_dir }}"
 
-- name: Bridge source at {{ wyze_bridge_version }}
+# wyze_bridge_version "4" (a bare major) resolves to the newest stable v4.x.y tag on the remote, like the Docker
+# tag `4`, so minor and patch releases arrive on the next `make provision`. Anything else is used verbatim.
+- name: Resolve newest stable v{{ wyze_bridge_version }}.x tag
+  ansible.builtin.shell: |
+    git ls-remote --tags --refs {{ wyze_bridge_repo }} 'v{{ wyze_bridge_version }}.*' \
+      | /usr/bin/python3 -c 'import sys,re; tags=[l.split("/")[-1] for l in sys.stdin.read().split()]; \
+          st=[t for t in tags if re.fullmatch(r"v\d+\.\d+\.\d+", t)]; \
+          print(max(st, key=lambda t: tuple(map(int, t[1:].split(".")))) if st else "")'
+  register: wb_latest
+  changed_when: false
+  check_mode: false
+  when: wyze_bridge_version is match('^[0-9]+$')
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/bin:/bin"
+
+- name: Bridge tag to build
+  ansible.builtin.set_fact:
+    wb_version: "{{ (wb_latest.stdout | trim) if (wyze_bridge_version is match('^[0-9]+$')) else wyze_bridge_version }}"
+  failed_when: wb_version | length == 0
+
+- name: Bridge source at {{ wb_version }}
   ansible.builtin.git:
     repo: "{{ wyze_bridge_repo }}"
     dest: "{{ ranch_src_dir }}/wyze-bridge"
-    version: "{{ wyze_bridge_version }}"
+    version: "{{ wb_version }}"
     depth: 1
     force: true
   register: wb_src
@@ -48,13 +68,13 @@
 # "4.0-beta" (seen 16 Oct). The stamp records commit + version so a flag change rebuilds too.
 - name: Expected build stamp
   ansible.builtin.set_fact:
-    wb_stamp_expected: "{{ wb_src.after }} {{ wyze_bridge_version }}"
+    wb_stamp_expected: "{{ wb_src.after }} {{ wb_version }}"
 
 - name: Build bridge (go build, ~1 min first time)
   ansible.builtin.command:
     cmd: >-
       {{ brew_prefix }}/bin/go build -trimpath
-      -ldflags "-s -w -X main.Version={{ wyze_bridge_version | regex_replace('^v', '') }}"
+      -ldflags "-s -w -X main.Version={{ wb_version | regex_replace('^v', '') }}"
       -o {{ ranch_src_dir }}/wyze-bridge.build ./cmd/wyze-bridge
     chdir: "{{ ranch_src_dir }}/wyze-bridge"
   environment:

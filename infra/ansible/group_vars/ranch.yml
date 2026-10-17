@@ -99,7 +99,9 @@ ranch_media_dir: /usr/local/ranch/media   # snapshots and recordings (same disk;
 # Wyze bridge: IDisposable's Go rewrite on top of go2rtc (docs/CAMERAS.md). Pure Go, no cgo, built on
 # the mini with Homebrew go. Pinned to a release tag; bump deliberately and re-measure.
 wyze_bridge_repo: https://github.com/IDisposable/docker-wyze-bridge.git
-wyze_bridge_version: v4.5.0
+# "4" follows the newest stable v4.x.y tag, like the Docker image tag `4` (betas and edge builds excluded);
+# a full tag such as v4.5.0 pins. The resolved tag goes into the build stamp and the binary's version string.
+wyze_bridge_version: "4"
 # go2rtc is the bridge's managed sidecar. The fork's Dockerfile pins this version; the macOS arm64
 # build is a zip on the GitHub release. Checksum of the zip, computed 14 Oct 2026.
 go2rtc_version: 1.9.14
