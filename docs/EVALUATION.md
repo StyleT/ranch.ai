@@ -40,9 +40,10 @@ be verified against the registry.
 
 Every dataset is pushed to the Hugging Face Hub, versions as git tags, the same way code goes to `origin main`:
 
-- One Hub dataset repo per family: `<hf-user>/ranch-frames` holds every `frames-*` version with its images,
-  `frames.jsonl`, `dataset.json`, `manifest.json` and the `predictions.*.jsonl` produced on it; labels go into
-  the same repo under `labels/` because they are meaningless without the frames. Layout: `frames-ranch-v1/…`,
+- One Hub dataset repo per family: `vladlenfedosov/ranch-frames` holds every `frames-*` version with its images,
+  `frames.jsonl`, `dataset.json`, `manifest.json`, the `predictions.*.jsonl` produced on it and `images/`; labels
+  go into the same repo under `labels/` because they are meaningless without the frames. Layout:
+  `frames-ranch-v1/{frames.jsonl,dataset.json,manifest.json,predictions.*.jsonl,README.md,images/<camera>/*.jpg}`,
   `labels/labels-ranch-claude-v1.jsonl`, …
 - A dataset is *registered* only once it is on the Hub: the registry row's last column is the Hub URL and the
   tag. `make dataset-push ID=frames-ranch-v1 DIR=evals/baseline/2026-10-20` uploads the directory (images
@@ -51,14 +52,16 @@ Every dataset is pushed to the Hugging Face Hub, versions as git tags, the same 
   is a one-line settings change once the frames are reviewed for faces and plates; Post 1 can link to it then.
 - The dataset card (`README.md` in the dataset directory) is written with the data and uploaded with it:
   what the frames are, how they were picked, the label schema, the privacy note, the license.
-- Tooling: `hf` CLI (`huggingface_hub`), token from `hf auth login` on the laptop (never in the repo, never on
-  the mini). Uploads run from the laptop, which already holds the images.
+- Tooling: `hf` CLI (`huggingface_hub`, installed on the mini by Ansible as a `uv` tool). The write token lives on
+  the mini in `~/.config/ranch/hf.env` (mode 600, like the other device secrets), never in the repo and never
+  on the laptop. `make dataset-push` runs the upload over SSH on the mini, where the images already are; the
+  JSONL comes from the deployed working-tree copy. Images land under `<id>/images/<camera>/`.
 
 Current datasets:
 
 | Id | What | Where |
 |---|---|---|
-| `frames-ranch-v1` | 300 frames, seeded 20261020, stratified camera × day/night from the 7-day pool of kept frames (was called B-2026-10-20) | `evals/baseline/2026-10-20/`; images on the mini `/usr/local/ranch/media/baseline/2026-10-20/` (never pruned), laptop copy git-ignored |
+| `frames-ranch-v1` | 300 frames, seeded 20261020, stratified camera × day/night from the 7-day pool of kept frames | Hub: `vladlenfedosov/ranch-frames` tag `frames-ranch-v1` (private); repo: `evals/baseline/2026-10-20/`; images on the mini `/usr/local/ranch/media/baseline/2026-10-20/` (never pruned), laptop copy git-ignored |
 | `preds-frames-ranch-v1-<model>-<sha8>` | yolo11n, yolo11s, rfdetr-nano fp16/fp32 at threshold 0.05 | same directory, `predictions.<model>.jsonl` |
 | `labels-ranch-claude-v1` | *planned*: Claude on 100 frames of `frames-ranch-v1` | `evals/golden/labels-ranch-claude-v1.jsonl` |
 | `labels-ranch-vlad-v1` | *planned, Phase 1b*: human, same 100 frames, blind | `evals/golden/labels-ranch-vlad-v1.jsonl` |

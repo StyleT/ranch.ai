@@ -57,3 +57,10 @@
     {{ brew_prefix }}/bin/fnm install {{ node_major }} && {{ brew_prefix }}/bin/fnm default {{ node_major }} && echo CHANGED
   register: fnm_out
   changed_when: "'CHANGED' in fnm_out.stdout"
+
+# Hugging Face CLI for dataset pushes (docs/EVALUATION.md §2.1); token in ~/.config/ranch/hf.env (mode 600, never in the repo).
+- name: huggingface_hub CLI (uv tool)
+  ansible.builtin.command: "{{ brew_prefix }}/bin/uv tool install 'huggingface_hub[cli]'"
+  args:
+    creates: /Users/{{ ranch_user }}/.local/bin/hf
+  environment: { HOME: "/Users/{{ ranch_user }}", PATH: "{{ brew_prefix }}/bin:/usr/bin:/bin" }

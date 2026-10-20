@@ -37,7 +37,7 @@
   ansible.builtin.command: >-
     rsync -ai --delete {{ '--dry-run' if ansible_check_mode else '' }}
     --exclude .git --exclude node_modules --exclude .scratch --exclude .venv --exclude infra/snapshots
-    --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store
+    --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store --exclude 'evals/baseline/*/frames'
     -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_app_dir }}/
   delegate_to: localhost
   register: app_sync

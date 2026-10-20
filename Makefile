@@ -24,11 +24,14 @@ logs:             ## Live tail of every ranch daemon (unified log; Ctrl-C to sto
 logs-last:        ## Last H hours (default 1) of daemon output, e.g. make logs-last H=3
 	ssh $(HOST) 'log show --last $(or $(H),1)h --predicate '"'"'process == "logger"'"'"' --style compact'
 
-HF_REPO ?= StyleT/ranch-frames
+HF_REPO ?= vladlenfedosov/ranch-frames
 
-dataset-push:     ## Upload a dataset dir to the Hub and tag it: make dataset-push ID=frames-ranch-v1 DIR=evals/baseline/2026-10-20
-	@test -n "$(ID)" -a -n "$(DIR)" || (echo "usage: make dataset-push ID=<dataset id> DIR=<directory>"; exit 2)
-	hf repo create $(HF_REPO) --repo-type dataset --private 2>/dev/null || true
-	hf upload $(HF_REPO) $(DIR) $(ID) --repo-type dataset --commit-message "$(ID)" --exclude "*.DS_Store"
-	hf repo tag create $(HF_REPO) $(ID) --repo-type dataset -m "$(ID)" 2>/dev/null || echo "tag $(ID) exists"
+# Runs on the mini: the images and the token (~/.config/ranch/hf.env) live there; the JSONL dir is the deployed copy.
+dataset-push:     ## Upload a dataset to the Hub and tag it: make dataset-push ID=frames-ranch-v1 DIR=evals/baseline/2026-10-20 [IMAGES=/usr/local/ranch/media/baseline/2026-10-20]
+	@test -n "$(ID)" -a -n "$(DIR)" || (echo "usage: make dataset-push ID=<dataset id> DIR=<repo-relative dir> [IMAGES=<dir on the mini>]"; exit 2)
+	ssh $(HOST) 'set -e; set -a; . ~/.config/ranch/hf.env; set +a; export PATH=$$HOME/.local/bin:$$PATH; \
+	  hf repo create $(HF_REPO) --repo-type dataset --private 2>/dev/null || true; \
+	  hf upload $(HF_REPO) /usr/local/ranch/app/$(DIR) $(ID) --repo-type dataset --commit-message "$(ID): data" --exclude "*.DS_Store" --exclude "frames/*"; \
+	  if [ -n "$(IMAGES)" ]; then hf upload $(HF_REPO) $(IMAGES) $(ID)/images --repo-type dataset --commit-message "$(ID): images" --exclude "*.DS_Store"; fi; \
+	  hf repo tag create $(HF_REPO) $(ID) --repo-type dataset -m "$(ID)" 2>/dev/null || echo "tag $(ID) exists"'
 	@echo "https://huggingface.co/datasets/$(HF_REPO)/tree/$(ID)"
