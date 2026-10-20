@@ -1,0 +1,19 @@
+{
+  "id": "labels-ranch-claude-v1",
+  "kind": "labels",
+  "version": 1,
+  "created": "2026-10-20T01:27:17.041985Z",
+  "parent": "frames-ranch-v1",
+  "n": 100,
+  "sha256": {
+    "labels-ranch-claude-v1.jsonl": "e7e0d99bef670c6cc1cd24493c9db5b879db6dfc9d52c89afb013facacc76883"
+  },
+  "source": {
+    "labeler": "claude-opus-5-5",
+    "method": "Batch API, structured outputs (evals/label/schema.ts), blind to detector output",
+    "batch_id": "msgbatch_01813SVCHSyED4hhQ2TTxckj",
+    "pick": "first 100 of frames-ranch-v1 round-robin over camera x period",
+    "cost_usd": 1.436
+  },
+  "host": "ranch-ai"
+}

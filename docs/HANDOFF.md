@@ -11,9 +11,11 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
 **Regroup, 19 Oct. Next, in order:**
 1. Watch delivery for a day with the keep-alive on (`ranch frames --since 24h --json | …`, or the status page):
    target ≥ 300 frames per camera per hour. If the go2rtc panic recurs, count it; decide on the upstream report.
-2. Phase 1 step 6: the frames are picked (`evals/baseline/2026-10-20/`, 300 frames, zero-shot predictions from
-   all four models recorded). Run the Claude labeling batch on the first 100 of them (~$1.60; key on the mini):
-   `node evals/label/claude.ts estimate|submit --frames evals/baseline/2026-10-20/frames.jsonl --n 100`. Then step 7: the recall benchmark. The detector
+2. ~~Phase 1 steps 6–7~~ done 20 Oct: `labels-ranch-claude-v1` (100 frames, $1.44) and the first leaderboard rows
+   (`evals/LEADERBOARD.md`, `evals/results/`). Horse recall 0.26–0.35 at 0.25, wide CIs; 12 of 23 horse-class
+   boxes missed by every model, seven of them large daytime donkeys. Datasets on the Hub (`vladlenfedosov/ranch-frames`).
+   Next: Post 1 from these numbers; a class filter for tier 1 (today the detector's "bench"/"bottle" boxes are
+   pure noise); then Phase 1b human labels on the same 100 frames; and the fine-tune question (donkey class). Then step 7: the recall benchmark. The detector
    evidence makes this urgent: yolo11n emits thousands of confident night false positives (bench, bottle,
    clock, airplane) per day; nothing downstream should trust tier 1 until the benchmark and a class filter exist.
 3. Post 1 draft from the measured numbers, plus the dropout story as the "what went wrong" section.

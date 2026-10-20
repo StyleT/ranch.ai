@@ -1,0 +1,19 @@
+# Benchmark results
+
+One JSON per run, written by `apps/detector/src/bench.ts`; rows summarized in `evals/LEADERBOARD.md`. Each file
+records the frames and labels dataset ids with sha256, the class mapping, threshold, IoU, commit, host and
+the exact command.
+
+## 2026-10-20-zero-shot.json (and -iou03)
+
+Four zero-shot models on the 100 Claude-labeled frames of `frames-ranch-v1`, threshold 0.25, IoU 0.5 (0.3 in the
+second file, identical recall). Headline: horse recall 0.26–0.35 with 95 % intervals spanning 0.09–0.57; the
+YOLOs have perfect horse precision but 0.7–0.8 false boxes of other classes per frame, RF-DETR finds a few more
+horses (AP 0.42) at ~2 false boxes per frame. By slice: day recall 0.09–0.27 (11 gold, mostly donkeys), night
+0.42–0.50 (12 gold). Horses by camera in the labeled set: front_porch 8, mops 7, donkey 6, back_yard 1,
+wash_stall 1, back_pasture 0, tractor 0.
+
+What every model misses (12 of 23): the seven large daytime donkeys on donkey_cam and front_porch (COCO has no
+donkey class and does not generalize `horse` to them), three animals narrower than 120 px, and one night frame
+where the horse fills the picture. That list is the Post 1 "what went wrong" and the first argument for a
+fine-tune with a `donkey` class.
