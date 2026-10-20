@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-20",
+  "host": "ranch-ai",
+  "n": 300,
+  "seed": 20261020,
+  "since": "7d",
+  "threshold": 0.05,
+  "media_dir": "/usr/local/ranch/media/baseline/2026-10-20",
+  "models": {
+    "rfdetr-nano-float16": {
+      "sha256": "a786ba8ab640b1d9500df59955364e0c6a332c0c6a03e3a7b140dba95ec605f2",
+      "compute": "ane",
+      "inputs": [
+        "image"
+      ],
+      "outputs": [
+        "labels",
+        "dets"
+      ],
+      "mean_ms": 30.78,
+      "wall_s": 9.5
+    },
+    "rfdetr-nano-float32": {
+      "sha256": "b7d49936d2796a1ffe73f2fd0a85f43eb2aa8a7d4330dba36dbd956cedf0eb98",
+      "compute": "gpu",
+      "inputs": [
+        "image"
+      ],
+      "outputs": [
+        "dets",
+        "labels"
+      ],
+      "mean_ms": 26.67,
+      "wall_s": 8.6
+    },
+    "yolo11n": {
+      "sha256": "7edec7809fb210622fd7794978ed35014de144d425e905fc30d1cafbacdea38e",
+      "compute": "ane",
+      "inputs": [
+        "confidenceThreshold",
+        "iouThreshold",
+        "image"
+      ],
+      "outputs": [
+        "coordinates",
+        "confidence"
+      ],
+      "mean_ms": 16.81,
+      "wall_s": 5.3
+    },
+    "yolo11s": {
+      "sha256": "0b717c6c9eb8d5019408f9813524c7405125c8cd5155f6ff9c615f3ee766cfd7",
+      "compute": "ane",
+      "inputs": [
+        "confidenceThreshold",
+        "image",
+        "iouThreshold"
+      ],
+      "outputs": [
+        "coordinates",
+        "confidence"
+      ],
+      "mean_ms": 20.27,
+      "wall_s": 6.3
+    }
+  }
+}

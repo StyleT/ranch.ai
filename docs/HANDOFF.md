@@ -11,8 +11,9 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
 **Regroup, 19 Oct. Next, in order:**
 1. Watch delivery for a day with the keep-alive on (`ranch frames --since 24h --json | …`, or the status page):
    target ≥ 300 frames per camera per hour. If the go2rtc panic recurs, count it; decide on the upstream report.
-2. Phase 1 step 6: pick 100 frames (day frames now exist for every camera except mops) and run the Claude
-   labeling batch (~$1.60; key on the mini; commands below). Then step 7: the recall benchmark. The detector
+2. Phase 1 step 6: the frames are picked (`evals/baseline/2026-10-20/`, 300 frames, zero-shot predictions from
+   all four models recorded). Run the Claude labeling batch on the first 100 of them (~$1.60; key on the mini):
+   `node evals/label/claude.ts estimate|submit --frames evals/baseline/2026-10-20/frames.jsonl --n 100`. Then step 7: the recall benchmark. The detector
    evidence makes this urgent: yolo11n emits thousands of confident night false positives (bench, bottle,
    clock, airplane) per day; nothing downstream should trust tier 1 until the benchmark and a class filter exist.
 3. Post 1 draft from the measured numbers, plus the dropout story as the "what went wrong" section.
@@ -42,6 +43,8 @@ make check       # drift report, changes nothing
 make verify      # after a reboot: asserts no console user, no noisy agents, audiomxd paused
 make snapshot    # infra/snapshots/<date>/ ; commit the result
 make logs        # live tail of every daemon (unified log); make logs-last H=3 for the last 3 hours
+# status page :5090 (cameras, daemons, detections per camera); :5090/frames browses kept frames with the boxes
+# drawn on them, and any baseline set with any model's predictions (docs/FRAMES-AND-BASELINE.md)
 make bootstrap   # only on a freshly erased mini (Xcode CLT + Homebrew), see infra/MANUAL.md
 ```
 **Tracking the pipeline:** the status page at http://ranch-ai.tail6d04cd.ts.net:5090/ (`ranch-ai.local:5090` on the

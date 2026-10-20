@@ -64,3 +64,19 @@ Baseline sets (section 3) live outside this tree and are never pruned.
 2. Dashboard per-camera table, frame browser and APIs.
 3. Baseline snapshot, run on the mini, JSONL committed.
 Each step is its own commit.
+
+## As built, 19–20 Oct
+
+- §1 shipped as schema v2 (`frames.kept`) + `EventStore.applyRetention`, run by the sampler hourly and at start.
+  First pass: 58,914 → 20,454 frames, 14 GB → 4.5 GB, 3.6 s. Most survivors are floor frames whose detections
+  "changed" between consecutive frames, which today is yolo11n's night false positives flickering; the class
+  filter after the benchmark will shrink that. `RANCH_RETAIN_AFTER_S` (3600) is the evaluation delay.
+- §2 shipped: `/frames` with filters, boxes as overlays, full-size view with prev/next and keyboard; `/api/frames`,
+  `/api/frame/<id>?w=`. The main page has the camera × label table linking into the browser.
+- §3 shipped: `evals/baseline/snapshot.ts`; first set `evals/baseline/2026-10-20/` (300 frames, 21–22 per
+  camera × day/night, 7-day pool of 20k kept frames), predictions from yolo11n, yolo11s, rfdetr-nano fp16 (ANE)
+  and fp32 (GPU) at threshold 0.05, images at `/usr/local/ranch/media/baseline/2026-10-20/` (80 MB). The frame
+  browser opens any set with a model selector (`/frames?set=2026-10-20&model=yolo11s`). At ≥ 0.25 on these 300
+  frames the models report 19–49 horse boxes and 29–72 "bench" boxes; the labels will say which are real.
+- Labeling now draws from the baseline file: `node evals/label/claude.ts estimate|submit --frames
+  evals/baseline/2026-10-20/frames.jsonl --n 100` takes the first 100 round-robin over camera × period.

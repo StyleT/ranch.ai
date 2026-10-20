@@ -99,3 +99,9 @@ again, compare the Wyze app's "online since" with the first seed file timestamp.
 Follow-up, same day: the "cameras still offline" report after the fix was correct and was a different fault. The five
 original cameras had been dead inside go2rtc since 23:24 ET the night before (docs/CAMERAS.md, incident); only the two
 newly powered ones were delivering. The page showed exactly that. The stall watchdog in the sampler is the fix.
+
+## Added 19–20 Oct (docs/FRAMES-AND-BASELINE.md)
+
+`/frames` frame browser with detection overlays, `/api/frames`, `/api/frame/<id>?w=` (sharp resize on the fly),
+`/api/baseline`, `/api/baseline/<date>?model=&min_conf=&camera=`, `/api/baseline-frame/<date>/<camera>/<file>?w=`.
+The main page's detections panel is per camera and links into the browser.

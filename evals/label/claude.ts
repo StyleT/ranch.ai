@@ -1,8 +1,8 @@
 // AI-first labeling (PLAN.md Phase 1, decided 15 Oct): Claude labels the frame set through the Batch API with
 // structured outputs; these labels are the Phase 1 ground truth. Phase 1b compares them with human labels.
-//   node evals/label/claude.ts submit  --frames evals/golden/frames.jsonl        → batch id (saved under evals/golden/batches/)
+//   node evals/label/claude.ts submit  --frames evals/baseline/<date>/frames.jsonl --n 100   → batch id (saved under evals/golden/batches/)
 //   node evals/label/claude.ts collect --batch <id> --out evals/golden/labels.claude.jsonl
-//   node evals/label/claude.ts estimate --frames evals/golden/frames.jsonl       → token count and cost for one frame
+//   node evals/label/claude.ts estimate --frames evals/baseline/<date>/frames.jsonl --n 100  → token count and cost
 import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,12 +24,23 @@ on its side with legs out; lying_sternal means upright on its chest. If no gate 
 
 const { values: a, positionals } = parseArgs({ allowPositionals: true, options: {
   frames: { type: 'string', default: 'evals/golden/frames.jsonl' }, batch: { type: 'string' }, out: { type: 'string', default: 'evals/golden/labels.claude.jsonl' },
-  limit: { type: 'string' },
+  limit: { type: 'string' }, n: { type: 'string' },
 } });
 const cmd = positionals[0];
 const client = new Anthropic();
 interface FrameRow { path: string; source?: string; camera: string; ts: string; period: string }
-const frames = (): FrameRow[] => readFileSync(a.frames!, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as FrameRow).slice(0, a.limit ? Number(a.limit) : undefined);
+const frames = (): FrameRow[] => {
+  const all = readFileSync(a.frames!, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as FrameRow);
+  if (a.limit) return all.slice(0, Number(a.limit));
+  if (!a.n) return all;
+  // --n: take the first N round-robin over camera x period buckets, in file order (the baseline file is already a
+  // seeded stratified pick), so the labeled subset stays balanced.
+  const buckets = new Map<string, FrameRow[]>();
+  for (const f of all) { const k = `${f.camera}|${f.period}`; (buckets.get(k) ?? buckets.set(k, []).get(k)!).push(f); }
+  const keys = [...buckets.keys()].sort(); const out: FrameRow[] = []; let i = 0;
+  while (out.length < Number(a.n) && i < keys.length * 1000) { const next = buckets.get(keys[i++ % keys.length]!)!.shift(); if (next) out.push(next); if ([...buckets.values()].every((b) => b.length === 0)) break; }
+  return out;
+};
 
 async function imageBlock(path: string): Promise<Anthropic.ImageBlockParam> {
   const data = await sharp(path).resize({ width: MAX_SIDE, height: MAX_SIDE, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
