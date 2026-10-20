@@ -1,0 +1,27 @@
+{
+  "id": "frames-ranch-v1",
+  "kind": "frames",
+  "version": 1,
+  "created": "2026-10-20T00:48:00Z",
+  "parent": null,
+  "n": 300,
+  "sha256": {
+    "frames.jsonl": "b3f7c87146018c03e434d53529ab74aa3695c72ba608d38cdd3d2717b8438af5"
+  },
+  "source": {
+    "query": "frames table",
+    "since": "7d",
+    "seed": 20261020,
+    "stratify": "camera x day/night",
+    "exclude": "living_room_cam"
+  },
+  "host": "ranch-ai",
+  "commit": "4f96694",
+  "media_dir": "/usr/local/ranch/media/baseline/2026-10-20",
+  "preds": {
+    "preds-frames-ranch-v1-rfdetr-nano-float16-a786ba8a": "predictions.rfdetr-nano-float16.jsonl",
+    "preds-frames-ranch-v1-rfdetr-nano-float32-b7d49936": "predictions.rfdetr-nano-float32.jsonl",
+    "preds-frames-ranch-v1-yolo11n-7edec780": "predictions.yolo11n.jsonl",
+    "preds-frames-ranch-v1-yolo11s-0b717c6c": "predictions.yolo11s.jsonl"
+  }
+}

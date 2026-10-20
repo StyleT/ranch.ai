@@ -1,7 +1,7 @@
 ANSIBLE_PLAYBOOK ?= $(HOME)/.local/bin/ansible-playbook
 HOST ?= ranch@ranch-ai.tail6d04cd.ts.net
 
-.PHONY: bootstrap provision check verify snapshot logs logs-last
+.PHONY: bootstrap provision check verify snapshot logs logs-last dataset-push
 
 bootstrap:        ## One-time: Xcode CLT + Homebrew on a freshly erased mini
 	ssh $(HOST) 'bash -s' < infra/bootstrap.sh
@@ -23,3 +23,12 @@ logs:             ## Live tail of every ranch daemon (unified log; Ctrl-C to sto
 
 logs-last:        ## Last H hours (default 1) of daemon output, e.g. make logs-last H=3
 	ssh $(HOST) 'log show --last $(or $(H),1)h --predicate '"'"'process == "logger"'"'"' --style compact'
+
+HF_REPO ?= StyleT/ranch-frames
+
+dataset-push:     ## Upload a dataset dir to the Hub and tag it: make dataset-push ID=frames-ranch-v1 DIR=evals/baseline/2026-10-20
+	@test -n "$(ID)" -a -n "$(DIR)" || (echo "usage: make dataset-push ID=<dataset id> DIR=<directory>"; exit 2)
+	hf repo create $(HF_REPO) --repo-type dataset --private 2>/dev/null || true
+	hf upload $(HF_REPO) $(DIR) $(ID) --repo-type dataset --commit-message "$(ID)" --exclude "*.DS_Store"
+	hf repo tag create $(HF_REPO) $(ID) --repo-type dataset -m "$(ID)" 2>/dev/null || echo "tag $(ID) exists"
+	@echo "https://huggingface.co/datasets/$(HF_REPO)/tree/$(ID)"

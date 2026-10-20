@@ -5,4 +5,4 @@ Protocol: `docs/EVALUATION.md`. One row per result file in `evals/results/`. CI 
 
 | date | tag | model | set | labels | R@FPPF≤0.1 (CI) | AP horse | FPPF all | count-exact | p50 ms | RSS MB | result |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| _(no labels yet; first rows after the Claude labeling batch on B-2026-10-20)_ | | | | | | | | | | | |
+| _(no labels yet; first rows after the Claude labeling batch on frames-ranch-v1)_ | | | | | | | | | | | |

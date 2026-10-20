@@ -19,14 +19,49 @@ golden set; every model swap is a post.*
 6. **Evidence over narrative** (the 16–19 Oct lesson): results are JSON files written by the benchmark, quoted
    from, never retyped.
 
-## 2. Datasets
+## 2. Datasets: named, versioned, registered
 
-| Name | What | Where | Status |
+**Every dataset has an id of the form `<kind>-<name>-v<N>`** and a row in the registry `evals/DATASETS.md`
+(append-only). Nothing is evaluated against "the frames" or "the labels"; results name the dataset ids they used.
+
+| Kind | Id pattern | What it is | Versioning rule |
 |---|---|---|---|
-| `B-<date>` baseline set | N frames, seeded, stratified by camera × day/night, from the live `frames` table | `evals/baseline/<date>/frames.jsonl`, images on the mini (`/usr/local/ranch/media/baseline/<date>/`, never pruned), laptop copy git-ignored | `B-2026-10-20`: 300 frames |
-| `P-<date>/<model>` zero-shot predictions | every current model on `B-<date>` at threshold 0.05 | `evals/baseline/<date>/predictions.<model>.jsonl` | 4 models |
-| `G-<date>` golden labels | human or AI labels on a subset of `B-<date>` | `evals/golden/labels.<labeler>.<date>.jsonl` | none yet; first: Claude on 100 of `B-2026-10-20` |
-| Event set (Phase 3) | 300–500 frames stratified by camera × day/night × event class, plus sequences for `horse_down_prolonged` | `evals/golden/events/` | later |
+| `frames` | `frames-<name>-vN` | an immutable set of images + `frames.jsonl` | a new version whenever membership changes (v2 may extend v1; v1 stays and stays scorable) |
+| `labels` | `labels-<name>-<labeler>-vN` | annotations over exactly one `frames` dataset | new version on any label edit, schema change or relabel; the file keeps the frames id it covers |
+| `preds` | `preds-<frames id>-<model>-<sha8>` | one model's output over one frames dataset | not hand-versioned: identified by the model package sha256; re-running the same model on the same frames must reproduce it |
+| `events` (Phase 3) | `events-<name>-vN` | event rows and sequences with human verdicts | as `frames` |
+
+Each dataset directory carries a `dataset.json` with: `id`, `kind`, `version`, `created`, `parent` (the frames id
+for labels/preds, the previous version for extensions), `n`, `sha256` of the data file(s), `source` (query,
+seed, window), `host`, `commit`. The registry row repeats id, created, n, parent and the sha256 so a dataset can
+be verified against the registry.
+
+### 2.1 The Hub is the dataset remote (like GitHub for code)
+
+Every dataset is pushed to the Hugging Face Hub, versions as git tags, the same way code goes to `origin main`:
+
+- One Hub dataset repo per family: `<hf-user>/ranch-frames` holds every `frames-*` version with its images,
+  `frames.jsonl`, `dataset.json`, `manifest.json` and the `predictions.*.jsonl` produced on it; labels go into
+  the same repo under `labels/` because they are meaningless without the frames. Layout: `frames-ranch-v1/…`,
+  `labels/labels-ranch-claude-v1.jsonl`, …
+- A dataset is *registered* only once it is on the Hub: the registry row's last column is the Hub URL and the
+  tag. `make dataset-push ID=frames-ranch-v1 DIR=evals/baseline/2026-10-20` uploads the directory (images
+  included) and creates the tag `frames-ranch-v1`; re-running it is a no-op for unchanged files.
+- **Private by default.** The frames show the house, the cars and whoever walks by. Flipping the repo to public
+  is a one-line settings change once the frames are reviewed for faces and plates; Post 1 can link to it then.
+- The dataset card (`README.md` in the dataset directory) is written with the data and uploaded with it:
+  what the frames are, how they were picked, the label schema, the privacy note, the license.
+- Tooling: `hf` CLI (`huggingface_hub`), token from `hf auth login` on the laptop (never in the repo, never on
+  the mini). Uploads run from the laptop, which already holds the images.
+
+Current datasets:
+
+| Id | What | Where |
+|---|---|---|
+| `frames-ranch-v1` | 300 frames, seeded 20261020, stratified camera × day/night from the 7-day pool of kept frames (was called B-2026-10-20) | `evals/baseline/2026-10-20/`; images on the mini `/usr/local/ranch/media/baseline/2026-10-20/` (never pruned), laptop copy git-ignored |
+| `preds-frames-ranch-v1-<model>-<sha8>` | yolo11n, yolo11s, rfdetr-nano fp16/fp32 at threshold 0.05 | same directory, `predictions.<model>.jsonl` |
+| `labels-ranch-claude-v1` | *planned*: Claude on 100 frames of `frames-ranch-v1` | `evals/golden/labels-ranch-claude-v1.jsonl` |
+| `labels-ranch-vlad-v1` | *planned, Phase 1b*: human, same 100 frames, blind | `evals/golden/labels-ranch-vlad-v1.jsonl` |
 
 **Stratification.** Camera × day/night (day = 07:00–17:59 local) is the minimum. From Phase 3 on, also event
 class and "hard" slices: night IR at distance, rain/fog, the lens-cobweb frames, cameras with poor signal.
@@ -44,7 +79,7 @@ real `donkey`/`tractor` classes can be scored both ways.
 
 **Splits.** Nothing is trained on anything yet. When fine-tuning starts: train/val/test split by *time and
 camera* (whole days held out, never random frames from the same minute), test = a golden set that is never
-trained on and never used to pick thresholds. `B-2026-10-20` and its labels are test data from day one.
+trained on and never used to pick thresholds. `frames-ranch-v1` and its labels are test data from day one.
 
 ## 3. What gets evaluated
 
@@ -94,12 +129,12 @@ the test set and flagged as optimistic):
 ## 5. The benchmark run
 
 ```
-node apps/detector/src/bench.ts --frames evals/baseline/<date>/frames.jsonl --labels evals/golden/labels.<labeler>.<date>.jsonl \
+node apps/detector/src/bench.ts --frames evals/baseline/<date>/frames.jsonl --labels evals/golden/labels-<name>-<labeler>-vN.jsonl \
   --model /usr/local/ranch/models/<m>.mlpackage [...] --compute ane --threshold 0.05 --out evals/results/<date>-<tag>.json
 ```
 `bench.ts` is extended to produce §4.1–4.3 (per-slice metrics, AP, FPPF, bootstrap CIs, operating points)
 and to read predictions files (`--predictions evals/baseline/<date>/predictions.<model>.jsonl`) so a set can
-be re-scored without re-running the model. A result file records: set, labels file and its sha256, model
+be re-scored without re-running the model. A result file records: the frames and labels dataset ids and their sha256, model
 package sha256, class mapping, commit, macOS and go2rtc/bridge versions, host, command line, timestamp.
 
 **Approaches, not just models.** Anything that changes what tier 1 sees or outputs is a run with a `tag`: input
@@ -108,7 +143,7 @@ counts, VLM-on-crop second opinion, fine-tuned weights. Same frames, same table.
 
 ## 6. Leaderboard and gates
 
-`evals/LEADERBOARD.md` is append-only: one row per result file with date, tag, model, set, labels, R@FPPF≤0.1
+`evals/LEADERBOARD.md` is append-only: one row per result file with date, tag, model, frames id, labels id, R@FPPF≤0.1
 with CI, AP(horse), FPPF(all), count-exact, p50 ms, RSS, link to the JSON. The current production model is marked.
 
 A change ships to tier 1 only if, on the same set and labels: horse R@FPPF≤0.1 does not drop (paired bootstrap),
@@ -117,12 +152,13 @@ mini's self-hosted runner and fails the PR.
 
 ## 7. Label production and review
 
-1. **Now (Phase 1):** Claude (`claude-opus-5-5`, Batch API, structured outputs) labels 100 of `B-2026-10-20`,
+1. **Now (Phase 1):** Claude (`claude-opus-5-5`, Batch API, structured outputs) labels 100 of `frames-ranch-v1`
+   → `labels-ranch-claude-v1`,
    balanced over camera × period. These are the only labels until Post 1. Every row keeps the raw structured
    output so the schema can evolve without relabeling.
 2. **Phase 1b:** Vlad labels the same 100 blind, in a small local page that shows the frame without boxes.
    Disagreements are reviewed together; the review protocol for Phase 3 (full review vs spot checks per class)
-   is decided from the agreement numbers.
+   is decided from the agreement numbers. → `labels-ranch-vlad-v1`.
 3. **Phase 3:** 300–500 frames, Claude first pass, human review per the protocol; stored as
    `labels.human.<date>.jsonl`, with the AI pass kept beside it.
 
@@ -132,6 +168,6 @@ section here when they get a tier.
 
 ## 9. Next actions
 1. Extend `bench.ts` per §5 (slices, AP, FPPF, bootstrap, operating points, `--predictions`).
-2. Create `evals/LEADERBOARD.md`; row 0 = the four zero-shot models on `B-2026-10-20` once labels exist.
+2. Create `evals/LEADERBOARD.md`; row 0 = the four zero-shot models on `frames-ranch-v1` once labels exist.
 3. Run the Claude labeling batch on 100 frames (`evals/label/claude.ts --n 100`), ~$1.60.
 4. Score all four models; write Post 1's table from the JSON.

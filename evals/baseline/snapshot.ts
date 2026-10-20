@@ -1,12 +1,13 @@
 // Zero-shot baseline (docs/FRAMES-AND-BASELINE.md §3): freeze a stratified frame set and record what every current
 // model says about it, with no training and no tuning. Later changes are re-run on the same frames and diffed.
-//   node evals/baseline/snapshot.ts --n 300 [--since 7d] [--seed 20261020] [--out-media /usr/local/ranch/media/baseline] [--out evals/baseline]
+//   node evals/baseline/snapshot.ts --id frames-<name>-vN --n 300 [--since 7d] [--seed 20261020] [--out-media /usr/local/ranch/media/baseline] [--out evals/baseline]
 // Writes <out>/<date>/frames.jsonl, predictions.<model>.jsonl (all boxes >= 0.05), manifest.json; images under <out-media>/<date>/<camera>/.
 import { parseArgs } from 'node:util';
 import { mkdirSync, copyFileSync, writeFileSync, readdirSync, createReadStream, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, basename } from 'node:path';
 import { hostname } from 'node:os';
+import { execSync } from 'node:child_process';
 import { config } from '@ranch/config';
 import { EventStore, parseSince } from '@ranch/events';
 import { Runner } from '../../apps/detector/src/runner.ts';
@@ -15,8 +16,9 @@ const { values: a } = parseArgs({ options: {
   n: { type: 'string', default: '300' }, since: { type: 'string', default: '7d' }, seed: { type: 'string', default: '20261020' },
   'out-media': { type: 'string', default: '/usr/local/ranch/media/baseline' }, out: { type: 'string', default: 'evals/baseline' },
   models: { type: 'string', default: '/usr/local/ranch/models' }, threshold: { type: 'string', default: '0.05' }, tz: { type: 'string', default: config.timezone },
-  exclude: { type: 'string', default: 'living_room_cam' },
+  exclude: { type: 'string', default: 'living_room_cam' }, id: { type: 'string' }, parent: { type: 'string' },
 } });
+if (!a.id || !/^frames-[a-z0-9-]+-v\d+$/.test(a.id)) { console.error('--id frames-<name>-vN is required (docs/EVALUATION.md §2)'); process.exit(2); }
 
 let s = Number(a.seed) >>> 0;
 const rand = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -67,4 +69,10 @@ for (const m of models) {
   console.log(JSON.stringify({ model: name, frames: rows.length, mean_ms: +(ms / rows.length).toFixed(2) }));
 }
 writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+const commit = (() => { try { return execSync('git rev-parse --short HEAD 2>/dev/null').toString().trim() || null; } catch { return null; } })();
+const framesSha = await sha256(join(outDir, 'frames.jsonl'));
+writeFileSync(join(outDir, 'dataset.json'), JSON.stringify({ id: a.id, kind: 'frames', version: Number(a.id.split('-v').pop()), created: new Date().toISOString(), parent: a.parent ?? null, n: rows.length,
+  sha256: { 'frames.jsonl': framesSha }, source: { query: 'frames table', since: a.since, seed: Number(a.seed), stratify: 'camera x day/night', exclude: a.exclude }, host: hostname(), commit, media_dir: mediaDir,
+  preds: Object.fromEntries(Object.entries(manifest.models as Record<string, { sha256: string }>).map(([m, v]) => [`preds-${a.id}-${m}-${v.sha256.slice(0, 8)}`, `predictions.${m}.jsonl`])) }, null, 2) + '\n');
+console.log(JSON.stringify({ dataset: a.id, sha256: framesSha.slice(0, 12) }));
 console.log(JSON.stringify({ out: outDir, models: models.length }));
