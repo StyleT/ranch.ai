@@ -139,6 +139,38 @@ export class EventStore {
     return rows.map((r) => r.path);
   }
 
+  frameById(id: number): Frame | undefined {
+    return this.db.prepare('SELECT * FROM frames WHERE id = ?').get(id) as unknown as Frame | undefined;
+  }
+
+  /** Frames with their detections for the browser (docs/FRAMES-AND-BASELINE.md §2). Newest first. */
+  framesWithDetections(q: { camera?: string; since?: string; until?: string; label?: string; minConf?: number; reason?: FrameReason; withDetections?: boolean; limit?: number; before?: number } = {}): (Frame & { detections: Detection[] })[] {
+    const where: string[] = []; const args: SQLInputValue[] = [];
+    if (q.camera) { where.push('f.camera = ?'); args.push(q.camera); }
+    if (q.since) { where.push('f.ts >= ?'); args.push(q.since); }
+    if (q.until) { where.push('f.ts < ?'); args.push(q.until); }
+    if (q.reason) { where.push('f.reason = ?'); args.push(q.reason); }
+    if (q.before) { where.push('f.id < ?'); args.push(q.before); }
+    const detCond: string[] = []; const detArgs: SQLInputValue[] = [];
+    if (q.label) { detCond.push('d.label = ?'); detArgs.push(q.label); }
+    if (q.minConf !== undefined) { detCond.push('d.confidence >= ?'); detArgs.push(q.minConf); }
+    if (q.withDetections || detCond.length) {
+      where.push(`EXISTS (SELECT 1 FROM detections d WHERE d.frame_id = f.id${detCond.length ? ' AND ' + detCond.join(' AND ') : ''})`);
+      args.push(...detArgs);
+    }
+    const sql = `SELECT f.* FROM frames f ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY f.id DESC LIMIT ?`;
+    args.push(Math.min(q.limit ?? 60, 500));
+    const frames = this.db.prepare(sql).all(...args) as unknown as Frame[];
+    const dets = this.db.prepare('SELECT * FROM detections WHERE frame_id = ? ORDER BY confidence DESC');
+    return frames.map((f) => ({ ...f, detections: dets.all(f.id) as unknown as Detection[] }));
+  }
+
+  /** camera x label counts in a window, for the dashboard. */
+  detectionsByCamera(since: string): { camera: string; label: string; n: number; conf: number }[] {
+    return this.db.prepare(`SELECT f.camera, d.label, COUNT(*) n, ROUND(AVG(d.confidence), 2) conf FROM detections d JOIN frames f ON f.id = d.frame_id
+      WHERE f.ts >= ? GROUP BY f.camera, d.label ORDER BY f.camera, n DESC`).all(since) as never;
+  }
+
   lastFrame(camera: string): Frame | undefined {
     return this.db.prepare('SELECT * FROM frames WHERE camera = ? ORDER BY ts DESC LIMIT 1').get(camera) as unknown as Frame | undefined;
   }

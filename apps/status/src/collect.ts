@@ -19,6 +19,7 @@ export interface Status {
   ts: string; host: string; uptime_s: number; load: number[]; disk_free_gb: number | null; disk_total_gb: number | null;
   seed: { total: number; window_start: string | null; window_hours: number | null };
   daemons: DaemonRow[]; cameras: CameraRow[]; labels_1h: { label: string; n: number; conf: number }[];
+  labels_by_camera_1h: { camera: string; label: string; n: number; conf: number }[];
   events: RanchEvent[]; totals: { frames: number; detections: number; events: number };
 }
 
@@ -109,6 +110,6 @@ export async function collect(store: EventStore, mqttStatus: Map<string, Record<
     disk_free_gb: df.free, disk_total_gb: df.total,
     seed: { total: Object.values(seed).reduce((s, v) => s + v, 0), window_start: seedStart, window_hours: process.env.SEED_HOURS ? Number(process.env.SEED_HOURS) : null },
     daemons: daemons.map((d) => ({ ...d, log: logLines.get(d.label.replace('com.ranch.', '')) ?? '', status: mqttStatus.get(d.label.replace('com.ranch.', '')) })),
-    cameras, labels_1h: labels, events: store.events({ limit: 10 }), totals: { frames: n('frames'), detections: n('detections'), events: n('events') },
+    cameras, labels_1h: labels, labels_by_camera_1h: store.detectionsByCamera(iso(3600e3)), events: store.events({ limit: 10 }), totals: { frames: n('frames'), detections: n('detections'), events: n('events') },
   };
 }

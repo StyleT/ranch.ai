@@ -1,2 +1,2 @@
 { "name": "@ranch/status", "version": "0.0.1", "private": true, "type": "module",
-  "dependencies": { "@ranch/config": "*", "@ranch/events": "*", "@ranch/bus": "*" } }
+  "dependencies": { "@ranch/config": "*", "@ranch/events": "*", "@ranch/bus": "*", "sharp": "^0.34.3" } }

@@ -1,15 +1,18 @@
 // Status page for the ranch pipeline (docs/STATUS-DASHBOARD.md). One node:http server:
 //   GET /                  the page
 //   GET /api/status        everything the page shows, JSON (5 s cache)
-//   GET /api/frame/<cam>   latest kept frame for that camera, as the sampler wrote it
+//   GET /api/frame/<cam>   latest kept frame for that camera; /api/frame/<id>?w=1280 a specific frame, resized on the fly
+//   GET /frames, /api/frames  the frame browser (docs/FRAMES-AND-BASELINE.md §2)
 //   GET /api/events        server-sent events: every MQTT message on ranch/# plus a status document every 15 s
 import { createServer, type ServerResponse } from 'node:http';
 import { createReadStream, existsSync } from 'node:fs';
 import { config } from '@ranch/config';
-import { EventStore } from '@ranch/events';
+import { EventStore, parseSince, type FrameReason } from '@ranch/events';
 import { connectBus } from '@ranch/bus';
 import { collect, type Status } from './collect.ts';
 import { page } from './page.ts';
+import { framesPage } from './frames.ts';
+import sharp from 'sharp';
 
 const PORT = Number(process.env.RANCH_STATUS_PORT ?? 5090);
 const HOST = process.env.RANCH_STATUS_HOST ?? '0.0.0.0';
@@ -46,12 +49,27 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(page);
     } else if (url.pathname === '/api/status') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(await status()));
+    } else if (url.pathname === '/frames') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(framesPage);
+    } else if (url.pathname === '/api/frames') {
+      const p = url.searchParams;
+      const num = (k: string) => (p.get(k) ? Number(p.get(k)) : undefined);
+      const since = p.get('since') ? parseSince(p.get('since')!) : undefined;
+      const rows = store.framesWithDetections({
+        ...(p.get('camera') ? { camera: p.get('camera')! } : {}), ...(since ? { since } : {}), ...(p.get('until') ? { until: p.get('until')! } : {}),
+        ...(p.get('label') ? { label: p.get('label')! } : {}), ...(num('min_conf') !== undefined ? { minConf: num('min_conf')! } : {}),
+        ...(p.get('reason') ? { reason: p.get('reason') as FrameReason } : {}), withDetections: p.get('with_detections') === '1',
+        ...(num('limit') !== undefined ? { limit: num('limit')! } : {}), ...(num('before') !== undefined ? { before: num('before')! } : {}),
+      });
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(rows));
     } else if (url.pathname.startsWith('/api/frame/')) {
-      const cam = decodeURIComponent(url.pathname.slice('/api/frame/'.length));
-      const f = store.lastFrame(cam);
+      const key = decodeURIComponent(url.pathname.slice('/api/frame/'.length));
+      const f = /^\d+$/.test(key) ? store.frameById(Number(key)) : store.lastFrame(key);
       if (!f || !existsSync(f.path)) { res.writeHead(404); res.end('no frame'); return; }
-      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-frame-ts': f.ts });
-      createReadStream(f.path).on('error', () => res.destroy()).pipe(res);
+      const w = Number(url.searchParams.get('w') ?? 0);
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-frame-ts': f.ts, 'x-frame-id': String(f.id) });
+      if (w > 0 && w < 4000) sharp(f.path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 82 }).pipe(res).on('error', () => res.destroy());
+      else createReadStream(f.path).on('error', () => res.destroy()).pipe(res);
     } else if (url.pathname === '/api/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
       res.write(': connected\n\n');
