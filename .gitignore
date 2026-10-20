@@ -10,3 +10,4 @@ node_modules/
 .venv/
 evals/golden/frames/
 evals/golden/batches/
+evals/baseline/*/frames/

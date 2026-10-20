@@ -7,7 +7,8 @@ the live `frames` table, fixed seed); `predictions.<model>.jsonl` is what each C
 under `/usr/local/ranch/media/baseline/<date>/` and are never pruned.
 
 How it was made and how to redo it: `node evals/baseline/snapshot.ts --n 300` on the mini from `/usr/local/ranch/app`;
-then rsync `evals/baseline/<date>/` back into the laptop checkout and commit.
+then rsync `evals/baseline/<date>/` back into the laptop checkout and commit. To look at the pictures on the laptop:
+`rsync -a ranch:/usr/local/ranch/media/baseline/<date>/ evals/baseline/<date>/frames/` (git-ignored, ~72 MB per set).
 
 Use: the Claude labeling pick (Phase 1) is drawn from this set; the benchmark (`apps/detector/src/bench.ts
 --labels … --frames evals/baseline/<date>/frames.jsonl`) scores these predictions; any later model, threshold,
