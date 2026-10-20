@@ -19,6 +19,7 @@ import sharp from 'sharp';
 const PORT = Number(process.env.RANCH_STATUS_PORT ?? 5090);
 const HOST = process.env.RANCH_STATUS_HOST ?? '0.0.0.0';
 const BASELINE_DIR = process.env.RANCH_BASELINE_DIR ?? '/usr/local/ranch/app/evals/baseline';
+const LABELS_DIR = process.env.RANCH_LABELS_DIR ?? '/usr/local/ranch/app/evals/golden';
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), svc: 'status', msg, ...extra }) + '\n');
 
@@ -67,7 +68,8 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(rows));
     } else if (url.pathname === '/api/baseline') {
       const sets = existsSync(BASELINE_DIR) ? readdirSync(BASELINE_DIR).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && existsSync(join(BASELINE_DIR, d, 'manifest.json'))).sort().reverse() : [];
-      const out = sets.map((d) => { const m = JSON.parse(readFileSync(join(BASELINE_DIR, d, 'manifest.json'), 'utf8')) as { n: number; models: Record<string, unknown> }; return { date: d, n: m.n, models: Object.keys(m.models) }; });
+      const labelSets = existsSync(LABELS_DIR) ? readdirSync(LABELS_DIR).filter((f) => /^labels-.*\.jsonl$/.test(f)).map((f) => 'labels:' + f.replace(/\.jsonl$/, '')) : [];
+      const out = sets.map((d) => { const m = JSON.parse(readFileSync(join(BASELINE_DIR, d, 'manifest.json'), 'utf8')) as { n: number; models: Record<string, unknown> }; return { date: d, n: m.n, models: [...labelSets, ...Object.keys(m.models)] }; });
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(out));
     } else if (/^\/api\/baseline\/\d{4}-\d{2}-\d{2}$/.test(url.pathname)) {
       const date = url.pathname.split('/').pop()!; const model = url.searchParams.get('model') ?? ''; const minConf = Number(url.searchParams.get('min_conf') ?? 0.25);
@@ -76,7 +78,11 @@ const server = createServer(async (req, res) => {
       if (!existsSync(framesFile)) { res.writeHead(404); res.end('no such set'); return; }
       const frames = readFileSync(framesFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as { frame_id: number; path: string; camera: string; ts: string; period: string; reason: string });
       const preds = new Map<string, { label: string; confidence: number; x: number; y: number; w: number; h: number }[]>();
-      if (model && existsSync(predFile)) for (const l of readFileSync(predFile, 'utf8').split('\n').filter(Boolean)) { const p = JSON.parse(l) as { path: string; detections: { label: string; confidence: number; x: number; y: number; w: number; h: number }[] }; preds.set(p.path, p.detections.filter((d) => d.confidence >= minConf)); }
+      if (model.startsWith('labels:')) {
+        // a labels dataset (evals/golden/<id>.jsonl): boxes carry kind/posture; shown with the label text
+        const lf = join(LABELS_DIR, `${model.slice('labels:'.length)}.jsonl`);
+        if (existsSync(lf)) for (const l of readFileSync(lf, 'utf8').split('\n').filter(Boolean)) { const r = JSON.parse(l) as { path: string; boxes: { label: string; kind?: string; posture?: string; x: number; y: number; w: number; h: number }[] }; preds.set(r.path, r.boxes.map((b) => ({ label: `${b.kind ?? b.label}${b.posture ? '/' + b.posture : ''}`, confidence: 1, x: b.x, y: b.y, w: b.w, h: b.h }))); }
+      } else if (model && existsSync(predFile)) for (const l of readFileSync(predFile, 'utf8').split('\n').filter(Boolean)) { const p = JSON.parse(l) as { path: string; detections: { label: string; confidence: number; x: number; y: number; w: number; h: number }[] }; preds.set(p.path, p.detections.filter((d) => d.confidence >= minConf)); }
       const camera = url.searchParams.get('camera');
       const rows = frames.filter((f) => !camera || f.camera === camera).map((f) => ({ id: f.frame_id, camera: f.camera, ts: f.ts, reason: f.reason, period: f.period, change: null, baseline: { date, file: f.path.slice(dir.length + 1) }, img: `/api/baseline-frame/${date}/${f.path.split('/').slice(-2).join('/')}`, detections: (preds.get(f.path) ?? []).map((d) => ({ ...d, model })) }));
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(rows));

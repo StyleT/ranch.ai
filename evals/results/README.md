@@ -17,3 +17,12 @@ What every model misses (12 of 23): the seven large daytime donkeys on donkey_ca
 donkey class and does not generalize `horse` to them), three animals narrower than 120 px, and one night frame
 where the horse fills the picture. That list is the Post 1 "what went wrong" and the first argument for a
 fine-tune with a `donkey` class.
+
+## 2026-10-20-zero-shot-labelconf05.json and -quadruped.json
+
+Same predictions, two scoring variants after the smoke verification of the labels (LEADERBOARD.md notes):
+`--min-label-conf 0.5` keeps the 20 horse-class boxes Claude was at least half sure of (drops three hedged
+ones); `--merge-pred-classes cow=horse,sheep=horse` additionally scores any large-quadruped prediction as a
+horse. Recall 0.30–0.40 → 0.55–0.60; AP 0.30–0.48 → 0.55–0.65. The gap between the two is class confusion: COCO
+models see donkeys as cows. The gap from 0.60 to 1.0 is real misses: animals under 100 px at night, a horse under a
+blanket ("bed"), a frame-filling horse ("bottle").

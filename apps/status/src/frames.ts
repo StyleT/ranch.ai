@@ -14,6 +14,7 @@ export const framesPage = `<!doctype html>
   .box{position:absolute;border:2px solid #ffd166;border-radius:2px;pointer-events:none} .box span{position:absolute;left:-2px;top:-18px;background:#ffd166;color:#000;font-size:11px;padding:0 4px;border-radius:2px;white-space:nowrap}
   .box.horse{border-color:var(--ok)} .box.horse span{background:var(--ok)} .box.person{border-color:#ff6b6b} .box.person span{background:#ff6b6b}
   .box.car,.box.truck{border-color:#9ecbff} .box.car span,.box.truck span{background:#9ecbff}
+  .box.gold{border-style:dashed;border-color:#3ecf8e} .box.gold span{background:#3ecf8e}
   .meta{padding:6px 8px;font-size:12px} .meta b{font-weight:600}
   #view{position:fixed;inset:0;background:#000d;display:none;z-index:9;padding:12px} #view.open{display:flex;flex-direction:column}
   #view .img{flex:1;aspect-ratio:auto;min-height:0} #view .img img{object-fit:contain;max-height:100%} #view .bar{display:flex;gap:12px;align-items:center;padding:6px 0}
@@ -37,7 +38,7 @@ export const framesPage = `<!doctype html>
 const $=s=>document.querySelector(s); const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const local=iso=>new Date(iso).toLocaleString('sv-SE').replace(' ','T').slice(5,19);
 let rows=[], cur=-1;
-function boxes(f,w){return f.detections.map(d=>'<div class="box '+esc(d.label.replace(/\\s/g,'-'))+'" style="left:'+(100*d.x)+'%;top:'+(100*d.y)+'%;width:'+(100*d.w)+'%;height:'+(100*d.h)+'%"><span>'+esc(d.label)+' '+d.confidence.toFixed(2)+'</span></div>').join('')}
+function boxes(f,w){return f.detections.map(d=>'<div class="box '+esc(d.label.split('/')[0].replace(/\\s/g,'-'))+(d.model&&String(d.model).startsWith('labels:')?' gold':'')+'" style="left:'+(100*d.x)+'%;top:'+(100*d.y)+'%;width:'+(100*d.w)+'%;height:'+(100*d.h)+'%"><span>'+esc(d.label)+' '+d.confidence.toFixed(2)+'</span></div>').join('')}
 function imgBox(f,w){return '<div class="img"><img src="'+(f.img?f.img+'?w='+w:'/api/frame/'+f.id+'?w='+w)+'" loading="lazy" alt="">'+boxes(f)+'</div>'}
 function card(f,i){const labs=f.detections.map(d=>d.label).reduce((m,l)=>(m[l]=(m[l]||0)+1,m),{});
   return '<div class="card" data-i="'+i+'">'+imgBox(f,640)+'<div class="meta"><b>'+esc(f.camera)+'</b> <span class="muted">'+local(f.ts)+' · '+f.reason+(f.change!=null?' · Δ'+(100*f.change).toFixed(1)+'%':'')+'</span><br>'+(Object.entries(labs).map(([l,n])=>esc(l)+(n>1?' ×'+n:'')).join(', ')||'<span class="muted">no detections</span>')+'</div></div>'}

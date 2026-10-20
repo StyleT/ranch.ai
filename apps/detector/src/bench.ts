@@ -16,6 +16,8 @@ const { values: a } = parseArgs({ options: {
   frames: { type: 'string' }, labels: { type: 'string' }, predictions: { type: 'string', multiple: true }, model: { type: 'string', multiple: true },
   compute: { type: 'string', default: 'ane' }, threshold: { type: 'string', default: '0.25' }, iou: { type: 'string', default: '0.5' },
   bin: { type: 'string', default: '/usr/local/ranch/bin/detector' }, out: { type: 'string' }, tag: { type: 'string', default: 'run' }, warmup: { type: 'string', default: '5' },
+  'min-label-conf': { type: 'string' },      // drop gold boxes whose labeler confidence is below this (uses the structured label when present)
+  'merge-pred-classes': { type: 'string' },  // e.g. "cow=horse,sheep=horse": rename prediction classes before scoring
 } });
 if (!a.frames) { console.error('--frames is required'); process.exit(2); }
 const readJsonl = <T,>(p: string): T[] => readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as T);
@@ -25,7 +27,17 @@ const commit = (() => { try { return execSync('git rev-parse --short HEAD 2>/dev
 interface FrameRow { path: string; camera: string; period: string; frame_id?: number }
 const frames = readJsonl<FrameRow>(a.frames);
 const labelsFile = a.labels;
-const gold = labelsFile ? new Map(readJsonl<{ path: string; boxes: Box[] }>(labelsFile).map((r) => [r.path, r.boxes])) : undefined;
+const minLabelConf = a['min-label-conf'] ? Number(a['min-label-conf']) : 0;
+const mergeMap = new Map((a['merge-pred-classes'] ?? '').split(',').filter(Boolean).map((kv) => kv.split('=') as [string, string]));
+interface LabelRow { path: string; boxes: Box[]; label?: { animals?: { box: Box; confidence: number }[]; people?: { box: Box; confidence: number }[]; vehicles?: { box: Box; confidence: number }[] } }
+const goldBoxes = (r: LabelRow): Box[] => {
+  if (!minLabelConf || !r.label) return r.boxes;
+  const conf = new Map<string, number>();
+  for (const g of [...(r.label.animals ?? []), ...(r.label.people ?? []), ...(r.label.vehicles ?? [])]) conf.set(`${g.box.x},${g.box.y},${g.box.w},${g.box.h}`, g.confidence);
+  return r.boxes.filter((b) => (conf.get(`${b.x},${b.y},${b.w},${b.h}`) ?? 1) >= minLabelConf);
+};
+const gold = labelsFile ? new Map(readJsonl<LabelRow>(labelsFile).map((r) => [r.path, goldBoxes(r)])) : undefined;
+const mergePred = (ps: Pred[]): Pred[] => mergeMap.size ? ps.map((p) => ({ ...p, label: mergeMap.get(p.label) ?? p.label })) : ps;
 const scoredFrames = gold ? frames.filter((f) => gold.has(f.path)) : frames; // score only labeled frames
 const threshold = Number(a.threshold), iouMin = Number(a.iou);
 const pct = (xs: number[], p: number) => { const s = [...xs].sort((u, v) => u - v); return s[Math.min(s.length - 1, Math.floor(p * s.length))] ?? 0; };
@@ -35,7 +47,7 @@ const runs: { name: string; preds: Map<string, Pred[]>; latency?: Record<string,
 
 for (const p of a.predictions ?? []) {
   const rows = readJsonl<{ path: string; model: string; detections: Pred[] }>(p);
-  runs.push({ name: rows[0]?.model ?? basename(p), preds: new Map(rows.map((r) => [r.path, r.detections])), provenance: { predictions_file: p, sha256: sha(p) } });
+  runs.push({ name: rows[0]?.model ?? basename(p), preds: new Map(rows.map((r) => [r.path, mergePred(r.detections)])), provenance: { predictions_file: p, sha256: sha(p) } });
 }
 for (const model of a.model ?? []) {
   const runner = new Runner({ bin: a.bin, model, compute: a.compute as 'ane' | 'gpu' | 'cpu' | 'all', threshold: 0.05 });
@@ -71,6 +83,7 @@ if (a.out) {
     frames: { file: a.frames, sha256: sha(a.frames), dataset: existsSync(datasetJson) ? (JSON.parse(readFileSync(datasetJson, 'utf8')) as { id: string }).id : null, n: frames.length, scored: scoredFrames.length },
     labels: labelsFile ? { file: labelsFile, sha256: sha(labelsFile), dataset: (readJsonl<{ dataset?: string }>(labelsFile)[0]?.dataset) ?? null } : null,
     class_mapping: { donkey: 'horse', delivery_vehicle: 'truck', tractor: 'truck', atv: 'truck', trailer: 'truck', people: 'person' },
+    min_label_conf: minLabelConf || null, merge_pred_classes: Object.fromEntries(mergeMap),
     threshold, iou: iouMin, results,
   }, null, 2) + '\n');
   console.log('wrote', a.out);
