@@ -72,12 +72,16 @@ Frames per bucket are reported with every result so an empty bucket is visible.
 
 **Label schema** (`evals/label/schema.ts`): boxes normalized to the image, origin top-left, `x,y,w,h` in 0..1;
 `animals[]` with `kind` (horse, donkey, dog, cat, deer, coyote, bird, other) and `posture` (standing, grazing,
-walking, lying_sternal, lying_flat, unknown); `people[]`, `vehicles[]` (car, truck, tractor, atv, trailer,
-other); `gate {visible, state}`, `trough {visible, level}`; free-text `notes`. Each row carries `labeler`,
-`labeled_at`, `batch_id`, `frame_id`, `path`, `camera`, `ts`, `period`.
+walking, lying_sternal, lying_flat, unknown); **insects and spiders are deliberately not animals and are never
+boxed** (a dirty lens goes in `notes`); `people[]` with `kind` (friendly = resident or regular recognized by face
+or look, set by the human labeler or a future recognition tier; mailman = postal or courier worker by uniform or
+vehicle; unknown) and a `look` description for later recognition; `vehicles[]` (car, truck, delivery_vehicle,
+tractor, atv, trailer, other); `gate {visible, state}`, `trough {visible, level}`; free-text `notes`. Each row
+carries `labeler`, `labeled_at`, `batch_id`, `frame_id`, `path`, `camera`, `ts`, `period`.
 
-**Class mapping for COCO detectors** (zero-shot models only know COCO): donkey → `horse`; tractor, atv,
-trailer → `truck`; everything else by name. The mapping is part of the result file so a fine-tuned model with
+**Class mapping for COCO detectors** (zero-shot models only know COCO): donkey → `horse`; delivery_vehicle,
+tractor, atv, trailer → `truck`; every person kind → `person`; everything else by name. Person kind and vehicle
+kind are scored separately once a recognition tier exists. The mapping is part of the result file so a fine-tuned model with
 real `donkey`/`tractor` classes can be scored both ways.
 
 **Splits.** Nothing is trained on anything yet. When fine-tuning starts: train/val/test split by *time and
