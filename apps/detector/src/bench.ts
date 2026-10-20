@@ -1,72 +1,77 @@
-// Detector benchmark (Post 1 table). For each model x compute unit: latency p50/p95, fps, peak RSS of the
-// runner, and, when a golden label file is given, per-class precision/recall at IoU 0.5.
-//   node apps/detector/src/bench.ts --frames evals/golden/frames.jsonl --labels evals/golden/labels.jsonl \
-//        --model /usr/local/ranch/models/yolo11n.mlpackage --model ... --compute ane,gpu,cpu --out bench.json
-// frames.jsonl: {"path": ...} per line (labels.jsonl rows also work). labels.jsonl: {"path", "boxes": [{label,x,y,w,h}]}.
+// Detector benchmark per docs/EVALUATION.md §5. Scores stored prediction files (--predictions) or a live model run
+// (--model) against a labels dataset, and writes a result JSON with provenance for evals/results/.
+//   node apps/detector/src/bench.ts --frames evals/baseline/<date>/frames.jsonl --labels evals/golden/labels-ranch-claude-v1.jsonl \
+//     --predictions evals/baseline/<date>/predictions.yolo11n.jsonl [--predictions ...] [--threshold 0.25] [--iou 0.5] --tag zero-shot --out evals/results/<date>-<tag>.json
+//   node apps/detector/src/bench.ts --frames ... [--labels ...] --model /usr/local/ranch/models/x.mlpackage --compute ane   (latency run, scored if labels given)
 import { parseArgs } from 'node:util';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { basename } from 'node:path';
-import { Runner, type RunnerDetection } from './runner.ts';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { execSync } from 'node:child_process';
+import { hostname } from 'node:os';
+import { Runner } from './runner.ts';
+import { scoreSet, type Scored, type Pred, type Box } from './score.ts';
 
 const { values: a } = parseArgs({ options: {
-  frames: { type: 'string' }, labels: { type: 'string' }, model: { type: 'string', multiple: true },
+  frames: { type: 'string' }, labels: { type: 'string' }, predictions: { type: 'string', multiple: true }, model: { type: 'string', multiple: true },
   compute: { type: 'string', default: 'ane' }, threshold: { type: 'string', default: '0.25' }, iou: { type: 'string', default: '0.5' },
-  bin: { type: 'string', default: '/usr/local/ranch/bin/detector' }, out: { type: 'string' }, warmup: { type: 'string', default: '5' },
+  bin: { type: 'string', default: '/usr/local/ranch/bin/detector' }, out: { type: 'string' }, tag: { type: 'string', default: 'run' }, warmup: { type: 'string', default: '5' },
 } });
-if (!a.model?.length || !(a.frames || a.labels)) { console.error('need --model and --frames or --labels'); process.exit(2); }
-
-interface Box { label: string; x: number; y: number; w: number; h: number }
+if (!a.frames) { console.error('--frames is required'); process.exit(2); }
 const readJsonl = <T,>(p: string): T[] => readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as T);
-const labels = a.labels ? new Map(readJsonl<{ path: string; boxes: Box[] }>(a.labels).map((r) => [r.path, r.boxes])) : undefined;
-const frames = (a.frames ? readJsonl<{ path: string }>(a.frames) : [...labels!.keys()].map((path) => ({ path }))).map((f) => f.path);
+const sha = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex');
+const commit = (() => { try { return execSync('git rev-parse --short HEAD 2>/dev/null').toString().trim() || null; } catch { return null; } })();
 
-const iou = (p: Box, q: Box): number => {
-  const x1 = Math.max(p.x, q.x), y1 = Math.max(p.y, q.y), x2 = Math.min(p.x + p.w, q.x + q.w), y2 = Math.min(p.y + p.h, q.y + q.h);
-  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-  return inter / (p.w * p.h + q.w * q.h - inter);
-};
+interface FrameRow { path: string; camera: string; period: string; frame_id?: number }
+const frames = readJsonl<FrameRow>(a.frames);
+const labelsFile = a.labels;
+const gold = labelsFile ? new Map(readJsonl<{ path: string; boxes: Box[] }>(labelsFile).map((r) => [r.path, r.boxes])) : undefined;
+const scoredFrames = gold ? frames.filter((f) => gold.has(f.path)) : frames; // score only labeled frames
+const threshold = Number(a.threshold), iouMin = Number(a.iou);
 const pct = (xs: number[], p: number) => { const s = [...xs].sort((u, v) => u - v); return s[Math.min(s.length - 1, Math.floor(p * s.length))] ?? 0; };
 
-interface ClassStat { tp: number; fp: number; fn: number }
-function score(pred: RunnerDetection[], gold: Box[], thr: number, stats: Map<string, ClassStat>): void {
-  const used = new Set<number>();
-  const labelsSeen = new Set([...pred.map((d) => d.label), ...gold.map((g) => g.label)]);
-  for (const label of labelsSeen) {
-    const st = stats.get(label) ?? { tp: 0, fp: 0, fn: 0 };
-    const g = gold.map((b, i) => [b, i] as const).filter(([b]) => b.label === label);
-    for (const d of pred.filter((d) => d.label === label).sort((u, v) => v.confidence - u.confidence)) {
-      let best = -1; let bestIou = thr;
-      for (const [b, i] of g) { if (used.has(i)) continue; const v = iou(d, b); if (v >= bestIou) { best = i; bestIou = v; } }
-      if (best >= 0) { used.add(best); st.tp++; } else st.fp++;
-    }
-    st.fn += g.filter(([, i]) => !used.has(i)).length;
-    stats.set(label, st);
-  }
+const results: Record<string, unknown>[] = [];
+const runs: { name: string; preds: Map<string, Pred[]>; latency?: Record<string, unknown>; provenance: Record<string, unknown> }[] = [];
+
+for (const p of a.predictions ?? []) {
+  const rows = readJsonl<{ path: string; model: string; detections: Pred[] }>(p);
+  runs.push({ name: rows[0]?.model ?? basename(p), preds: new Map(rows.map((r) => [r.path, r.detections])), provenance: { predictions_file: p, sha256: sha(p) } });
+}
+for (const model of a.model ?? []) {
+  const runner = new Runner({ bin: a.bin, model, compute: a.compute as 'ane' | 'gpu' | 'cpu' | 'all', threshold: 0.05 });
+  const info = await runner.info;
+  for (const f of frames.slice(0, Number(a.warmup))) await runner.detect(f.path);
+  const ms: number[] = []; let peak = info.rss_mb; const preds = new Map<string, Pred[]>(); const t0 = Date.now();
+  for (const f of frames) { const r = await runner.detect(f.path); ms.push(r.ms); peak = Math.max(peak, r.rss_mb); preds.set(f.path, r.detections); }
+  runner.close();
+  runs.push({ name: basename(model).replace(/\.(mlpackage|mlmodelc)$/, ''), preds, provenance: { model, compute: a.compute },
+    latency: { p50_ms: pct(ms, 0.5), p95_ms: pct(ms, 0.95), mean_ms: ms.reduce((s, v) => s + v, 0) / ms.length, fps_wall: frames.length / ((Date.now() - t0) / 1000), peak_rss_mb: peak, compiled_ms: info.compiled_ms ?? null } });
 }
 
-const results: Record<string, unknown>[] = [];
-for (const model of a.model) {
-  for (const compute of a.compute!.split(',') as ('ane' | 'gpu' | 'cpu' | 'all')[]) {
-    const runner = new Runner({ bin: a.bin, model, compute, threshold: Number(a.threshold) });
-    const info = await runner.info;
-    const warm = frames.slice(0, Number(a.warmup));
-    for (const p of warm) await runner.detect(p);
-    const ms: number[] = []; let peakRss = info.rss_mb; const stats = new Map<string, ClassStat>();
-    const t0 = Date.now();
-    for (const p of frames) {
-      const r = await runner.detect(p);
-      ms.push(r.ms); peakRss = Math.max(peakRss, r.rss_mb);
-      if (labels) score(r.detections, labels.get(p) ?? [], Number(a.iou), stats);
-    }
-    const wall = (Date.now() - t0) / 1000;
-    runner.close();
-    const perClass = Object.fromEntries([...stats].map(([label, s]) => [label, { ...s, precision: s.tp / Math.max(1, s.tp + s.fp), recall: s.tp / Math.max(1, s.tp + s.fn) }]));
-    const row = { model: basename(model), compute, frames: frames.length, compiled_ms: info.compiled_ms ?? null,
-      p50_ms: pct(ms, 0.5), p95_ms: pct(ms, 0.95), mean_ms: ms.reduce((s, v) => s + v, 0) / ms.length, fps_wall: frames.length / wall, peak_rss_mb: peakRss,
-      ...(labels ? { classes: perClass } : {}) };
-    results.push(row);
-    const h = perClass.horse as { precision: number; recall: number } | undefined;
-    console.log(`${row.model.padEnd(22)} ${compute.padEnd(4)} p50 ${row.p50_ms.toFixed(1)} ms  p95 ${row.p95_ms.toFixed(1)} ms  ${row.fps_wall.toFixed(1)} fps  rss ${peakRss} MB` + (h ? `  horse P ${h.precision.toFixed(2)} R ${h.recall.toFixed(2)}` : ''));
+for (const run of runs) {
+  const row: Record<string, unknown> = { model: run.name, tag: a.tag, ...run.provenance, latency: run.latency ?? null };
+  if (gold) {
+    const scored: Scored[] = scoredFrames.map((f) => ({ frame: f, gold: gold.get(f.path) ?? [], pred: run.preds.get(f.path) ?? [] }));
+    row.score = scoreSet(scored, { threshold, iou: iouMin });
+    const all = (row.score as { slices: Record<string, { classes: Record<string, { recall: number; precision: number; ap: number; gold: number }>; fppf_all: number; horse_count: { exact: number }; horse_recall_ci: { lo: number; hi: number } | null }> }).slices.all!;
+    const op = (row.score as { operating_points: { r_at_fppf01: { recall: number; threshold: number | null }; r_at_p90: { recall: number } } }).operating_points;
+    const h = all.classes.horse;
+    console.log(`${run.name.padEnd(22)} frames ${scoredFrames.length}  horse gold ${h?.gold ?? 0}  P ${h?.precision.toFixed(2)} R ${h?.recall.toFixed(2)} [${all.horse_recall_ci?.lo.toFixed(2)}–${all.horse_recall_ci?.hi.toFixed(2)}] AP ${h?.ap.toFixed(2)}  FPPF(all) ${all.fppf_all.toFixed(2)}  count-exact ${all.horse_count.exact.toFixed(2)}  R@FPPF≤0.1 ${op.r_at_fppf01.recall.toFixed(2)}@${op.r_at_fppf01.threshold}  R@P90 ${op.r_at_p90.recall.toFixed(2)}` + (run.latency ? `  p50 ${(run.latency.p50_ms as number).toFixed(1)} ms` : ''));
+  } else if (run.latency) {
+    console.log(`${run.name.padEnd(22)} p50 ${(run.latency.p50_ms as number).toFixed(1)} ms  p95 ${(run.latency.p95_ms as number).toFixed(1)} ms  ${(run.latency.fps_wall as number).toFixed(1)} fps  rss ${run.latency.peak_rss_mb} MB`);
   }
+  results.push(row);
 }
-if (a.out) writeFileSync(a.out, JSON.stringify({ ts: new Date().toISOString(), threshold: Number(a.threshold), iou: Number(a.iou), results }, null, 2) + '\n');
+
+if (a.out) {
+  mkdirSync(dirname(a.out), { recursive: true });
+  const datasetJson = join(dirname(a.frames), 'dataset.json');
+  writeFileSync(a.out, JSON.stringify({
+    ts: new Date().toISOString(), tag: a.tag, host: hostname(), commit, command: process.argv.slice(1).join(' '),
+    frames: { file: a.frames, sha256: sha(a.frames), dataset: existsSync(datasetJson) ? (JSON.parse(readFileSync(datasetJson, 'utf8')) as { id: string }).id : null, n: frames.length, scored: scoredFrames.length },
+    labels: labelsFile ? { file: labelsFile, sha256: sha(labelsFile), dataset: (readJsonl<{ dataset?: string }>(labelsFile)[0]?.dataset) ?? null } : null,
+    class_mapping: { donkey: 'horse', delivery_vehicle: 'truck', tractor: 'truck', atv: 'truck', trailer: 'truck', people: 'person' },
+    threshold, iou: iouMin, results,
+  }, null, 2) + '\n');
+  console.log('wrote', a.out);
+}
