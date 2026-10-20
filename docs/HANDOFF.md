@@ -1,14 +1,23 @@
-# Handoff — state as of 15 Oct 2026, 21:40 ET
+# Handoff — state as of 19 Oct 2026, 21:00 ET
 
 ## Where things stand
-Phase 0 (headless, reproducible Mac mini) is **complete and closed**. Phase 1 (camera ingest + detector) is
-**in progress**: the Wyze bridge and Mosquitto run as LaunchDaemons (14 Oct), five of eight cameras stream over
-RTSP on the mini, three are offline at the camera end. Details and per-camera table in `docs/CAMERAS.md`. The erase-and-reprovision timing run was
-skipped by decision; convergence proof stands in for it.
+Phase 0 is closed. Phase 1 is **mid-way**: cameras stream through our own go2rtc + bridge daemons, the sampler
+keeps frames every 10 s, yolo11n runs on the ANE, a status page and a network probe run, and all of it is under
+launchd with unified logging. The last three days went to camera dropouts (docs/CAMERAS.md, "Analysis, 19 Oct"):
+proven causes are a go2rtc panic in its Wyze DTLS code (now auto-restarted, draft report in docs/upstream/) and
+per-grab TUTK session setup failing under 2.4 GHz loss (fixed 19 Oct by a persistent in-process consumer per
+camera). mops_cam is effectively off the network (5 % ping success) and needs physical attention.
 
-Repo: this directory (`~/job_hunt_2026/projects/ranch`), pushed to `git@github.com:StyleT/ranch.ai.git` (`origin/main`) on 14 Oct.
-Canonical plan: `docs/PLAN.md`. A mirror copy exists at `../horse-watch/PLAN.md`; keep `docs/PLAN.md` as the
-source of truth and copy over it if you edit.
+**Regroup, 19 Oct. Next, in order:**
+1. Watch delivery for a day with the keep-alive on (`ranch frames --since 24h --json | …`, or the status page):
+   target ≥ 300 frames per camera per hour. If the go2rtc panic recurs, count it; decide on the upstream report.
+2. Phase 1 step 6: pick 100 frames (day frames now exist for every camera except mops) and run the Claude
+   labeling batch (~$1.60; key on the mini; commands below). Then step 7: the recall benchmark. The detector
+   evidence makes this urgent: yolo11n emits thousands of confident night false positives (bench, bottle,
+   clock, airplane) per day; nothing downstream should trust tier 1 until the benchmark and a class filter exist.
+3. Post 1 draft from the measured numbers, plus the dropout story as the "what went wrong" section.
+4. Vlad: relocate mops_cam or its AP; report per-camera signal from the Wyze app. Consider the SD sub-stream
+   for sampling if the 15 Mbit/s of continuous HD ever matters (today it does not: 5 GHz link is clean).
 
 ## The machine
 | Item | Value |

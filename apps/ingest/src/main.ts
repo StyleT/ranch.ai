@@ -18,6 +18,12 @@ const RETENTION_D = Number(process.env.RANCH_FRAMES_RETENTION_D ?? 7);
 // producer and every new consumer attaches to it and hangs, forever. If a camera has produced nothing for
 // RANCH_STALL_RESET_S we delete its go2rtc stream and re-add it from the bridge's go2rtc.yaml, at most once per
 // RANCH_STALL_COOLDOWN_S. A camera that is really offline just gets a fresh (and equally idle) stream.
+// Keep-alive consumer (evidence 19 Oct, docs/CAMERAS.md): a one-shot frame.jpeg grab starts a fresh TUTK session
+// (LAN discovery + DTLS handshake) every time and fails about half the time on these 2.4 GHz cameras; with a
+// consumer holding the stream open, delivery was 275-337 frames/h instead of 65-226, and grabs answered in ~1 s
+// instead of 3-8 s. So each camera gets one persistent in-process fMP4 consumer whose body is discarded. No child
+// processes; go2rtc muxes without transcoding.
+const KEEPALIVE = (process.env.RANCH_KEEPALIVE ?? '1') !== '0';
 const STALL_RESET_S = Number(process.env.RANCH_STALL_RESET_S ?? 180);
 const STALL_COOLDOWN_S = Number(process.env.RANCH_STALL_COOLDOWN_S ?? 300);
 const GO2RTC_CONFIG = process.env.RANCH_GO2RTC_CONFIG ?? '/usr/local/ranch/var/wyze-bridge/go2rtc.yaml';
@@ -67,6 +73,25 @@ async function resetStream(camera: string): Promise<'recreated_by_bridge' | 'rec
   if (!src) return 'deleted';
   const r = await fetch(`${base}?name=${q}&src=${encodeURIComponent(src)}`, { method: 'PUT', signal: AbortSignal.timeout(5000) });
   return r.ok ? 'recreated' : 'deleted';
+}
+
+async function keepAlive(camera: string, stop: { v: boolean }): Promise<void> {
+  let failures = 0;
+  while (!stop.v) {
+    const t0 = Date.now();
+    try {
+      const res = await fetch(`${config.go2rtcUrl}/api/stream.mp4?src=${encodeURIComponent(camera)}`);
+      if (!res.ok || !res.body) throw new Error(`go2rtc ${res.status}`);
+      log('keepalive connected', { camera });
+      for await (const _chunk of res.body) { if (stop.v) break; }
+      failures = 0;
+    } catch (e) {
+      failures++;
+      if (failures === 1 || failures % 12 === 0) log('keepalive failed', { camera, failures, error: String(e).slice(0, 80) });
+    }
+    if (Date.now() - t0 > 60_000) failures = 0; // a long-lived session that ended is not a failure streak
+    await sleep(Math.min(60_000, 2_000 * (failures + 1)));
+  }
 }
 
 function meanAbsDiff(a: Buffer, b: Buffer): number {
@@ -133,7 +158,7 @@ async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const bus = await connectBus('ingest');
   const cameras = await cameraList();
-  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, media: config.mediaDir, db: config.dbPath });
+  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, media: config.mediaDir, db: config.dbPath });
   const stop = { v: false };
   const status = setInterval(() => {
     const m = process.memoryUsage();
@@ -143,7 +168,10 @@ async function main(): Promise<void> {
   await prune(store);
   const shutdown = async () => { stop.v = true; clearInterval(status); clearInterval(pruner); await bus.close(); store.close(); process.exit(0); };
   process.on('SIGTERM', () => void shutdown()); process.on('SIGINT', () => void shutdown());
-  await Promise.all(cameras.map((c) => sampleCamera(c, store, bus, stop)));
+  await Promise.all([
+    ...cameras.map((c) => sampleCamera(c, store, bus, stop)),
+    ...(KEEPALIVE ? cameras.map((c) => keepAlive(c, stop)) : []),
+  ]);
 }
 
 main().catch((e) => { log('fatal', { error: String(e) }); process.exit(1); });

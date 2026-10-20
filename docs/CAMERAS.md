@@ -127,3 +127,64 @@ Per-camera gap timeline from the `frames` table (gaps > 60 s) against the bridge
   (`grab failing` / `grab recovered` with error class and duration).
 - A first experiment with a no-decode persistent RTSP consumer to keep one producer alive raced with the
   restarts of that same provision and is void; repeat it when the logs are quiet.
+
+## Analysis, 19 Oct: two days of probe, sampler and go2rtc data (17 Oct 02:00Z → 19 Oct 23:59Z)
+
+**Scale of the problem (frames table, gaps > 60 s):**
+
+| Camera | gaps | time dark | longest gap | frames/day (target 8,640) |
+|---|---|---|---|---|
+| back_yard_cam | 152 | 9 % | 1.3 h | 3,500–4,100 |
+| front_porch_cam | 368 | 27 % | 1.1 h | 2,800–4,400 |
+| wash_stall | 631 | 30 % | 1.2 h | 2,100–2,900 |
+| donkey_cam | 480 | 31 % | 1.4 h | 1,700–3,000 |
+| tractor_cam | 584 | 37 % | 5.4 h | 1,300–2,800 |
+| back_pasture_cam | 742 | 47 % | 5.4 h | 1,200–2,400 |
+| mops_cam | 118 | 71 % | 24.1 h | 650 → 2 |
+
+**What each source says:**
+
+- *Sampler edges:* 58,808 lines. Failure class is "empty" (go2rtc answered 200 with no frame) in 90 % of
+  episodes, "timeout" in 10 %, "unreachable" only during the three go2rtc crashes. Episodes are short and
+  constant: back_yard_cam recovered 5,367 times in two days, one failure every ~30 s even on the best camera.
+  The watchdog reset streams 1,129 times (553 of them mops_cam).
+- *Probe (107,493 lines):* ICMP success 34–59 % on the v4s, 74 % on the v3 (front porch), **5 % on mops_cam**;
+  median RTT of answered pings 400–800 ms, p95 ~1.9 s, on a LAN. Slightly better at night (04–10Z) than by day.
+  go2rtc held a producer object for every camera 99 % of the time, so "producer present" is not a liveness
+  signal. The mini's own 5 GHz link never moved: RSSI −18 ±3 dBm, tx 1200 Mbit/s, over 3,642 samples. **The loss
+  is on the cameras' 2.4 GHz side; the mini is not the bottleneck.**
+- *go2rtc:* 7,829 `discovery timeout` and 1,623 `dtls handshake` failures per day. **Three panics**, identical
+  trace, `pion/dtls (*Conn).Write` on a nil connection inside `tutk/dtls.(*DTLSConn).AVClientStart.func1`
+  seconds after a DTLS handshake timeout (18 Oct 02:13, 15:41; 19 Oct 19:18). launchd restarted it each time
+  within seconds; this is almost certainly the 16 Oct `exit status 2` too. Draft report: `docs/upstream/`.
+  1.9.14 (Jan 2026) is the newest release and the first with the native Wyze source, so there is no fix to
+  upgrade to.
+- *Bridge:* no camera-level signal beyond "stream lost"/"connected" around our own resets.
+
+**The decisive comparison.** The sampler's one-shot `frame.jpeg` grab starts a fresh TUTK session each time
+(LAN discovery + DTLS handshake). On windows where the same five cameras were alive:
+
+| Window | Consumers | frames/h: back_yard, donkey, front_porch, mops, wash_stall |
+|---|---|---|
+| 16 Oct 01:05–03:20Z | seed recorder holding RTSP open + sampler | 337, 320, 275, 276, 327 (target 360) |
+| 19 Oct 01:05–03:20Z, night | sampler only | 204, 132, 226, 0, 114 |
+| 19 Oct 15:00–17:15Z, day | sampler only | 99, 100, 65, 0, 112 |
+
+Confirmed live (19 Oct 20:40 ET): with an in-process fMP4 consumer holding donkey_cam and wash_stall open,
+10/10 grabs succeeded in 1.0–1.8 s; the two control cameras managed 6/10 and 9/10 in 3.4–8.5 s.
+
+**Conclusion supported by the data:** the cameras' 2.4 GHz link is lossy, and under that loss the per-grab
+session setup fails about half the time, while an established session mostly survives. The fix in the sampler
+is one persistent consumer per camera (`RANCH_KEEPALIVE`, default on). It costs ~15 Mbit/s of continuous inbound
+video on the mini's clean 5 GHz link, which the probe shows is not the constraint. Not fixed by this: mops_cam
+(5 % ping success, effectively off the network: relocate the camera or the AP), and the go2rtc panic (fewer
+sessions mean fewer chances; launchd covers the rest; report upstream).
+
+**Detector, as a by-product:** yolo11n on night IR frames produces thousands of confident false positives per day
+(bench 3,155, bottle 2,456, clock 1,066, airplane 660, train 311 on 19 Oct) against ~400 horse detections. The COCO
+model is not usable on these scenes without the labeled benchmark and a class filter; Phase 1 step 6/7 is next.
+
+**After the fix (19 Oct 20:12–20:22 ET, keep-alive on):** 46–59 frames per camera per 10 min against a target of
+60 (back_yard 59, tractor 56, donkey 54, wash_stall 54, back_pasture 51, front_porch 46), zero `grab failing`
+episodes in the window, go2rtc at 6 % CPU / 53 MB, ~5 Mbit/s inbound. mops_cam still off. One day of data will
+tell whether this holds through daytime loss.
