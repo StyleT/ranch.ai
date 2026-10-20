@@ -71,7 +71,7 @@ class and "hard" slices: night IR at distance, rain/fog, the lens-cobweb frames,
 Frames per bucket are reported with every result so an empty bucket is visible.
 
 **Label schema** (`evals/label/schema.ts`): boxes normalized to the image, origin top-left, `x,y,w,h` in 0..1;
-`animals[]` with `kind` (horse, donkey, dog, cat, deer, coyote, bird, other) and `posture` (standing, grazing,
+`animals[]` with `kind` (horse, donkey, dog, cat, deer, coyote, bird, other) and `posture` (standing, grazing, drinking,
 walking, lying_sternal, lying_flat, unknown); **insects and spiders are deliberately not animals and are never
 boxed** (a dirty lens goes in `notes`); `people[]` with `kind` (friendly = resident or regular recognized by face
 or look, set by the human labeler or a future recognition tier; mailman = postal or courier worker by uniform or

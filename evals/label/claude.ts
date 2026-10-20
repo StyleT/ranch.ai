@@ -20,7 +20,7 @@ paddocks, a house). Each frame is one camera at one moment; many are night infra
 Return only what you can actually see. Draw one box per animal, person or vehicle, tight around the visible
 extent, in normalized image coordinates (x, y = top-left corner, w, h = size, all 0..1). Do not box reflections,
 shadows, or things you are guessing at; use the confidence field for uncertainty instead. Posture: lying_flat means
-on its side with legs out; lying_sternal means upright on its chest. Insects and spiders, including ones on the lens,
+on its side with legs out; lying_sternal means upright on its chest; drinking means head down at a trough or water. Insects and spiders, including ones on the lens,
 are not animals: never box them (mention a dirty lens in notes instead). People: kind is "mailman" only with a visible
 postal or courier uniform or vehicle, "unknown" otherwise ("friendly" is reserved for the human labeler who knows the
 residents); describe clothing and build in "look". Vehicles: "delivery_vehicle" for marked courier or postal vans and

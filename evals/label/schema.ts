@@ -10,7 +10,7 @@ export const FrameLabel = z.object({
   // Insects and spiders (including on the lens) are deliberately not animals: never boxed, never counted.
   animals: z.array(z.object({
     kind: z.enum(['horse', 'donkey', 'dog', 'cat', 'deer', 'coyote', 'bird', 'other']),
-    posture: z.enum(['standing', 'grazing', 'walking', 'lying_sternal', 'lying_flat', 'unknown']),
+    posture: z.enum(['standing', 'grazing', 'drinking', 'walking', 'lying_sternal', 'lying_flat', 'unknown']),
     box: Box,
     confidence: z.number().min(0).max(1).describe('How sure you are this is an animal of this kind.'),
   })),
