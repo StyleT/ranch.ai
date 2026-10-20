@@ -27,12 +27,12 @@ residents); describe clothing and build in "look". Vehicles: "delivery_vehicle" 
 trucks. If no gate or trough is visible, say so.`;
 
 const { values: a, positionals } = parseArgs({ allowPositionals: true, options: {
-  frames: { type: 'string', default: 'evals/golden/frames.jsonl' }, batch: { type: 'string' }, out: { type: 'string', default: 'evals/golden/labels.claude.jsonl' },
-  limit: { type: 'string' }, n: { type: 'string' },
+  frames: { type: 'string', default: 'evals/golden/frames.jsonl' }, batch: { type: 'string' }, out: { type: 'string', default: '' },
+  limit: { type: 'string' }, n: { type: 'string' }, dataset: { type: 'string', default: 'frames-ranch-v1' }, labels: { type: 'string', default: 'labels-ranch-claude-v1' },
 } });
 const cmd = positionals[0];
 const client = new Anthropic();
-interface FrameRow { path: string; source?: string; camera: string; ts: string; period: string }
+interface FrameRow { path: string; source?: string; camera: string; ts: string; period: string; frame_id?: number }
 const frames = (): FrameRow[] => {
   const all = readFileSync(a.frames!, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as FrameRow);
   if (a.limit) return all.slice(0, Number(a.limit));
@@ -99,12 +99,14 @@ if (cmd === 'estimate') {
     if (!parsed.success) { failed++; console.error(`${r.custom_id} ${f.path}: schema ${parsed.error.message.slice(0, 200)}`); continue; }
     const usd = (msg.usage.input_tokens * PRICE.input + msg.usage.output_tokens * PRICE.output) * PRICE.batchDiscount;
     cost += usd;
-    out.push(JSON.stringify({ path: f.path, source: f.source, camera: f.camera, ts: f.ts, period: f.period, labeler: MODEL, batch_id: a.batch,
+    out.push(JSON.stringify({ dataset: a.labels, frames_dataset: a.dataset, frame_id: f.frame_id ?? null, path: f.path, source: f.source, camera: f.camera, ts: f.ts, period: f.period,
+      labeler: MODEL, labeled_at: new Date().toISOString(), batch_id: a.batch,
       boxes: toBoxes(parsed.data), label: parsed.data, usage: msg.usage, cost_usd: +usd.toFixed(5) }));
   }
   out.sort();
-  writeFileSync(a.out!, out.join('\n') + '\n');
-  console.log(JSON.stringify({ labeled: out.length, failed, cost_usd: +cost.toFixed(4), out: a.out }));
+  const outPath = a.out || `evals/golden/${a.labels}.jsonl`;
+  writeFileSync(outPath, out.join('\n') + '\n');
+  console.log(JSON.stringify({ labeled: out.length, failed, cost_usd: +cost.toFixed(4), out: outPath, dataset: a.labels, frames: a.dataset }));
 } else {
   console.error('usage: claude.ts estimate|submit|collect [--frames f.jsonl] [--batch id] [--out labels.jsonl] [--limit n]');
   process.exit(2);
