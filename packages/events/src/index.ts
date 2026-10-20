@@ -8,6 +8,7 @@ export type FrameReason = 'floor' | 'change' | 'seed' | 'manual';
 export interface Frame {
   id: number; ts: string; camera: string; path: string;
   width: number | null; height: number | null; bytes: number | null; change: number | null; reason: FrameReason;
+  kept: number | null;
 }
 export interface NewFrame {
   ts: string; camera: string; path: string; reason: FrameReason;
@@ -98,6 +99,39 @@ export class EventStore {
     return this.db.prepare(sql).all(...args) as unknown as Frame[];
   }
 
+  /**
+   * Retention policy (docs/FRAMES-AND-BASELINE.md §1). Evaluates frames older than `olderThanMs` that have not
+   * been evaluated yet (kept IS NULL), per camera in time order. A frame is kept when its reason is not `floor`
+   * (the scene changed), or its detections differ from the previous kept frame's (a new label, or a same-label
+   * box with IoU below `iou`). A floor frame whose picture and detections match the previous kept frame is
+   * deleted: nothing is kept only because time passed. The file paths are returned for the caller to unlink.
+   */
+  applyRetention(opts: { olderThanMs: number; iou?: number; now?: Date } = { olderThanMs: 3600e3 }): { kept: number; deleted: number; paths: string[] } {
+    const iouMin = opts.iou ?? 0.8;
+    const cutoff = new Date((opts.now ?? new Date()).getTime() - opts.olderThanMs).toISOString();
+    const cams = (this.db.prepare('SELECT DISTINCT camera FROM frames WHERE kept IS NULL AND ts < ?').all(cutoff) as { camera: string }[]).map((r) => r.camera);
+    const detsOf = this.db.prepare('SELECT label, x, y, w, h FROM detections WHERE frame_id = ?');
+    const markKept = this.db.prepare('UPDATE frames SET kept = 1 WHERE id = ?');
+    const del = this.db.prepare('DELETE FROM frames WHERE id = ?');
+    let kept = 0; const paths: string[] = [];
+    for (const camera of cams) {
+      const prevKept = this.db.prepare('SELECT id FROM frames WHERE camera = ? AND kept = 1 AND ts < ? ORDER BY ts DESC LIMIT 1').get(camera, cutoff) as { id: number } | undefined;
+      let prevDets = prevKept ? (detsOf.all(prevKept.id) as unknown as Box[]) : [];
+      const rows = this.db.prepare('SELECT id, ts, path, reason FROM frames WHERE camera = ? AND kept IS NULL AND ts < ? ORDER BY ts').all(camera, cutoff) as { id: number; ts: string; path: string; reason: string }[];
+      this.db.exec('BEGIN');
+      try {
+        for (const f of rows) {
+          const dets = detsOf.all(f.id) as unknown as Box[];
+          const keep = f.reason !== 'floor' || detectionsDiffer(prevDets, dets, iouMin);
+          if (keep) { markKept.run(f.id); kept++; prevDets = dets; }
+          else { del.run(f.id); paths.push(f.path); }
+        }
+        this.db.exec('COMMIT');
+      } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    }
+    return { kept, deleted: paths.length, paths };
+  }
+
   /** Delete frames (and their detections) older than `before`; returns the file paths for the caller to unlink. */
   pruneFrames(before: string): string[] {
     const rows = this.db.prepare('SELECT path FROM frames WHERE ts < ?').all(before) as { path: string }[];
@@ -178,6 +212,26 @@ export class EventStore {
     args.push(q.limit ?? 1000);
     return this.db.prepare(`SELECT * FROM camera_counts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ts DESC LIMIT ?`).all(...args) as never;
   }
+}
+
+interface Box { label: string; x: number; y: number; w: number; h: number }
+function iou(a: Box, b: Box): number {
+  const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y), x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const union = a.w * a.h + b.w * b.h - inter;
+  return union > 0 ? inter / union : 0;
+}
+/** True when the two detection sets are not the same picture: different labels, or a box that moved. */
+export function detectionsDiffer(prev: Box[], cur: Box[], iouMin = 0.8): boolean {
+  if (prev.length !== cur.length) return true;
+  const used = new Set<number>();
+  for (const c of cur) {
+    let found = -1;
+    for (let i = 0; i < prev.length; i++) { const p = prev[i]!; if (!used.has(i) && p.label === c.label && iou(p, c) >= iouMin) { found = i; break; } }
+    if (found < 0) return true;
+    used.add(found);
+  }
+  return false;
 }
 
 function rowToEvent(r: Record<string, unknown>): RanchEvent {

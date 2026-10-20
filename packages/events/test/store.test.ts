@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EventStore, parseSince } from '../src/index.ts';
+import { EventStore, parseSince, detectionsDiffer } from '../src/index.ts';
 
 test('migrates an empty database and round-trips frames, detections and events', () => {
   const s = new EventStore(':memory:');
-  assert.equal(s.schemaVersion, 1);
+  assert.equal(s.schemaVersion, 2);
   const fid = s.insertFrame({ ts: '2026-10-15T00:00:00.000Z', camera: 'front_porch_cam', path: '/x/a.jpg', reason: 'floor', change: 0.01 });
   s.insertDetections(fid, [{ model: 'yolo11n', label: 'horse', confidence: 0.9, x: 0.1, y: 0.2, w: 0.3, h: 0.4 }]);
   assert.equal(s.detectionsForFrame(fid)[0]?.label, 'horse');
@@ -28,4 +28,30 @@ test('parseSince', () => {
   assert.equal(parseSince('90m', now), '2026-10-15T10:30:00.000Z');
   assert.equal(parseSince('2026-10-01T00:00:00Z', now), '2026-10-01T00:00:00.000Z');
   assert.throws(() => parseSince('yesterday', now));
+});
+
+test('retention: change and moved boxes survive; floor frames with the same picture and detections go', () => {
+  const s = new EventStore(':memory:');
+  const t0 = Date.parse('2026-10-19T00:00:00Z');
+  const add = (sec: number, reason: 'floor' | 'change', dets: { label: string; x: number }[] = []) => {
+    const ts = new Date(t0 + sec * 1000).toISOString();
+    const id = s.insertFrame({ ts, camera: 'cam', path: `/f/${sec}.jpg`, reason });
+    s.insertDetections(id, dets.map((d) => ({ model: 'm', label: d.label, confidence: 0.9, x: d.x, y: 0.1, w: 0.1, h: 0.1 })));
+    return id;
+  };
+  add(0, 'floor');                                   // nothing before it, nothing detected: deleted (time alone keeps nothing)
+  add(10, 'floor');                                  // identical -> deleted
+  add(20, 'floor', [{ label: 'horse', x: 0.5 }]);    // new label -> kept
+  add(30, 'floor', [{ label: 'horse', x: 0.5 }]);    // same box -> deleted
+  add(40, 'floor', [{ label: 'horse', x: 0.7 }]);    // box moved -> kept
+  add(50, 'change', [{ label: 'horse', x: 0.7 }]);   // scene changed -> kept
+  add(700, 'floor', [{ label: 'horse', x: 0.7 }]);   // ten minutes later, same picture -> deleted
+  const r = s.applyRetention({ olderThanMs: 0, now: new Date(t0 + 3600e3) });
+  assert.deepEqual(r.paths.sort(), ['/f/0.jpg', '/f/10.jpg', '/f/30.jpg', '/f/700.jpg']);
+  assert.equal(r.kept, 3);
+  assert.equal(s.frames({ limit: 100 }).filter((f) => f.kept === 1).length, 3);
+  assert.equal(s.applyRetention({ olderThanMs: 0, now: new Date(t0 + 3600e3) }).deleted, 0); // second pass: nothing new
+  assert.ok(detectionsDiffer([], [{ label: 'a', x: 0, y: 0, w: 1, h: 1 }]));
+  assert.ok(!detectionsDiffer([{ label: 'a', x: 0, y: 0, w: 1, h: 1 }], [{ label: 'a', x: 0.01, y: 0, w: 1, h: 1 }]));
+  s.close();
 });

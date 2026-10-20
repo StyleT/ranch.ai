@@ -22,11 +22,14 @@ detector still sees every kept frame. What changes is what survives after an hou
 |---|---|
 | `change` (scene changed ≥ 4 %) | 7 days |
 | has detections that differ from the previous retained frame of that camera (new label, or a box that moved: IoU < 0.8) | 7 days |
-| first `floor` frame of each camera per 10-minute bucket | 7 days (a time-lapse spine) |
 | any other `floor` frame | deleted after 1 h (row and file) |
 
-Expected: ~144 spine frames per camera per day plus motion, i.e. hundreds, not thousands, per camera. The hourly
-prune in `apps/ingest` applies it with SQL plus a small IoU check. No thumbnails or annotated copies are ever
+Nothing is kept only because time passed (Vlad, 19 Oct): a night with no motion leaves no frames behind, and
+that is correct. Liveness on the dashboard is unaffected because it only looks at the last 60 s, which is
+inside the 1 h evaluation delay.
+
+Expected: motion only, i.e. tens to hundreds of frames per camera per day. The hourly prune in `apps/ingest`
+applies it with SQL plus a small IoU check. No thumbnails or annotated copies are ever
 written: the browser draws boxes as SVG over the original, and resized variants are produced on the fly.
 Baseline sets (section 3) live outside this tree and are never pruned.
 

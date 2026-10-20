@@ -146,10 +146,19 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
   }
 }
 
+const RETAIN_AFTER_S = Number(process.env.RANCH_RETAIN_AFTER_S ?? 3600);
+
 async function prune(store: EventStore): Promise<void> {
+  // 1. retention policy on frames older than an hour (docs/FRAMES-AND-BASELINE.md §1)
+  const t0 = Date.now();
+  const r = store.applyRetention({ olderThanMs: RETAIN_AFTER_S * 1000 });
+  let removed = 0;
+  for (const p of r.paths) { try { unlinkSync(p); removed++; } catch { /* already gone */ } }
+  if (r.kept || r.deleted) log('retention applied', { kept: r.kept, deleted: r.deleted, files: removed, ms: Date.now() - t0 });
+  // 2. age limit for everything else
   const before = new Date(Date.now() - RETENTION_D * 86400e3).toISOString();
   const paths = store.pruneFrames(before);
-  let removed = 0;
+  removed = 0;
   for (const p of paths) { try { unlinkSync(p); removed++; } catch { /* already gone */ } }
   if (paths.length) log('pruned frames', { before, rows: paths.length, files: removed });
 }

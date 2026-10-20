@@ -71,4 +71,14 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       );
     `,
   },
+  {
+    version: 2,
+    name: 'frames.kept retention marker',
+    sql: `
+      -- Retention policy (docs/FRAMES-AND-BASELINE.md): NULL = not evaluated yet, 1 = passed the policy and is
+      -- kept until the age limit. Frames that fail are deleted (row + file).
+      ALTER TABLE frames ADD COLUMN kept INTEGER;
+      CREATE INDEX frames_camera_kept_ts ON frames (camera, kept, ts);
+    `,
+  },
 ];
