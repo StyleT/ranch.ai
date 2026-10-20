@@ -10,8 +10,11 @@ Rules: docs/EVALUATION.md §2. Verify a dataset by comparing its `dataset.json` 
 | preds-frames-ranch-v1-yolo11n-7edec780 | preds | 2026-10-20 | 300 | frames-ranch-v1 | af69ab7a90125bdf… | `evals/baseline/2026-10-20/predictions.yolo11n.jsonl` | same repo and tag, `predictions.*.jsonl` |
 | preds-frames-ranch-v1-yolo11s-0b717c6c | preds | 2026-10-20 | 300 | frames-ranch-v1 | 58d26b97e4df8b96… | `evals/baseline/2026-10-20/predictions.yolo11s.jsonl` | same repo and tag, `predictions.*.jsonl` |
 | labels-ranch-claude-v1 | labels | 2026-10-20 | 100 | frames-ranch-v1 | e7e0d99bef670c6c… | `evals/golden/labels-ranch-claude-v1.jsonl` (+ `.dataset.json`) | [tag labels-ranch-claude-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-claude-v1) `labels/` |
+| labels-ranch-claude-revised-vlad-v1 | labels | 2026-10-20 | 100 | labels-ranch-claude-v1 | 88fd9e2f3fd77486… | `evals/golden/labels-ranch-claude-revised-vlad-v1.jsonl` (+ `.dataset.json`) | [tag labels-ranch-claude-revised-vlad-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-claude-revised-vlad-v1) `labels/` |
 
 Notes on `labels-ranch-claude-v1` (smoke-verified 20 Oct, see LEADERBOARD.md): reliable at labeler confidence ≥ 0.7;
 boxes at 0.25–0.45 are hedged guesses on dark blobs and include a static patch on front_porch_cam boxed as a cat in
 four frames. Score with `--min-label-conf 0.5` until the human labels (`labels-ranch-vlad-v1`) exist. The
 `friendly` person kind is never set by Claude by design.
+
+`labels-ranch-claude-revised-vlad-v1`: Vlad reviewed Claude's labels in the frame browser (20 Oct) and removed every cat box (5; shadows and a static patch); all other boxes accepted. This is the labels dataset to score against until `labels-ranch-vlad-v1` exists.

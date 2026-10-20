@@ -17,6 +17,14 @@ Protocol: `docs/EVALUATION.md`. One row per result file in `evals/results/`. CI 
 | 2026-10-20 | zero-shot-labelconf05-quadruped | yolo11s | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1, as above + cow/sheep predictions counted as horse | 0.00 @– | R 0.60 [0.38–0.83] | 0.59 | 0.69 | 0.88 | | | `2026-10-20-zero-shot-labelconf05-quadruped.json` |
 | 2026-10-20 | zero-shot-labelconf05-quadruped | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1, as above + cow/sheep predictions counted as horse | 0.35 @0.65 | R 0.60 [0.38–0.82] | 0.65 | 1.89 | 0.85 | | | `2026-10-20-zero-shot-labelconf05-quadruped.json` |
 | 2026-10-20 | zero-shot-labelconf05-quadruped | rfdetr-nano-float32 | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1, as above + cow/sheep predictions counted as horse | 0.30 @0.8 | R 0.60 [0.38–0.82] | 0.63 | 2.00 | 0.86 | | | `2026-10-20-zero-shot-labelconf05-quadruped.json` |
+| 2026-10-20 | revised-labelconf05 | yolo11n | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 (20 gold) | 0.00 @– | R 0.30 [0.10–0.53] | 0.30 | 0.81 | 0.86 | | | `2026-10-20-revised-labelconf05.json` |
+| 2026-10-20 | revised-labelconf05 | yolo11s | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 (20 gold) | 0.00 @– | R 0.40 [0.19–0.62] | 0.40 | 0.73 | 0.88 | | | `2026-10-20-revised-labelconf05.json` |
+| 2026-10-20 | revised-labelconf05 | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 (20 gold) | 0.20 @0.8 | R 0.40 [0.18–0.62] | 0.48 | 1.93 | 0.85 | | | `2026-10-20-revised-labelconf05.json` |
+| 2026-10-20 | revised-labelconf05 | rfdetr-nano-float32 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 (20 gold) | 0.20 @0.8 | R 0.40 [0.18–0.62] | 0.46 | 2.04 | 0.86 | | | `2026-10-20-revised-labelconf05.json` |
+| 2026-10-20 | revised-labelconf05-quadruped | yolo11n | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.00 @– | R 0.55 [0.32–0.80] | 0.55 | 0.76 | 0.89 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
+| 2026-10-20 | revised-labelconf05-quadruped | yolo11s | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.00 @– | R 0.60 [0.38–0.83] | 0.59 | 0.69 | 0.88 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
+| 2026-10-20 | revised-labelconf05-quadruped | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.35 @0.65 | R 0.60 [0.38–0.82] | 0.65 | 1.89 | 0.85 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
+| 2026-10-20 | revised-labelconf05-quadruped | rfdetr-nano-float32 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.30 @0.8 | R 0.60 [0.38–0.82] | 0.63 | 2.00 | 0.86 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
 
 Notes 2026-10-20: 23 horse-class gold boxes (14 horses + 9 donkeys mapped to horse) in the 100 labeled frames; intervals are wide, as EVALUATION.md §4.2 warns. 12 of the 23 are missed by every model at 0.25: all seven large daytime donkeys (356–489 px wide), three animals under 120 px, one frame-filling night horse. IoU 0.3 changes nothing: misses are misses, not misplaced boxes. No model meets the FPPF ≤ 0.1 budget at any threshold except RF-DETR at 0.8 (recall 0.17).
 
@@ -28,3 +36,9 @@ and three "other/unknown" boxes sit on faint blobs Claude's own notes call "poss
 `labelconf05` variants, which drop those. Of the 12 universal horse misses, six were detected as `cow` or `dog`
 (class confusion, not blindness), which the `quadruped` variant quantifies: counting cow and sheep as horse lifts
 recall from 0.30–0.40 to 0.55–0.60.
+
+Human revision, 20 Oct: Vlad reviewed the labels in the frame browser and removed every cat box (all shadows or a
+static patch); everything else accepted → `labels-ranch-claude-revised-vlad-v1`, the reference labels from now on.
+Horse numbers are unchanged by the revision (no horse box was touched). Per class on the revised set, yolo11s at
+0.25: car recall 1.00 (28/28, 4 FP), person recall 1.00 with precision 0.42 (7 FP: night horses called person),
+horse 8/20, truck 0/14 (the tractors), the 10 "other" boxes never matched.

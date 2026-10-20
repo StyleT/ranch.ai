@@ -26,3 +26,9 @@ ones); `--merge-pred-classes cow=horse,sheep=horse` additionally scores any larg
 horse. Recall 0.30–0.40 → 0.55–0.60; AP 0.30–0.48 → 0.55–0.65. The gap between the two is class confusion: COCO
 models see donkeys as cows. The gap from 0.60 to 1.0 is real misses: animals under 100 px at night, a horse under a
 blanket ("bed"), a frame-filling horse ("bottle").
+
+## 2026-10-20-revised-labelconf05.json and -quadruped.json
+
+Same two variants against `labels-ranch-claude-revised-vlad-v1` (Claude's labels after Vlad removed the five cat
+boxes). Horse metrics identical to the `labelconf05` runs; this is now the reference. Per-class table in
+LEADERBOARD.md notes: the models are solid on cars, over-eager on people at night, blind to tractors as trucks.

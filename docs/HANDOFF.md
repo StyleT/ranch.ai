@@ -13,7 +13,7 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
    target ≥ 300 frames per camera per hour. If the go2rtc panic recurs, count it; decide on the upstream report.
 2. ~~Phase 1 steps 6–7~~ done 20 Oct: `labels-ranch-claude-v1` (100 frames, $1.44) and the first leaderboard rows
    (`evals/LEADERBOARD.md`, `evals/results/`). Horse recall 0.26–0.35 at 0.25, wide CIs; 12 of 23 horse-class
-   boxes missed by every model, seven of them large daytime donkeys. Datasets on the Hub (`vladlenfedosov/ranch-frames`).
+   boxes missed by every model, seven of them large daytime donkeys. Reference labels: `labels-ranch-claude-revised-vlad-v1` (Vlad removed Claude's five cat boxes, rest accepted). Datasets on the Hub (`vladlenfedosov/ranch-frames`).
    Next: Post 1 from these numbers; a class filter for tier 1 (today the detector's "bench"/"bottle" boxes are
    pure noise); then Phase 1b human labels on the same 100 frames; and the fine-tune question (donkey class). Then step 7: the recall benchmark. The detector
    evidence makes this urgent: yolo11n emits thousands of confident night false positives (bench, bottle,
