@@ -16,7 +16,10 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
    boxes missed by every model, seven of them large daytime donkeys. Reference labels: `labels-ranch-claude-revised-vlad-v1` (Vlad removed Claude's five cat boxes, rest accepted). Datasets on the Hub (`vladlenfedosov/ranch-frames`).
    21 Oct: class filter shipped (`docs/TAXONOMY.md`, `packages/taxonomy`): FPPF(all) 0.81 → 0.27, horse recall 0.30 →
    0.55 on the reference labels. 22 Oct: the taxonomy is editable on `:5090/taxonomy` with a measured gate and
-   versions (`docs/TAXONOMY-UI.md`); the status port is LAN-only. Next: Post 1; the yolo11s swap row; Phase 1b
+   versions (`docs/TAXONOMY-UI.md`); the status port is LAN-only. 22 Oct, later: the dashboard was rebuilt as a
+   Next.js app (`apps/web`, `docs/WEB-DASHBOARD.md`) with unit, integration, Playwright and agentic e2e tests; the
+   status daemon is API-only on loopback 5091; cameras follow `docs/CAMERA-ARCHITECTURE.md` (the app reads the
+   recorder buffer, never go2rtc). Next: Post 1; the yolo11s swap row; Phase 1b
    human labels; the fine-tune question. 22 Oct: yolo26s is the production detector (leaderboard), and change
    keeps become bursts with per-burst tracks (`docs/MODEL-YOLO26.md`); tier 2/3 will receive bursts, not frames. Then step 7: the recall benchmark. The detector
    evidence makes this urgent: yolo11n emits thousands of confident night false positives (bench, bottle,

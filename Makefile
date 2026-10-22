@@ -64,5 +64,6 @@ contract-test: tunnel    ## Validate the live daemon against packages/contracts
 e2e:              ## Deterministic Playwright against a local build + the fixture daemon
 	npm -w apps/web run e2e
 
-e2e-ai:           ## Agentic e2e: Claude Code (subscription) drives the browser on the ranch LAN. make e2e-ai [MODEL=haiku] [TASK=name] [TARGET=live|fixtures]
-	RANCH_E2E_MODEL=$(or $(MODEL),haiku) RANCH_E2E_TARGET=$(or $(TARGET),live) RANCH_E2E_TASK=$(TASK) npm -w apps/web run e2e:ai
+e2e-ai:           ## Agentic e2e: Claude Code (your subscription) drives the browser. make e2e-ai [TARGET=tunnel|live|fixtures] [MODEL=haiku|sonnet|opus] [TASK=name]
+	@case "$(or $(TARGET),tunnel)" in tunnel) ssh -f -N -o ExitOnForwardFailure=yes -L 5097:127.0.0.1:5090 -L 5091:127.0.0.1:5091 $(HOST) 2>/dev/null || true;; live) ssh -f -N -o ExitOnForwardFailure=yes -L 5091:127.0.0.1:5091 $(HOST) 2>/dev/null || true;; esac
+	RANCH_E2E_TARGET=$(or $(TARGET),tunnel) $(if $(MODEL),RANCH_E2E_MODEL=$(MODEL),) RANCH_E2E_TASK=$(TASK) node --experimental-strip-types --no-warnings apps/web/e2e/ai/run.ts

@@ -78,7 +78,32 @@ Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/we
   go2rtc removed from it; `seed` fields became `buffer` fields in the status contract.
 - M4 (22 Oct): cut-over. Status daemon on 127.0.0.1:5091 (API only, HTML pages deleted), web app on 5090.
 - M5 (22 Oct): deterministic e2e and hardening, below.
-- Next: M6 agentic e2e with `claude -p` + Playwright MCP over the subscription.
+- M6 (22 Oct): agentic e2e, below.
+
+## Agentic e2e (M6)
+
+`make e2e-ai [TARGET=tunnel|live|fixtures] [MODEL=haiku|sonnet|opus] [TASK=name]` has Claude operate the real UI
+through a browser and checks its answers against the daemon API. It runs **Claude Code headless on the user's
+subscription**, not an API key: `apps/web/e2e/ai/run.ts` invokes `claude -p` per task with `--strict-mcp-config`
+and a pinned `@playwright/mcp` server (headless, isolated profile, origin restricted to the dashboard), built-in
+tools removed, an allowlist of browser tools (no `browser_evaluate`), `--permission-mode dontAsk`,
+`--max-turns`, `--max-budget-usd 0.50`, `--no-session-persistence`, a rubric appended to the system prompt
+(`e2e/ai/rubric.md`), and `--json-schema` for a structured answer. The run happens from a neutral temp cwd with
+`ANTHROPIC_API_KEY` unset. Targets: `tunnel` (default: the browser reaches the mini's 5090 through an ssh tunnel,
+so it works off the ranch LAN), `live` (ranch LAN), `fixtures` (the fixture daemon + a local build, no ranch).
+
+Tasks (`e2e/ai/tasks.ts`) and their oracles (`e2e/ai/oracle.ts`, code over `@ranch/contracts`, evaluated before
+and after the run because live data moves): camera with the most horse detections in the last hour; donkey_cam's
+current equine count; the offline cameras; the daemon using the most memory; the newest moving person (camera and
+time); and, with Sonnet, change the coco person threshold to 0.7 in the taxonomy draft, score it and report the
+gate (no token, so it cannot apply). Reports go to `e2e/ai/runs/<ts>.json` (git-ignored).
+
+First results, 22 Oct: fixtures 6/6 and live (tunnel) 6/6 after two oracle fixes; haiku tasks take 4–8 turns and
+10–25 s each at a ~$0.002–0.005 client-side cost estimate, the Sonnet taxonomy task 9–11 turns and 30–50 s at
+~$0.12–0.15; usage counts against the subscription's windows. Lessons: the oracle must mirror the page's own query
+(the label filter applies to the head frame, "moving" to the whole burst); the set judge extracts camera names from
+free text because the model sometimes answers in a sentence instead of the structured field. Private use only:
+the Agent SDK terms do not allow offering claude.ai login to third parties.
 
 ## End-to-end tests (M5)
 
@@ -100,3 +125,11 @@ deutan, normal-vision ≥ 17, contrast ≥ 3:1): horse `#34c47f`, person `#f28c3
 with 192/512 px icons and an Apple touch icon. Client JavaScript after build: 867 kB across all chunks (the
 shared runtime chunk 229 kB); no per-route first-load figure is printed by Next 16's build, so the number to
 watch is the total. Lighthouse was not run (no tool on the laptop); axe covers accessibility.
+
+## Rollback
+
+The API never changed shape across the cut-over, so rolling back is a provision: revert the cut-over commits (or
+check out the commit before them), add `com.ranch.web` to `ranch_daemons_retired` in that revert, `make provision`.
+The status plist renders 5090/0.0.0.0 again and is rebootstrapped; the old pages come back with the tree; the
+retired task boots out `com.ranch.web` and deletes its plist. `apps/web/.next` on the mini is excluded from the rsync
+delete, so finish with `ssh ranch rm -rf /usr/local/ranch/app/apps/web/.next`.
