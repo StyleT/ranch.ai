@@ -113,3 +113,9 @@ The main page's detections panel is per camera and links into the browser.
 
 `/taxonomy` editor; `GET /api/taxonomy`, `/api/taxonomy/versions[/<id>]`; `POST /api/taxonomy/validate|score`
 (open) and `apply|revert` (need `x-ranch-token`). Main page shows the taxonomy version and a drift banner.
+
+## Added 22 Oct (docs/MODEL-YOLO26.md part B)
+
+`/frames` groups bursts into one card (hover to step through members; ↑/↓ in the viewer), draws motion arrows,
+"moving only" filter (`/api/frames?moving=1`); `/api/frames` returns heads with `burst: [...]` members and
+`track/seen/dx/dy` on detections.

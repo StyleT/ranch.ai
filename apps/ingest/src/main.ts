@@ -5,6 +5,7 @@
 // <media>/frames/<camera>/<UTC date>/<ts>.jpg, a row in `frames`, and MQTT ranch/frames/<camera>.
 import { mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { config } from '@ranch/config';
 import { EventStore } from '@ranch/events';
@@ -24,6 +25,21 @@ const RETENTION_D = Number(process.env.RANCH_FRAMES_RETENTION_D ?? 7);
 // instead of 3-8 s. So each camera gets one persistent in-process fMP4 consumer whose body is discarded. No child
 // processes; go2rtc muxes without transcoding.
 const KEEPALIVE = (process.env.RANCH_KEEPALIVE ?? '1') !== '0';
+// Bursts (docs/MODEL-YOLO26.md part B): only a change keep opens one; it extends 1 s at a time while consecutive
+// grabs keep differing, stops at the first still grab or at BURST_MAX; one burst per camera per cooldown; and a
+// global per-minute budget of member frames across all cameras keeps the cost bounded.
+const BURST_MAX = Number(process.env.RANCH_BURST_MAX ?? 4);
+const BURST_GAP_S = Number(process.env.RANCH_BURST_GAP_S ?? 1);
+const BURST_CHANGE = Number(process.env.RANCH_BURST_CHANGE ?? 0.01);
+const BURST_COOLDOWN_S = Number(process.env.RANCH_BURST_COOLDOWN_S ?? 10);
+const BURST_BUDGET_PER_MIN = Number(process.env.RANCH_BURST_BUDGET_PER_MIN ?? 60);
+const burstStats = { bursts: 0, burst_frames: 0, throttled: 0, tokens: BURST_BUDGET_PER_MIN, lastRefill: Date.now(), lastThrottleLog: 0 };
+function takeBurstToken(): boolean {
+  const now = Date.now();
+  if (now - burstStats.lastRefill >= 60_000) { burstStats.tokens = BURST_BUDGET_PER_MIN; burstStats.lastRefill = now; }
+  if (burstStats.tokens <= 0) { burstStats.throttled++; if (now - burstStats.lastThrottleLog > 60_000) { burstStats.lastThrottleLog = now; log('burst throttled', { budget_per_min: BURST_BUDGET_PER_MIN }); } return false; }
+  burstStats.tokens--; return true;
+}
 const STALL_RESET_S = Number(process.env.RANCH_STALL_RESET_S ?? 180);
 const STALL_COOLDOWN_S = Number(process.env.RANCH_STALL_COOLDOWN_S ?? 300);
 const GO2RTC_CONFIG = process.env.RANCH_GO2RTC_CONFIG ?? '/usr/local/ranch/var/wyze-bridge/go2rtc.yaml';
@@ -100,8 +116,39 @@ function meanAbsDiff(a: Buffer, b: Buffer): number {
   return sum / a.length / 255;
 }
 
+/**
+ * Extend a change keep into a burst (docs/MODEL-YOLO26.md part B): grab again every BURST_GAP_S; a grab becomes a
+ * member only if it differs from the previous member by >= BURST_CHANGE; the first still grab ends the burst; at
+ * most BURST_MAX frames; every member costs one token of the global per-minute budget. Returns what was added so
+ * the caller can continue its own change detection from the last member. Exported for the unit test.
+ */
+export async function extendBurst(o: { headId: number; camera: string; dir: string; headThumb: Buffer; grab: () => Promise<Buffer>; store: EventStore; bus: Bus; gapMs?: number }): Promise<{ members: number; frameIds: number[]; lastThumb?: Buffer; stopped: 'still' | 'max' | 'budget' | 'error' }> {
+  const frameIds = [o.headId]; let prevThumb = o.headThumb; let seq = 1; let stopped: 'still' | 'max' | 'budget' | 'error' = 'max';
+  while (seq < BURST_MAX) {
+    await sleep(o.gapMs ?? BURST_GAP_S * 1000);
+    if (!takeBurstToken()) { stopped = 'budget'; break; }
+    let jpeg: Buffer; try { jpeg = await o.grab(); } catch { stopped = 'error'; break; }
+    const img = sharp(jpeg);
+    const [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]);
+    const change = meanAbsDiff(thumb, prevThumb);
+    if (change < BURST_CHANGE) { stopped = 'still'; break; }
+    if (seq === 1) o.store.markBurstHead(o.headId);
+    const ts = new Date().toISOString(); const path = join(o.dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
+    writeFileSync(path, jpeg);
+    const id = o.store.insertFrame({ ts, camera: o.camera, path, reason: 'change', change, bytes: jpeg.length, burst_id: o.headId, seq, ...(meta.width ? { width: meta.width } : {}), ...(meta.height ? { height: meta.height } : {}) });
+    await o.bus.publish(topics.frames(o.camera), { id, ts, camera: o.camera, path, reason: 'change', change, width: meta.width, height: meta.height, burst_id: o.headId, seq });
+    frameIds.push(id); prevThumb = thumb; seq++;
+  }
+  if (frameIds.length > 1) {
+    burstStats.bursts++; burstStats.burst_frames += frameIds.length - 1;
+    await o.bus.publish(topics.bursts(o.camera), { burst_id: o.headId, camera: o.camera, frame_ids: frameIds, n: frameIds.length, stopped });
+    return { members: frameIds.length - 1, frameIds, lastThumb: prevThumb, stopped };
+  }
+  return { members: 0, frameIds, stopped };
+}
+
 async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: { v: boolean }): Promise<void> {
-  let lastThumb: Buffer | undefined; let lastKept = 0; let failures = 0;
+  let lastThumb: Buffer | undefined; let lastKept = 0; let failures = 0; let lastBurstEnd = 0;
   let lastOk = Date.now(); let lastReset = 0; let failingSince = 0; let failClass = '';
   const classify = (e: unknown) => { const m = String(e); return /Timeout/.test(m) ? 'timeout' : /empty/.test(m) ? 'empty' : /404/.test(m) ? '404' : /fetch failed/.test(m) ? 'unreachable' : m.slice(0, 40); };
   while (!stop.v) {
@@ -123,6 +170,10 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
         const id = store.insertFrame({ ts, camera, path, reason, change, bytes: jpeg.length, ...(meta.width ? { width: meta.width } : {}), ...(meta.height ? { height: meta.height } : {}) });
         await bus.publish(topics.frames(camera), { id, ts, camera, path, reason, change, width: meta.width, height: meta.height });
         lastThumb = thumb; lastKept = now.getTime();
+        if (reason === 'change' && BURST_MAX > 1 && now.getTime() - lastBurstEnd > BURST_COOLDOWN_S * 1000) {
+          const b = await extendBurst({ headId: id, camera, dir, headThumb: thumb, grab: () => grab(camera), store, bus });
+          if (b.members > 0) { lastThumb = b.lastThumb!; lastKept = Date.now(); lastBurstEnd = Date.now(); }
+        }
       }
       if (failingSince) { log('grab recovered', { camera, down_s: Math.round((Date.now() - failingSince) / 1000), failures, last_error: failClass }); failingSince = 0; }
       failures = 0; lastOk = Date.now();
@@ -167,11 +218,11 @@ async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const bus = await connectBus('ingest');
   const cameras = await cameraList();
-  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, keepalive_exclude: config.keepaliveExclude, media: config.mediaDir, db: config.dbPath });
+  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, keepalive_exclude: config.keepaliveExclude, burst: { max: BURST_MAX, gap_s: BURST_GAP_S, change: BURST_CHANGE, cooldown_s: BURST_COOLDOWN_S, budget_per_min: BURST_BUDGET_PER_MIN }, media: config.mediaDir, db: config.dbPath });
   const stop = { v: false };
   const status = setInterval(() => {
     const m = process.memoryUsage();
-    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), resets }, { retain: true });
+    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), resets, bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN }, { retain: true });
   }, 60_000);
   const pruner = setInterval(() => void prune(store), 3600_000);
   await prune(store);
@@ -183,4 +234,5 @@ async function main(): Promise<void> {
   ]);
 }
 
-main().catch((e) => { log('fatal', { error: String(e) }); process.exit(1); });
+// Run the daemon only when this file is the entry point (the burst test imports extendBurst).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch((e) => { log('fatal', { error: String(e) }); process.exit(1); });

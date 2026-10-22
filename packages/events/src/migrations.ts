@@ -108,4 +108,22 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       CREATE INDEX taxonomy_versions_active ON taxonomy_versions (active);
     `,
   },
+  {
+    version: 5,
+    name: 'bursts and tracks',
+    sql: `
+      -- Bursts (docs/MODEL-YOLO26.md part B): a change keep may be followed by members 1 s apart while motion continues.
+      -- burst_id = the head frame's id (the head has seq 0, members seq >= 1). The reason CHECK cannot be altered in
+      -- SQLite, so members carry reason 'change' and are told apart by seq > 0.
+      ALTER TABLE frames ADD COLUMN burst_id INTEGER;
+      ALTER TABLE frames ADD COLUMN seq INTEGER;
+      CREATE INDEX frames_burst ON frames (burst_id, seq);
+      -- Short tracks across a burst: track = local id within the burst, seen = frames the track appears in,
+      -- dx/dy = normalized displacement of the box centre from first to last appearance.
+      ALTER TABLE detections ADD COLUMN track INTEGER;
+      ALTER TABLE detections ADD COLUMN seen INTEGER;
+      ALTER TABLE detections ADD COLUMN dx REAL;
+      ALTER TABLE detections ADD COLUMN dy REAL;
+    `,
+  },
 ];

@@ -166,7 +166,7 @@ const server = createServer(async (req, res) => {
       const rows = store.framesWithDetections({
         ...(p.get('camera') ? { camera: p.get('camera')! } : {}), ...(since ? { since } : {}), ...(p.get('until') ? { until: p.get('until')! } : {}),
         ...(p.get('label') ? { label: p.get('label')! } : {}), ...(num('min_conf') !== undefined ? { minConf: num('min_conf')! } : {}),
-        ...(p.get('reason') ? { reason: p.get('reason') as FrameReason } : {}), withDetections: p.get('with_detections') === '1',
+        ...(p.get('reason') ? { reason: p.get('reason') as FrameReason } : {}), withDetections: p.get('with_detections') === '1', moving: p.get('moving') === '1',
         ...(num('limit') !== undefined ? { limit: num('limit')! } : {}), ...(num('before') !== undefined ? { before: num('before')! } : {}),
       });
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(rows));

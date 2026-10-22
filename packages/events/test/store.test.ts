@@ -4,7 +4,7 @@ import { EventStore, parseSince, detectionsDiffer } from '../src/index.ts';
 
 test('migrates an empty database and round-trips frames, detections and events', () => {
   const s = new EventStore(':memory:');
-  assert.equal(s.schemaVersion, 4);
+  assert.equal(s.schemaVersion, 5);
   const fid = s.insertFrame({ ts: '2026-10-15T00:00:00.000Z', camera: 'front_porch_cam', path: '/x/a.jpg', reason: 'floor', change: 0.01 });
   s.insertDetections(fid, [{ model: 'yolo11n', label: 'horse', confidence: 0.9, x: 0.1, y: 0.2, w: 0.3, h: 0.4 }]);
   assert.equal(s.detectionsForFrame(fid)[0]?.label, 'horse');
@@ -53,5 +53,25 @@ test('retention: change and moved boxes survive; floor frames with the same pict
   assert.equal(s.applyRetention({ olderThanMs: 0, now: new Date(t0 + 3600e3) }).deleted, 0); // second pass: nothing new
   assert.ok(detectionsDiffer([], [{ label: 'a', x: 0, y: 0, w: 1, h: 1 }]));
   assert.ok(!detectionsDiffer([{ label: 'a', x: 0, y: 0, w: 1, h: 1 }], [{ label: 'a', x: 0.01, y: 0, w: 1, h: 1 }]));
+  s.close();
+});
+
+test('bursts: members ride with the head in listing and retention', () => {
+  const s = new EventStore(':memory:');
+  const t0 = Date.parse('2026-10-22T00:00:00Z'); const at = (sec: number) => new Date(t0 + sec * 1000).toISOString();
+  const head = s.insertFrame({ ts: at(0), camera: 'cam', path: '/b/0.jpg', reason: 'change' }); s.markBurstHead(head);
+  s.insertFrame({ ts: at(1), camera: 'cam', path: '/b/1.jpg', reason: 'change', burst_id: head, seq: 1 });
+  s.insertFrame({ ts: at(2), camera: 'cam', path: '/b/2.jpg', reason: 'change', burst_id: head, seq: 2 });
+  const still = s.insertFrame({ ts: at(10), camera: 'cam', path: '/b/10.jpg', reason: 'floor' });   // detections changed (horse gone): kept
+  s.insertFrame({ ts: at(20), camera: 'cam', path: '/b/20.jpg', reason: 'floor' });                  // same as the previous kept: deleted
+  const ids = s.insertDetections(head, [{ model: 'm', label: 'horse', confidence: 0.9, x: 0.1, y: 0.1, w: 0.2, h: 0.2 }]);
+  s.updateTrack(ids[0]!, { track: 1, seen: 3, dx: 0.05, dy: 0 });
+  const list = s.framesWithDetections({ limit: 10 });
+  assert.deepEqual(list.map((f) => f.id).slice(1), [still, head]);  // members are not listed on their own
+  assert.equal(list[2]!.burst.length, 2);
+  assert.equal(s.framesWithDetections({ moving: true, limit: 10 }).length, 1);
+  const r = s.applyRetention({ olderThanMs: 0, now: new Date(t0 + 3600e3) });
+  assert.equal(r.kept, 2); assert.deepEqual(r.paths.sort(), ['/b/20.jpg']);
+  assert.equal(s.burstMembers(head).length, 3);                      // head + 2 members survive together
   s.close();
 });

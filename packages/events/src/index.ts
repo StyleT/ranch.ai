@@ -8,14 +8,14 @@ export type FrameReason = 'floor' | 'change' | 'seed' | 'manual';
 export interface Frame {
   id: number; ts: string; camera: string; path: string;
   width: number | null; height: number | null; bytes: number | null; change: number | null; reason: FrameReason;
-  kept: number | null;
+  kept: number | null; burst_id: number | null; seq: number | null;
 }
 export interface NewFrame {
-  ts: string; camera: string; path: string; reason: FrameReason;
+  ts: string; camera: string; path: string; reason: FrameReason; burst_id?: number; seq?: number;
   width?: number; height?: number; bytes?: number; change?: number;
 }
 export interface Detection {
-  id: number; frame_id: number; model: string; label: string; confidence: number;
+  id: number; frame_id: number; model: string; label: string; confidence: number; track: number | null; seen: number | null; dx: number | null; dy: number | null;
   x: number; y: number; w: number; h: number; latency_ms: number | null; raw_label: string | null;
 }
 export interface NewDetection {
@@ -60,11 +60,13 @@ export class EventStore {
 
   private migrate(): void {
     this.db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)');
-    const applied = new Set((this.db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map((r) => r.version));
+    // Several daemons open the database at the same moment after a provision. BEGIN IMMEDIATE takes the write lock
+    // before the version check, so only one of them applies a migration and the others see it as applied.
     for (const m of migrations) {
-      if (applied.has(m.version)) continue;
-      this.db.exec('BEGIN');
+      this.db.exec('BEGIN IMMEDIATE');
       try {
+        const done = this.db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(m.version);
+        if (done) { this.db.exec('COMMIT'); continue; }
         this.db.exec(m.sql);
         this.db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(m.version, m.name, new Date().toISOString());
         this.db.exec('COMMIT');
@@ -84,9 +86,17 @@ export class EventStore {
   // ---- frames
   insertFrame(f: NewFrame): number {
     const r = this.db.prepare(
-      'INSERT INTO frames (ts, camera, path, width, height, bytes, change, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).run(f.ts, f.camera, f.path, f.width ?? null, f.height ?? null, f.bytes ?? null, f.change ?? null, f.reason);
+      'INSERT INTO frames (ts, camera, path, width, height, bytes, change, reason, burst_id, seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(f.ts, f.camera, f.path, f.width ?? null, f.height ?? null, f.bytes ?? null, f.change ?? null, f.reason, f.burst_id ?? null, f.seq ?? null);
     return Number(r.lastInsertRowid);
+  }
+  /** Turn a kept frame into a burst head (burst_id = its own id, seq 0). */
+  markBurstHead(id: number): void { this.db.prepare('UPDATE frames SET burst_id = ?, seq = 0 WHERE id = ?').run(id, id); }
+  burstMembers(burstId: number): Frame[] {
+    return this.db.prepare('SELECT * FROM frames WHERE burst_id = ? ORDER BY seq').all(burstId) as unknown as Frame[];
+  }
+  updateTrack(detectionId: number, t: { track: number; seen: number; dx: number; dy: number }): void {
+    this.db.prepare('UPDATE detections SET track = ?, seen = ?, dx = ?, dy = ? WHERE id = ?').run(t.track, t.seen, t.dx, t.dy, detectionId);
   }
 
   frames(q: { since?: string; until?: string; camera?: string; limit?: number } = {}): Frame[] {
@@ -117,14 +127,17 @@ export class EventStore {
     for (const camera of cams) {
       const prevKept = this.db.prepare('SELECT id FROM frames WHERE camera = ? AND kept = 1 AND ts < ? ORDER BY ts DESC LIMIT 1').get(camera, cutoff) as { id: number } | undefined;
       let prevDets = prevKept ? (detsOf.all(prevKept.id) as unknown as Box[]) : [];
-      const rows = this.db.prepare('SELECT id, ts, path, reason FROM frames WHERE camera = ? AND kept IS NULL AND ts < ? ORDER BY ts').all(camera, cutoff) as { id: number; ts: string; path: string; reason: string }[];
+      const rows = this.db.prepare('SELECT id, ts, path, reason, burst_id FROM frames WHERE camera = ? AND kept IS NULL AND ts < ? AND (seq IS NULL OR seq = 0) ORDER BY ts').all(camera, cutoff) as { id: number; ts: string; path: string; reason: string; burst_id: number | null }[];
+      const memberPaths = this.db.prepare('SELECT path FROM frames WHERE burst_id = ? AND seq > 0');
+      const keepMembers = this.db.prepare('UPDATE frames SET kept = 1 WHERE burst_id = ? AND seq > 0');
+      const delMembers = this.db.prepare('DELETE FROM frames WHERE burst_id = ? AND seq > 0');
       this.db.exec('BEGIN');
       try {
         for (const f of rows) {
           const dets = detsOf.all(f.id) as unknown as Box[];
           const keep = f.reason !== 'floor' || detectionsDiffer(prevDets, dets, iouMin);
-          if (keep) { markKept.run(f.id); kept++; prevDets = dets; }
-          else { del.run(f.id); paths.push(f.path); }
+          if (keep) { markKept.run(f.id); kept++; prevDets = dets; if (f.burst_id) keepMembers.run(f.burst_id); }
+          else { if (f.burst_id) { for (const m of memberPaths.all(f.burst_id) as { path: string }[]) paths.push(m.path); delMembers.run(f.burst_id); } del.run(f.id); paths.push(f.path); }
         }
         this.db.exec('COMMIT');
       } catch (e) { this.db.exec('ROLLBACK'); throw e; }
@@ -144,13 +157,15 @@ export class EventStore {
   }
 
   /** Frames with their detections for the browser (docs/FRAMES-AND-BASELINE.md §2). Newest first. */
-  framesWithDetections(q: { camera?: string; since?: string; until?: string; label?: string; minConf?: number; reason?: FrameReason; withDetections?: boolean; limit?: number; before?: number } = {}): (Frame & { detections: Detection[] })[] {
+  framesWithDetections(q: { camera?: string; since?: string; until?: string; label?: string; minConf?: number; reason?: FrameReason; withDetections?: boolean; moving?: boolean; limit?: number; before?: number } = {}): (Frame & { detections: Detection[]; burst: (Frame & { detections: Detection[] })[] })[] {
     const where: string[] = []; const args: SQLInputValue[] = [];
     if (q.camera) { where.push('f.camera = ?'); args.push(q.camera); }
     if (q.since) { where.push('f.ts >= ?'); args.push(q.since); }
     if (q.until) { where.push('f.ts < ?'); args.push(q.until); }
     if (q.reason) { where.push('f.reason = ?'); args.push(q.reason); }
     if (q.before) { where.push('f.id < ?'); args.push(q.before); }
+    where.push('(f.seq IS NULL OR f.seq = 0)'); // burst members ride with their head
+    if (q.moving) where.push('EXISTS (SELECT 1 FROM detections d WHERE d.frame_id = f.id AND d.dx IS NOT NULL AND (d.dx*d.dx + d.dy*d.dy) >= 0.0004)');
     const detCond: string[] = []; const detArgs: SQLInputValue[] = [];
     if (q.label) { detCond.push('d.label = ?'); detArgs.push(q.label); }
     if (q.minConf !== undefined) { detCond.push('d.confidence >= ?'); detArgs.push(q.minConf); }
@@ -162,7 +177,8 @@ export class EventStore {
     args.push(Math.min(q.limit ?? 60, 500));
     const frames = this.db.prepare(sql).all(...args) as unknown as Frame[];
     const dets = this.db.prepare('SELECT * FROM detections WHERE frame_id = ? ORDER BY confidence DESC');
-    return frames.map((f) => ({ ...f, detections: dets.all(f.id) as unknown as Detection[] }));
+    const members = this.db.prepare('SELECT * FROM frames WHERE burst_id = ? AND seq > 0 ORDER BY seq');
+    return frames.map((f) => ({ ...f, detections: dets.all(f.id) as unknown as Detection[], burst: f.burst_id ? (members.all(f.burst_id) as unknown as Frame[]).map((m) => ({ ...m, detections: dets.all(m.id) as unknown as Detection[] })) : [] }));
   }
 
   /** camera x label counts in a window, for the dashboard. */
@@ -208,15 +224,17 @@ export class EventStore {
   }
 
   // ---- detections
-  insertDetections(frameId: number, ds: NewDetection[]): void {
+  insertDetections(frameId: number, ds: NewDetection[]): number[] {
     const stmt = this.db.prepare(
       'INSERT INTO detections (frame_id, model, label, confidence, x, y, w, h, latency_ms, raw_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     );
+    const ids: number[] = [];
     this.db.exec('BEGIN');
     try {
-      for (const d of ds) stmt.run(frameId, d.model, d.label, d.confidence, d.x, d.y, d.w, d.h, d.latency_ms ?? null, d.raw_label ?? null);
+      for (const d of ds) ids.push(Number(stmt.run(frameId, d.model, d.label, d.confidence, d.x, d.y, d.w, d.h, d.latency_ms ?? null, d.raw_label ?? null).lastInsertRowid));
       this.db.exec('COMMIT');
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    return ids;
   }
 
   detectionsForFrame(frameId: number, model?: string): Detection[] {

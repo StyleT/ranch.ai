@@ -84,3 +84,25 @@ precision 0.92 (0.85), FPPF(all) 0.14 (0.27), person precision 0.38 at recall 1.
 the ANE (18.2), RSS unchanged. First model to reach the 0.1 false-positive budget with usable horse recall (0.55
 at threshold 0.75). The relative gate fails on one class: the single gold dog (1/1 → 0/1). Swapped to production
 as instructed with that recorded. yolo26n is not an improvement on yolo11n.
+
+## Part B, as built (22 Oct, ~00:00 ET)
+
+- Schema v5: `frames.burst_id`, `frames.seq` (members keep reason `change`, told apart by `seq > 0`, because the
+  reason CHECK cannot be altered in SQLite); `detections.track/seen/dx/dy`. Migrations now run under `BEGIN
+  IMMEDIATE` with the version re-checked inside the transaction: the first deploy had the detector and the
+  sampler apply v5 at the same moment ("duplicate column name"), launchd restarted it, nothing was lost.
+- Sampler: `extendBurst` (exported; `apps/ingest/test/burst.test.ts` drives it with a white square moving on a
+  grey field: extends on motion, stops at the first still frame, caps at `RANCH_BURST_MAX`). Defaults: max 4,
+  gap 1 s, member threshold 1 %, cooldown 10 s per camera, budget 60 member frames per minute across cameras;
+  `ranch/status/ingest` carries `bursts`, `burst_frames`, `burst_throttled`, `burst_budget_per_min`. A restart's
+  first grab is a change keep (no previous thumbnail) and so costs one extension grab per camera; at night that
+  grab was still in every case (no members), which is the "no over-capture" rule working.
+- Detector: tracks per burst by greedy same-label IoU ≥ 0.3 across consecutive members; `track`, `seen`,
+  `dx`, `dy` written on the detections; `ranch/tracks/<camera>` publishes `{tracks: [{label, raw_label, seen, dx,
+  dy, moving, stable, confidence}]}`; `RANCH_MOVING_MIN` = 0.02 of the frame. A burst whose close message or
+  members never complete is abandoned after 120 s.
+- Browser: a burst is one card ("burst ×3 · tracked"); hovering steps through the members; boxes carry a motion
+  arrow and "×seen"; "moving only" filter; in the full view ↑/↓ step through the burst. `/api/frames` lists heads
+  only, each with `burst: [...]`; `snapshot.ts` never picks members.
+- Change keeps happen by day (last 3 days: 52/h at 07:00, 61/h at 14:00 local, a handful at night), so most
+  bursts are expected after sunrise; a watcher reports the first morning's numbers.

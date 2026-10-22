@@ -59,7 +59,7 @@ if (a.existing) {
 
 const date = new Date().toISOString().slice(0, 10);
 const store = new EventStore(config.dbPath);
-const all = store.frames({ since: parseSince(a.since!), limit: 500000 }).filter((f) => !a.exclude!.split(/\s+/).includes(f.camera));
+const all = store.frames({ since: parseSince(a.since!), limit: 500000 }).filter((f) => !a.exclude!.split(/\s+/).includes(f.camera) && !(f.seq && f.seq > 0));
 const buckets = new Map<string, typeof all>();
 for (const f of all) { const k = `${f.camera}|${period(f.ts)}`; (buckets.get(k) ?? buckets.set(k, []).get(k)!).push(f); }
 const keys = [...buckets.keys()].sort(); const n = Number(a.n); const per = Math.floor(n / keys.length);

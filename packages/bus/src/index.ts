@@ -14,6 +14,8 @@ export const topics = {
   events: (camera: string, type: string) => `ranch/events/${camera}/${type}`,
   status: (service: string) => `ranch/status/${service}`,
   taxonomy: 'ranch/taxonomy',
+  bursts: (camera: string) => `ranch/bursts/${camera}`,   // sampler: a burst closed {burst_id, frame_ids}
+  tracks: (camera: string) => `ranch/tracks/${camera}`,   // detector: tracks across a burst
 } as const;
 
 export interface Bus {

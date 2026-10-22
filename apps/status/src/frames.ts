@@ -16,6 +16,7 @@ export const framesPage = `<!doctype html>
   .box.car,.box.truck{border-color:#9ecbff} .box.car span,.box.truck span{background:#9ecbff}
   .box.gold{border-style:dashed;border-color:#3ecf8e} .box.gold span{background:#3ecf8e}
   .meta{padding:6px 8px;font-size:12px} .meta b{font-weight:600}
+  .arrow{position:absolute;pointer-events:none;overflow:visible} .strip{position:absolute;right:6px;bottom:6px;background:#000a;color:#fff;font-size:11px;padding:1px 6px;border-radius:8px}
   #view{position:fixed;inset:0;background:#000d;display:none;z-index:9;padding:12px} #view.open{display:flex;flex-direction:column}
   #view .img{flex:1;aspect-ratio:auto;min-height:0} #view .img img{object-fit:contain;max-height:100%} #view .bar{display:flex;gap:12px;align-items:center;padding:6px 0}
 </style></head><body>
@@ -29,6 +30,7 @@ export const framesPage = `<!doctype html>
   <input name="min_conf" placeholder="min conf" size="7" type="number" step="0.05" min="0" max="1">
   <select name="reason"><option value="">any reason</option><option value="change">scene change</option><option value="floor">floor</option></select>
   <label><input type="checkbox" name="with_detections" value="1"> only with detections</label>
+  <label><input type="checkbox" name="moving" value="1"> moving only</label>
   <button>show</button> <span id="count" class="muted"></span>
 </form>
 <div class="grid" id="grid"></div>
@@ -38,10 +40,16 @@ export const framesPage = `<!doctype html>
 const $=s=>document.querySelector(s); const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const local=iso=>new Date(iso).toLocaleString('sv-SE').replace(' ','T').slice(5,19);
 let rows=[], cur=-1;
-function boxes(f,w){return f.detections.map(d=>'<div class="box '+esc(d.label.split('/')[0].replace(/\\s/g,'-'))+(d.model&&String(d.model).startsWith('labels:')?' gold':'')+'" style="left:'+(100*d.x)+'%;top:'+(100*d.y)+'%;width:'+(100*d.w)+'%;height:'+(100*d.h)+'%"><span>'+esc(d.label)+' '+d.confidence.toFixed(2)+'</span></div>').join('')}
-function imgBox(f,w){return '<div class="img"><img src="'+(f.img?f.img+'?w='+w:'/api/frame/'+f.id+'?w='+w)+'" loading="lazy" alt="">'+boxes(f)+'</div>'}
+function arrow(d){if(d.dx==null||Math.hypot(d.dx,d.dy)<0.02)return '';const cx=100*(d.x+d.w/2),cy=100*(d.y+d.h/2);return '<svg class="arrow" style="left:0;top:0;width:100%;height:100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="'+(cx-100*d.dx)+'" y1="'+(cy-100*d.dy)+'" x2="'+cx+'" y2="'+cy+'" stroke="#ffd166" stroke-width="0.6" vector-effect="non-scaling-stroke"/><circle cx="'+cx+'" cy="'+cy+'" r="0.8" fill="#ffd166"/></svg>'}
+function boxes(f,w){return f.detections.map(d=>arrow(d)+'<div class="box '+esc(d.label.split('/')[0].replace(/\\s/g,'-'))+(d.model&&String(d.model).startsWith('labels:')?' gold':'')+'" style="left:'+(100*d.x)+'%;top:'+(100*d.y)+'%;width:'+(100*d.w)+'%;height:'+(100*d.h)+'%"><span>'+esc(d.label)+' '+d.confidence.toFixed(2)+'</span></div>').join('')}
+function imgBox(f,w,i){const seq=f.burst&&f.burst.length?'<span class="strip">burst ×'+(f.burst.length+1)+(f.detections.some(d=>d.seen>1)?' · tracked':'')+'</span>':'';return '<div class="img" data-burst="'+(i??'')+'"><img src="'+(f.img?f.img+'?w='+w:'/api/frame/'+f.id+'?w='+w)+'" loading="lazy" alt="">'+boxes(f)+seq+'</div>'}
+// hovering a burst card steps through its members (head, m1, m2 ...) every 400 ms; leaving returns to the head
+let hoverTimer=null;
+document.addEventListener('mouseover',e=>{const img=e.target.closest('.img');if(!img||img.dataset.burst==='')return;const f=rows[+img.dataset.burst];if(!f||!f.burst||!f.burst.length)return;const seqs=[f,...f.burst];let k=0;clearInterval(hoverTimer);
+  hoverTimer=setInterval(()=>{k=(k+1)%seqs.length;const m=seqs[k];img.querySelector('img').src='/api/frame/'+m.id+'?w=640';img.querySelectorAll('.box,.arrow').forEach(x=>x.remove());img.insertAdjacentHTML('beforeend',boxes({detections:m.detections}))},400)});
+document.addEventListener('mouseout',e=>{const img=e.target.closest('.img');if(!img||!e.relatedTarget||img.contains(e.relatedTarget))return;if(img.dataset.burst==='')return;clearInterval(hoverTimer);const f=rows[+img.dataset.burst];if(!f)return;img.querySelector('img').src='/api/frame/'+f.id+'?w=640';img.querySelectorAll('.box,.arrow').forEach(x=>x.remove());img.insertAdjacentHTML('beforeend',boxes(f))});
 function card(f,i){const labs=f.detections.map(d=>d.label).reduce((m,l)=>(m[l]=(m[l]||0)+1,m),{});
-  return '<div class="card" data-i="'+i+'">'+imgBox(f,640)+'<div class="meta"><b>'+esc(f.camera)+'</b> <span class="muted">'+local(f.ts)+' · '+f.reason+(f.change!=null?' · Δ'+(100*f.change).toFixed(1)+'%':'')+'</span><br>'+(Object.entries(labs).map(([l,n])=>esc(l)+(n>1?' ×'+n:'')).join(', ')||'<span class="muted">no detections</span>')+'</div></div>'}
+  return '<div class="card" data-i="'+i+'">'+imgBox(f,640,i)+'<div class="meta"><b>'+esc(f.camera)+'</b> <span class="muted">'+local(f.ts)+' · '+f.reason+(f.change!=null?' · Δ'+(100*f.change).toFixed(1)+'%':'')+'</span><br>'+(Object.entries(labs).map(([l,n])=>esc(l)+(n>1?' ×'+n:'')).join(', ')||'<span class="muted">no detections</span>')+'</div></div>'}
 function query(){const fd=new FormData($('#f'));const p=new URLSearchParams();for(const [k,v] of fd)if(v)p.set(k,v);p.set('limit','60');return p}
 let sets=[];
 function syncSet(){const set=$('[name=set]').value;const ms=$('[name=model]');ms.style.display=set?'':'none';const info=sets.find(x=>x.date===set);
@@ -53,11 +61,12 @@ async function load(more){const p=query();const set=p.get('set');let r;
   r=await (await fetch('/api/frames?'+p)).json();rows=more?rows.concat(r):r;
   $('#grid').innerHTML=rows.map(card).join('');$('#count').textContent=rows.length+' frames';$('#more').style.display=r.length>=60?'':'none';
   history.replaceState(null,'','/frames?'+query())}
-function show(i){if(i<0||i>=rows.length)return;cur=i;const f=rows[i];$('#vimg').innerHTML=imgBox(f,1920);
-  $('#vmeta').innerHTML='<b>'+esc(f.camera)+'</b> '+local(f.ts)+' · '+f.reason+' · frame #'+f.id+' · '+(f.detections.map(d=>esc(d.label)+' '+d.confidence.toFixed(2)).join(', ')||'no detections');$('#view').classList.add('open')}
+let curSeq=0;
+function show(i,seq){if(i<0||i>=rows.length)return;cur=i;const head=rows[i];const seqs=[head,...(head.burst||[])];curSeq=Math.max(0,Math.min(seq||0,seqs.length-1));const f={...seqs[curSeq],camera:head.camera,reason:head.reason,burst:[]};$('#vimg').innerHTML=imgBox(f,1920);
+  $('#vmeta').innerHTML='<b>'+esc(f.camera)+'</b> '+local(f.ts)+' · '+f.reason+' · frame #'+f.id+(seqs.length>1?' · burst '+(curSeq+1)+'/'+seqs.length+' <span class="muted">(↑↓)</span>':'')+' · '+(f.detections.map(d=>esc(d.label)+' '+d.confidence.toFixed(2)+(d.seen>1?' ×'+d.seen:'')).join(', ')||'no detections');$('#view').classList.add('open')}
 $('#grid').addEventListener('click',e=>{const c=e.target.closest('.card');if(c)show(+c.dataset.i)});
 $('#prev').onclick=()=>show(cur-1);$('#next').onclick=()=>show(cur+1);$('#close').onclick=()=>$('#view').classList.remove('open');
-document.addEventListener('keydown',e=>{if(!$('#view').classList.contains('open'))return;if(e.key==='ArrowLeft')show(cur-1);if(e.key==='ArrowRight')show(cur+1);if(e.key==='Escape')$('#close').onclick()});
+document.addEventListener('keydown',e=>{if(!$('#view').classList.contains('open'))return;if(e.key==='ArrowLeft')show(cur-1);if(e.key==='ArrowRight')show(cur+1);if(e.key==='ArrowDown'){e.preventDefault();show(cur,curSeq+1)}if(e.key==='ArrowUp'){e.preventDefault();show(cur,curSeq-1)}if(e.key==='Escape')$('#close').onclick()});
 $('#f').onsubmit=e=>{e.preventDefault();load(false)};$('#more').onclick=()=>load(true);$('[name=set]').onchange=syncSet;
 (async()=>{const s=await (await fetch('/api/status')).json();const sel=$('[name=camera]');for(const c of s.cameras)sel.insertAdjacentHTML('beforeend','<option>'+esc(c.name)+'</option>');
   for(const l of (s.label_order||[]))$('[name=label]').insertAdjacentHTML('beforeend','<option>'+esc(l)+'</option>');
