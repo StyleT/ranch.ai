@@ -1,0 +1,1442 @@
+[
+  {
+    "id": 1691,
+    "camera": "donkey_cam",
+    "ts": "2026-10-16T02:09:43.255Z",
+    "reason": "change",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-16T02-09-43-255Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-16T02-09-43-255Z.jpg",
+    "detections": [
+      {
+        "label": "toilet",
+        "confidence": 0.32434239983558655,
+        "x": 0.240966796875,
+        "y": 0.5621337890625,
+        "w": 0.1552734375,
+        "h": 0.406005859375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 5968,
+    "camera": "donkey_cam",
+    "ts": "2026-10-16T17:41:01.119Z",
+    "reason": "change",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-16T17-41-01-119Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-16T17-41-01-119Z.jpg",
+    "detections": [
+      {
+        "label": "bird",
+        "confidence": 0.43308210372924805,
+        "x": 0.1037139892578125,
+        "y": 0.4547119140625,
+        "w": 0.049896240234375,
+        "h": 0.152099609375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "person",
+        "confidence": 0.37433314323425293,
+        "x": 0.451416015625,
+        "y": 0.4791259765625,
+        "w": 0.0341796875,
+        "h": 0.173583984375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.3517562747001648,
+        "x": 0.10675048828125,
+        "y": 0.02349853515625,
+        "w": 0.0970458984375,
+        "h": 0.13916015625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 15772,
+    "camera": "donkey_cam",
+    "ts": "2026-10-17T12:26:13.555Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-17T12-26-13-555Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-17T12-26-13-555Z.jpg",
+    "detections": [
+      {
+        "label": "cow",
+        "confidence": 0.879871129989624,
+        "x": 0.53961181640625,
+        "y": 0.125732421875,
+        "w": 0.1864013671875,
+        "h": 0.2998046875,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 16206,
+    "camera": "donkey_cam",
+    "ts": "2026-10-17T13:16:01.403Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-17T13-16-01-403Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-17T13-16-01-403Z.jpg",
+    "detections": [
+      {
+        "label": "cow",
+        "confidence": 0.8292155861854553,
+        "x": 0.53826904296875,
+        "y": 0.1575927734375,
+        "w": 0.1402587890625,
+        "h": 0.351806640625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 19032,
+    "camera": "donkey_cam",
+    "ts": "2026-10-17T18:16:44.099Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-17T18-16-44-099Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-17T18-16-44-099Z.jpg",
+    "detections": [
+      {
+        "label": "person",
+        "confidence": 0.3944341838359833,
+        "x": 0.078094482421875,
+        "y": 0.1214599609375,
+        "w": 0.08380126953125,
+        "h": 0.145263671875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "toilet",
+        "confidence": 0.271348237991333,
+        "x": 0.2066650390625,
+        "y": 0.551025390625,
+        "w": 0.197021484375,
+        "h": 0.42236328125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "person",
+        "confidence": 0.26817408204078674,
+        "x": 0.111846923828125,
+        "y": 0.0440673828125,
+        "w": 0.06488037109375,
+        "h": 0.1500244140625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 20703,
+    "camera": "donkey_cam",
+    "ts": "2026-10-17T21:16:38.422Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-17T21-16-38-422Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-17T21-16-38-422Z.jpg",
+    "detections": [
+      {
+        "label": "potted plant",
+        "confidence": 0.26961395144462585,
+        "x": 0.058441162109375,
+        "y": 0.139892578125,
+        "w": 0.10260009765625,
+        "h": 0.28466796875,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 20782,
+    "camera": "donkey_cam",
+    "ts": "2026-10-17T21:27:39.118Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-17T21-27-39-118Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-17T21-27-39-118Z.jpg",
+    "detections": [
+      {
+        "label": "cow",
+        "confidence": 0.5421664714813232,
+        "x": 0.5347900390625,
+        "y": 0.1141357421875,
+        "w": 0.191162109375,
+        "h": 0.2666015625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "fire hydrant",
+        "confidence": 0.392686128616333,
+        "x": 0.205108642578125,
+        "y": 0.75323486328125,
+        "w": 0.05096435546875,
+        "h": 0.1234130859375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "horse",
+        "confidence": 0.3015677034854889,
+        "x": 0.5347900390625,
+        "y": 0.1141357421875,
+        "w": 0.191162109375,
+        "h": 0.2666015625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "person",
+        "confidence": 0.28002533316612244,
+        "x": 0.06201171875,
+        "y": 0.1546630859375,
+        "w": 0.0714111328125,
+        "h": 0.216064453125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 20928,
+    "camera": "donkey_cam",
+    "ts": "2026-10-17T21:46:14.107Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-17T21-46-14-107Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-17T21-46-14-107Z.jpg",
+    "detections": [
+      {
+        "label": "cow",
+        "confidence": 0.685528576374054,
+        "x": 0.6300048828125,
+        "y": 0.334716796875,
+        "w": 0.191162109375,
+        "h": 0.36376953125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 21398,
+    "camera": "donkey_cam",
+    "ts": "2026-10-17T22:42:03.628Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-17T22-42-03-628Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-17T22-42-03-628Z.jpg",
+    "detections": [
+      {
+        "label": "toilet",
+        "confidence": 0.48456302285194397,
+        "x": 0.2552490234375,
+        "y": 0.546630859375,
+        "w": 0.149658203125,
+        "h": 0.40869140625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "car",
+        "confidence": 0.3039383590221405,
+        "x": 0.771484375,
+        "y": 0.671875,
+        "w": 0.2109375,
+        "h": 0.310546875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "fire hydrant",
+        "confidence": 0.25183165073394775,
+        "x": 0.2091522216796875,
+        "y": 0.75421142578125,
+        "w": 0.046539306640625,
+        "h": 0.0980224609375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 23476,
+    "camera": "donkey_cam",
+    "ts": "2026-10-18T01:40:57.152Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-18T01-40-57-152Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-18T01-40-57-152Z.jpg",
+    "detections": [
+      {
+        "label": "skateboard",
+        "confidence": 0.47776731848716736,
+        "x": 0.20947265625,
+        "y": 0.5546875,
+        "w": 0.2041015625,
+        "h": 0.423828125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 23801,
+    "camera": "donkey_cam",
+    "ts": "2026-10-18T02:06:41.103Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-18T02-06-41-103Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-18T02-06-41-103Z.jpg",
+    "detections": [
+      {
+        "label": "skateboard",
+        "confidence": 0.5857529640197754,
+        "x": 0.20916748046875,
+        "y": 0.5567626953125,
+        "w": 0.2095947265625,
+        "h": 0.422607421875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "truck",
+        "confidence": 0.2525683641433716,
+        "x": 0.208740234375,
+        "y": 0.0244140625,
+        "w": 0.77880859375,
+        "h": 0.9599609375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 23830,
+    "camera": "donkey_cam",
+    "ts": "2026-10-18T02:08:37.580Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-18T02-08-37-580Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-18T02-08-37-580Z.jpg",
+    "detections": [
+      {
+        "label": "skateboard",
+        "confidence": 0.8178656101226807,
+        "x": 0.2098388671875,
+        "y": 0.5552978515625,
+        "w": 0.201904296875,
+        "h": 0.423583984375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 31568,
+    "camera": "donkey_cam",
+    "ts": "2026-10-18T13:00:53.518Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-18T13-00-53-518Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-18T13-00-53-518Z.jpg",
+    "detections": [
+      {
+        "label": "train",
+        "confidence": 0.31732046604156494,
+        "x": 0.73895263671875,
+        "y": 0.6728515625,
+        "w": 0.2359619140625,
+        "h": 0.3037109375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.2763974666595459,
+        "x": 0.76873779296875,
+        "y": 0.673583984375,
+        "w": 0.2086181640625,
+        "h": 0.30517578125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "elephant",
+        "confidence": 0.2501792907714844,
+        "x": 0.161041259765625,
+        "y": 0.274169921875,
+        "w": 0.12103271484375,
+        "h": 0.1650390625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 33074,
+    "camera": "donkey_cam",
+    "ts": "2026-10-18T15:49:29.594Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-18T15-49-29-594Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-18T15-49-29-594Z.jpg",
+    "detections": [
+      {
+        "label": "person",
+        "confidence": 0.6766199469566345,
+        "x": 0.033599853515625,
+        "y": 0.020263671875,
+        "w": 0.08380126953125,
+        "h": 0.301025390625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.3809892237186432,
+        "x": 0.117279052734375,
+        "y": 0.01861572265625,
+        "w": 0.08184814453125,
+        "h": 0.149658203125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.367383748292923,
+        "x": 0.099853515625,
+        "y": 0.229248046875,
+        "w": 0.197509765625,
+        "h": 0.451171875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.35231319069862366,
+        "x": 0.16046142578125,
+        "y": 0.032562255859375,
+        "w": 0.0770263671875,
+        "h": 0.08404541015625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "person",
+        "confidence": 0.3089194595813751,
+        "x": 0.4493865966796875,
+        "y": 0.47747802734375,
+        "w": 0.036773681640625,
+        "h": 0.1856689453125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.2978782653808594,
+        "x": 0.13201904296875,
+        "y": 0.04351806640625,
+        "w": 0.0689697265625,
+        "h": 0.123779296875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.2639786899089813,
+        "x": 0.1651611328125,
+        "y": 0.2330322265625,
+        "w": 0.133056640625,
+        "h": 0.446533203125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.2577650845050812,
+        "x": 0.20367431640625,
+        "y": 0.768402099609375,
+        "w": 0.0504150390625,
+        "h": 0.11749267578125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 35120,
+    "camera": "donkey_cam",
+    "ts": "2026-10-18T19:08:39.541Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-18T19-08-39-541Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-18T19-08-39-541Z.jpg",
+    "detections": [
+      {
+        "label": "chair",
+        "confidence": 0.490372896194458,
+        "x": 0.09991455078125,
+        "y": 0.2216796875,
+        "w": 0.1966552734375,
+        "h": 0.4638671875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.41087448596954346,
+        "x": 0.0260162353515625,
+        "y": 0.52587890625,
+        "w": 0.039581298828125,
+        "h": 0.3125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 36215,
+    "camera": "donkey_cam",
+    "ts": "2026-10-18T20:41:18.212Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-18T20-41-18-212Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-18T20-41-18-212Z.jpg",
+    "detections": [
+      {
+        "label": "chair",
+        "confidence": 0.6019445657730103,
+        "x": 0.10284423828125,
+        "y": 0.2183837890625,
+        "w": 0.1959228515625,
+        "h": 0.466064453125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.4275161921977997,
+        "x": 0.0258331298828125,
+        "y": 0.5255126953125,
+        "w": 0.039398193359375,
+        "h": 0.315185546875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.2632204294204712,
+        "x": 0.3392181396484375,
+        "y": 0.845947265625,
+        "w": 0.060333251953125,
+        "h": 0.12744140625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "person",
+        "confidence": 0.2587003707885742,
+        "x": 0.28363037109375,
+        "y": 0.7706298828125,
+        "w": 0.0509033203125,
+        "h": 0.110107421875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "chair",
+        "confidence": 0.2516477108001709,
+        "x": 0.02880859375,
+        "y": 0.5264892578125,
+        "w": 0.0732421875,
+        "h": 0.359130859375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 49820,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T11:33:36.291Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T11-33-36-291Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T11-33-36-291Z.jpg",
+    "detections": [
+      {
+        "label": "toilet",
+        "confidence": 0.550426185131073,
+        "x": 0.19561767578125,
+        "y": 0.65185546875,
+        "w": 0.1649169921875,
+        "h": 0.33203125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.3078780174255371,
+        "x": 0.75079345703125,
+        "y": 0.67138671875,
+        "w": 0.2318115234375,
+        "h": 0.3125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 50847,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T12:49:16.478Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T12-49-16-478Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T12-49-16-478Z.jpg",
+    "detections": [
+      {
+        "label": "toilet",
+        "confidence": 0.756717324256897,
+        "x": 0.19415283203125,
+        "y": 0.6529541015625,
+        "w": 0.1614990234375,
+        "h": 0.328857421875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.34886693954467773,
+        "x": 0.75848388671875,
+        "y": 0.6734619140625,
+        "w": 0.2203369140625,
+        "h": 0.306396484375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 52096,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T14:36:40.737Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T14-36-40-737Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T14-36-40-737Z.jpg",
+    "detections": [
+      {
+        "label": "train",
+        "confidence": 0.37079480290412903,
+        "x": 0.74749755859375,
+        "y": 0.673095703125,
+        "w": 0.2305908203125,
+        "h": 0.30224609375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "traffic light",
+        "confidence": 0.31647488474845886,
+        "x": 0.19390869140625,
+        "y": 0.6546630859375,
+        "w": 0.1619873046875,
+        "h": 0.330322265625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "stop sign",
+        "confidence": 0.31552502512931824,
+        "x": 0.19390869140625,
+        "y": 0.6546630859375,
+        "w": 0.1619873046875,
+        "h": 0.330322265625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 52491,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T15:29:01.801Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T15-29-01-801Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T15-29-01-801Z.jpg",
+    "detections": [
+      {
+        "label": "stop sign",
+        "confidence": 0.539802074432373,
+        "x": 0.19415283203125,
+        "y": 0.652587890625,
+        "w": 0.1605224609375,
+        "h": 0.33056640625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "car",
+        "confidence": 0.3159469962120056,
+        "x": 0.0313720703125,
+        "y": 0.02642822265625,
+        "w": 0.1329345703125,
+        "h": 0.175537109375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "traffic light",
+        "confidence": 0.26664361357688904,
+        "x": 0.19415283203125,
+        "y": 0.652587890625,
+        "w": 0.1605224609375,
+        "h": 0.33056640625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 52500,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T15:30:25.987Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T15-30-25-987Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T15-30-25-987Z.jpg",
+    "detections": [
+      {
+        "label": "wine glass",
+        "confidence": 0.45374593138694763,
+        "x": 0.19378662109375,
+        "y": 0.6546630859375,
+        "w": 0.1622314453125,
+        "h": 0.320556640625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "wine glass",
+        "confidence": 0.30228808522224426,
+        "x": 0.19158935546875,
+        "y": 0.5064697265625,
+        "w": 0.1666259765625,
+        "h": 0.478271484375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.26435837149620056,
+        "x": 0.76519775390625,
+        "y": 0.673095703125,
+        "w": 0.2127685546875,
+        "h": 0.30810546875,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 53293,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T16:45:33.807Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T16-45-33-807Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T16-45-33-807Z.jpg",
+    "detections": [
+      {
+        "label": "train",
+        "confidence": 0.3368762135505676,
+        "x": 0.8153076171875,
+        "y": 0.676025390625,
+        "w": 0.167236328125,
+        "h": 0.27392578125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 53423,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T17:01:52.632Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T17-01-52-632Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T17-01-52-632Z.jpg",
+    "detections": [
+      {
+        "label": "stop sign",
+        "confidence": 0.46232134103775024,
+        "x": 0.194091796875,
+        "y": 0.6544189453125,
+        "w": 0.16064453125,
+        "h": 0.326904296875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.3303631544113159,
+        "x": 0.8134765625,
+        "y": 0.6761474609375,
+        "w": 0.169921875,
+        "h": 0.276611328125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.29828691482543945,
+        "x": 0.757080078125,
+        "y": 0.67431640625,
+        "w": 0.21826171875,
+        "h": 0.298828125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 53860,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T17:54:34.071Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T17-54-34-071Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T17-54-34-071Z.jpg",
+    "detections": [
+      {
+        "label": "stop sign",
+        "confidence": 0.38139235973358154,
+        "x": 0.194091796875,
+        "y": 0.6553955078125,
+        "w": 0.16015625,
+        "h": 0.317138671875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.29239320755004883,
+        "x": 0.81341552734375,
+        "y": 0.6763916015625,
+        "w": 0.1700439453125,
+        "h": 0.277099609375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 54729,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T19:44:52.038Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T19-44-52-038Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T19-44-52-038Z.jpg",
+    "detections": [
+      {
+        "label": "train",
+        "confidence": 0.3878062665462494,
+        "x": 0.810791015625,
+        "y": 0.6759033203125,
+        "w": 0.17236328125,
+        "h": 0.276123046875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.37284767627716064,
+        "x": 0.0048828125,
+        "y": 0.029052734375,
+        "w": 0.5869140625,
+        "h": 0.95458984375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "train",
+        "confidence": 0.29828691482543945,
+        "x": 0.38037109375,
+        "y": 0.025390625,
+        "w": 0.21044921875,
+        "h": 0.9580078125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 55187,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T20:29:36.407Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T20-29-36-407Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T20-29-36-407Z.jpg",
+    "detections": [
+      {
+        "label": "train",
+        "confidence": 0.318909227848053,
+        "x": 0.81524658203125,
+        "y": 0.6761474609375,
+        "w": 0.1673583984375,
+        "h": 0.274658203125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 56248,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T21:55:33.169Z",
+    "reason": "floor",
+    "period": "day",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T21-55-33-169Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T21-55-33-169Z.jpg",
+    "detections": [
+      {
+        "label": "train",
+        "confidence": 0.3992845118045807,
+        "x": 0.010498046875,
+        "y": 0.0224609375,
+        "w": 0.57958984375,
+        "h": 0.9619140625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 56609,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T22:25:09.586Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T22-25-09-586Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T22-25-09-586Z.jpg",
+    "detections": [
+      {
+        "label": "toilet",
+        "confidence": 0.8356177806854248,
+        "x": 0.19232177734375,
+        "y": 0.649658203125,
+        "w": 0.1627197265625,
+        "h": 0.32275390625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "toilet",
+        "confidence": 0.31111282110214233,
+        "x": 0.19256591796875,
+        "y": 0.5198974609375,
+        "w": 0.1632080078125,
+        "h": 0.460205078125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 57695,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T23:46:13.387Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T23-46-13-387Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T23-46-13-387Z.jpg",
+    "detections": [
+      {
+        "label": "traffic light",
+        "confidence": 0.33742183446884155,
+        "x": 0.1943359375,
+        "y": 0.6513671875,
+        "w": 0.1611328125,
+        "h": 0.3330078125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "suitcase",
+        "confidence": 0.2864685654640198,
+        "x": 0.1943359375,
+        "y": 0.6513671875,
+        "w": 0.1611328125,
+        "h": 0.3330078125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 57738,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T23:49:05.148Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T23-49-05-148Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T23-49-05-148Z.jpg",
+    "detections": [
+      {
+        "label": "traffic light",
+        "confidence": 0.31848517060279846,
+        "x": 0.19366455078125,
+        "y": 0.5133056640625,
+        "w": 0.1761474609375,
+        "h": 0.470458984375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "traffic light",
+        "confidence": 0.29665425419807434,
+        "x": 0.19586181640625,
+        "y": 0.646240234375,
+        "w": 0.1639404296875,
+        "h": 0.33935546875,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 57741,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T23:49:29.316Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T23-49-29-316Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T23-49-29-316Z.jpg",
+    "detections": [
+      {
+        "label": "suitcase",
+        "confidence": 0.2952299118041992,
+        "x": 0.1942138671875,
+        "y": 0.650146484375,
+        "w": 0.161376953125,
+        "h": 0.33447265625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "car",
+        "confidence": 0.2884688675403595,
+        "x": 0.77081298828125,
+        "y": 0.673828125,
+        "w": 0.2122802734375,
+        "h": 0.306640625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 57759,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T23:50:18.008Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T23-50-18-008Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T23-50-18-008Z.jpg",
+    "detections": [
+      {
+        "label": "suitcase",
+        "confidence": 0.295738160610199,
+        "x": 0.1934814453125,
+        "y": 0.51171875,
+        "w": 0.161865234375,
+        "h": 0.4697265625,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "suitcase",
+        "confidence": 0.26549941301345825,
+        "x": 0.19482421875,
+        "y": 0.6513671875,
+        "w": 0.16015625,
+        "h": 0.3330078125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 57901,
+    "camera": "donkey_cam",
+    "ts": "2026-10-19T23:59:44.958Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-19T23-59-44-958Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-19T23-59-44-958Z.jpg",
+    "detections": [
+      {
+        "label": "car",
+        "confidence": 0.2711551785469055,
+        "x": 0.766845703125,
+        "y": 0.6737060546875,
+        "w": 0.21728515625,
+        "h": 0.307861328125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "traffic light",
+        "confidence": 0.2617081105709076,
+        "x": 0.19512939453125,
+        "y": 0.6502685546875,
+        "w": 0.1600341796875,
+        "h": 0.334228515625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 57910,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:00:08.482Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-00-08-482Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-00-08-482Z.jpg",
+    "detections": []
+  },
+  {
+    "id": 57939,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:01:50.611Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-01-50-611Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-01-50-611Z.jpg",
+    "detections": [
+      {
+        "label": "suitcase",
+        "confidence": 0.2624635696411133,
+        "x": 0.1951904296875,
+        "y": 0.64892578125,
+        "w": 0.159912109375,
+        "h": 0.3359375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 58137,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:12:31.784Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-12-31-784Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-12-31-784Z.jpg",
+    "detections": [
+      {
+        "label": "traffic light",
+        "confidence": 0.2808135449886322,
+        "x": 0.1959228515625,
+        "y": 0.6502685546875,
+        "w": 0.159912109375,
+        "h": 0.334228515625,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 58374,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:19:56.448Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-19-56-448Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-19-56-448Z.jpg",
+    "detections": [
+      {
+        "label": "suitcase",
+        "confidence": 0.2832854390144348,
+        "x": 0.194580078125,
+        "y": 0.510498046875,
+        "w": 0.16015625,
+        "h": 0.46923828125,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "suitcase",
+        "confidence": 0.2649284899234772,
+        "x": 0.19537353515625,
+        "y": 0.6500244140625,
+        "w": 0.1600341796875,
+        "h": 0.333740234375,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 58392,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:20:30.481Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-20-30-481Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-20-30-481Z.jpg",
+    "detections": [
+      {
+        "label": "car",
+        "confidence": 0.310380756855011,
+        "x": 0.77154541015625,
+        "y": 0.6729736328125,
+        "w": 0.2069091796875,
+        "h": 0.307373046875,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "traffic light",
+        "confidence": 0.2801238000392914,
+        "x": 0.19384765625,
+        "y": 0.65185546875,
+        "w": 0.16162109375,
+        "h": 0.33203125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 58661,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:28:51.238Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-28-51-238Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-28-51-238Z.jpg",
+    "detections": [
+      {
+        "label": "car",
+        "confidence": 0.30476540327072144,
+        "x": 0.76287841796875,
+        "y": 0.6727294921875,
+        "w": 0.2154541015625,
+        "h": 0.309814453125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 58688,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:29:45.313Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-29-45-313Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-29-45-313Z.jpg",
+    "detections": []
+  },
+  {
+    "id": 58759,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:32:05.513Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-32-05-513Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-32-05-513Z.jpg",
+    "detections": []
+  },
+  {
+    "id": 58803,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:33:25.640Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-33-25-640Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-33-25-640Z.jpg",
+    "detections": [
+      {
+        "label": "car",
+        "confidence": 0.2557152211666107,
+        "x": 0.763427734375,
+        "y": 0.67333984375,
+        "w": 0.22021484375,
+        "h": 0.3076171875,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 59136,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:43:51.020Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-43-51-020Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-43-51-020Z.jpg",
+    "detections": [
+      {
+        "label": "car",
+        "confidence": 0.36954259872436523,
+        "x": 0.764892578125,
+        "y": 0.67333984375,
+        "w": 0.21337890625,
+        "h": 0.3037109375,
+        "model": "rfdetr-nano-float16"
+      },
+      {
+        "label": "traffic light",
+        "confidence": 0.26913344860076904,
+        "x": 0.1951904296875,
+        "y": 0.6513671875,
+        "w": 0.160400390625,
+        "h": 0.33203125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  },
+  {
+    "id": 59142,
+    "camera": "donkey_cam",
+    "ts": "2026-10-20T00:44:01.034Z",
+    "reason": "floor",
+    "period": "night",
+    "change": null,
+    "baseline": {
+      "date": "2026-10-20",
+      "file": "ey_cam/2026-10-20T00-44-01-034Z.jpg"
+    },
+    "img": "/api/baseline-frame/2026-10-20/donkey_cam/2026-10-20T00-44-01-034Z.jpg",
+    "detections": [
+      {
+        "label": "traffic light",
+        "confidence": 0.2639786899089813,
+        "x": 0.19482421875,
+        "y": 0.6502685546875,
+        "w": 0.16064453125,
+        "h": 0.335205078125,
+        "model": "rfdetr-nano-float16"
+      }
+    ]
+  }
+]

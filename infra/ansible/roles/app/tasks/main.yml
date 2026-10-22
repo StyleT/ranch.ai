@@ -37,7 +37,7 @@
   ansible.builtin.command: >-
     rsync -ai --delete {{ '--dry-run' if ansible_check_mode else '' }}
     --exclude .git --exclude node_modules --exclude .scratch --exclude .venv --exclude infra/snapshots
-    --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store --exclude 'evals/baseline/*/frames'
+    --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store --exclude 'evals/baseline/*/frames' --exclude 'apps/web/.next' --exclude 'apps/web/test-results' --exclude 'apps/web/playwright-report' --exclude 'apps/web/e2e/ai/runs' --exclude 'apps/web/coverage' --exclude 'apps/web/tsconfig.tsbuildinfo'
     -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_app_dir }}/
   delegate_to: localhost
   register: app_sync
@@ -61,7 +61,7 @@
 
 - name: npm ci (lockfile changed or first deploy)
   ansible.builtin.command:
-    cmd: "{{ ranch_bin_dir }}/node {{ node_path.stdout | trim | dirname }}/npm ci --omit=dev --no-audit --no-fund"
+    cmd: "{{ ranch_bin_dir }}/node {{ node_path.stdout | trim | dirname }}/npm ci --no-audit --no-fund"
     chdir: "{{ ranch_app_dir }}"
   environment: { HOME: "/Users/{{ ranch_user }}", PATH: "{{ node_path.stdout | trim | dirname }}:/usr/bin:/bin" }
   when: not nm.stat.exists or (app_sync.stdout is search('package-lock\.json'))
