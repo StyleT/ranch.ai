@@ -88,6 +88,8 @@ editing labels datasets from the UI (Phase 1b has its own page), user accounts.
 5. A deliberate test: change the person threshold on the page, score, apply, see the detector row report the new
    version within a minute, pull, commit.
 
+## 22 Oct, later: the editor moved to the Next.js app (`apps/web`, `/taxonomy` on :5090); the daemon keeps the API
+
 ## As built, 22 Oct
 
 - `packages/taxonomy/taxonomy.json` is the data; `src/index.ts` validates (zod, with cross-checks that name the path)

@@ -49,8 +49,8 @@ make verify      # after a reboot: asserts no console user, no noisy agents, aud
 make snapshot    # infra/snapshots/<date>/ ; commit the result
 make logs        # live tail of every daemon (unified log); make logs-last H=3 for the last 3 hours
 make taxonomy-pull  # after editing classes/thresholds on :5090/taxonomy: bring the active version into the repo, commit
-# status page :5090 (cameras, daemons, detections per camera); :5090/frames browses kept frames with the boxes
-# drawn on them, and any baseline set with any model's predictions (docs/FRAMES-AND-BASELINE.md)
+# dashboard http://ranch-ai.local:5090 (Next.js, docs/WEB-DASHBOARD.md): home, cameras, detections, taxonomy, system, evals
+# make web-dev runs it on the laptop against the mini's API; the API itself is 127.0.0.1:5091 on the mini
 make bootstrap   # only on a freshly erased mini (Xcode CLT + Homebrew), see infra/MANUAL.md
 ```
 **Tracking the pipeline:** the status page at http://ranch-ai.tail6d04cd.ts.net:5090/ (`ranch-ai.local:5090` on the

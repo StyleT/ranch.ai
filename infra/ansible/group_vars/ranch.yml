@@ -160,12 +160,12 @@ detector_threshold: "0.05"
 detector_family: coco            # key into MODEL_MAPPINGS; a fine-tuned model gets its own
 
 # Status page (com.ranch.status, apps/status, docs/STATUS-DASHBOARD.md). No auth; LAN + tailnet only.
-status_port: 5090
-# Next.js dashboard (com.ranch.web, apps/web, docs/WEB-DASHBOARD.md). On the temporary loopback port until the cut-over
-# (milestone 4) moves it to 5090 and the status daemon to 5091.
-web_port: 5092
-web_host: 127.0.0.1
-web_max_streams: 2
+status_port: 5091       # the status daemon's JSON/SSE API, loopback only since 22 Oct (the web app on 5090 is the page)
+status_host: 127.0.0.1
+# Next.js dashboard (com.ranch.web, apps/web, docs/WEB-DASHBOARD.md): the page on 5090, LAN-only via tailscale_blocked_ports.
+web_port: 5090
+web_host: 0.0.0.0
+web_max_streams: 4        # concurrent buffer MJPEG viewers (disk reads only; no camera is involved)
 web_heap_mb: 256
 # Taxonomy editor (docs/TAXONOMY-UI.md): reference datasets the "Score draft" button uses; write token is generated on the mini.
 status_reference_frames: evals/baseline/2026-10-20

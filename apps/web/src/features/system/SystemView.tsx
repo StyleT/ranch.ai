@@ -25,7 +25,7 @@ export function SystemView() {
       <h1 className="mb-2 text-lg font-semibold">System</h1>
       <Card className="grid gap-2 text-sm md:grid-cols-2">
         <div><b>{d.host}</b> · up {formatUptime(d.uptime_s)} · web {d.web.rss_mb} MB{d.web.build?.commit ? ` · build ${String(d.web.build.commit)}` : ''}</div>
-        <div>frames {d.totals.frames.toLocaleString()} · detections {d.totals.detections.toLocaleString()} · events {d.totals.events}{d.seed.total ? ` · seed ${d.seed.total.toLocaleString()}` : ''}</div>
+        <div>frames {d.totals.frames.toLocaleString()} · detections {d.totals.detections.toLocaleString()} · events {d.totals.events}{` · buffer ${d.buffer.total.toLocaleString()} frames`}</div>
         <BarList rows={d.load.map((l, i) => ({ label: `load ${['1m', '5m', '15m'][i]}`, value: l }))} max={8} format={(v) => v.toFixed(2)} />
         <BarList rows={[{ label: 'disk used', value: d.disk.total_gb && d.disk.free_gb !== null ? d.disk.total_gb - d.disk.free_gb : 0, hint: d.disk.free_gb !== null ? `${d.disk.free_gb} GB free` : '' }]} max={d.disk.total_gb ?? 1} format={(v) => `${v} GB`} />
       </Card>

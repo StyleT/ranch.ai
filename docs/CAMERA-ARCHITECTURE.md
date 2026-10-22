@@ -20,7 +20,10 @@ camera --(1 persistent LOCAL TUTK/LAN stream)--> go2rtc --(1 persistent RTSP con
   per camera pulling go2rtc's **local** RTSP into a rolling few-minute JPEG buffer at `<media>/buffer/<cam>/`.
   Because this consumer never drops, go2rtc never tears the producer down.
 - **The sampler** (`apps/ingest`) reads the newest buffered JPEG per camera, does change detection, and writes
-  kept frames. It never calls go2rtc or a camera. **The detector and status page** already read frames from disk.
+  kept frames. It never calls go2rtc or a camera. **The detector and status daemon** read frames from disk.
+- **The web dashboard** (`apps/web`, 22 Oct) is a buffer reader too: camera thumbnails are the newest buffered
+  frame (`/api/buffer/<cam>`) and the "live" view on a camera page is an MJPEG the status daemon assembles from
+  the buffer as it fills (`/api/buffer/<cam>/stream`, ~1 frame / 2 s). The dashboard has no go2rtc URL at all.
 
 ## Why (the evidence)
 

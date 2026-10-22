@@ -15,15 +15,20 @@ afterAll(() => server.close());
 
 describe('/api/ui/stream/[camera]', () => {
   const call = (camera: string, q = '') => { const ac = new AbortController(); return { res: streamGET(new Request(`http://x/api/ui/stream/${camera}${q}`, { signal: ac.signal }), { params: Promise.resolve({ camera }) }), ac }; };
-  it('404s unknown cameras and serves mjpeg for excluded ones', async () => {
+  it('404s unknown cameras and streams the daemon buffer mjpeg for known ones', async () => {
     expect((await call('nope').res).status).toBe(404);
-    const { res, ac } = call('mops_cam', '?fmt=mp4'); const r = await res; expect(r.status).toBe(200); expect(r.headers.get('content-type')).toContain('multipart'); ac.abort();
+    const { res, ac } = call('donkey_cam'); const r = await res; expect(r.status).toBe(200); expect(r.headers.get('content-type')).toContain('multipart'); ac.abort();
+  });
+  it('serves one jpeg with fmt=jpeg, falling back to the kept frame when the buffer is empty', async () => {
+    const a = await call('donkey_cam', '?fmt=jpeg').res; expect(a.status).toBe(200); expect(a.headers.get('content-type')).toBe('image/jpeg');
+    const b = await call('mops_cam', '?fmt=jpeg').res; expect(b.status).toBe(200);
   });
   it('caps concurrent streams at the configured maximum', async () => {
-    const a = call('donkey_cam', '?fmt=mp4'); const b = call('wash_stall', '?fmt=mp4'); const c = call('tractor_cam', '?fmt=mp4');
-    expect((await a.res).status).toBe(200); expect((await b.res).status).toBe(200); expect((await c.res).status).toBe(429);
-    a.ac.abort(); b.ac.abort(); await new Promise((r) => setTimeout(r, 20));
-    const d = call('tractor_cam', '?fmt=jpeg'); expect((await d.res).status).toBe(200);
+    const opened = ['donkey_cam', 'wash_stall', 'tractor_cam', 'back_yard_cam'].map((c) => call(c));
+    for (const o of opened) expect((await o.res).status).toBe(200);
+    expect((await call('front_porch_cam').res).status).toBe(429);
+    for (const o of opened) o.ac.abort(); await new Promise((r) => setTimeout(r, 20));
+    expect((await call('front_porch_cam', '?fmt=jpeg').res).status).toBe(200);
   });
 });
 

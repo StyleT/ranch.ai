@@ -1,18 +1,17 @@
 {
-  "ts": "2026-10-22T14:54:53.865Z",
+  "ts": "2026-10-22T16:17:35.373Z",
   "host": "ranch-ai",
-  "uptime_s": 703299,
+  "uptime_s": 708260,
   "load": [
-    19.59,
-    15.87,
-    9.96
+    4.91,
+    6.76,
+    7.32
   ],
-  "disk_free_gb": 169,
+  "disk_free_gb": 167,
   "disk_total_gb": 228,
-  "seed": {
-    "total": 7460,
-    "window_start": "2026-10-16T00:32:00.000Z",
-    "window_hours": 16
+  "buffer": {
+    "total": 1119,
+    "stale_s": 30
   },
   "daemons": [
     {
@@ -20,98 +19,97 @@
       "pid": 2223,
       "last_exit": 0,
       "log": "",
-      "rss_mb": 5
+      "rss_mb": 2
     },
     {
       "label": "com.ranch.detector",
-      "pid": 83155,
+      "pid": 16308,
       "last_exit": -15,
-      "log": "{\"ts\":\"2026-10-22T14:51:18.095Z\",\"svc\":\"detector\",\"msg\":\"runner ready\",\"compute\":\"ane\",\"inputs\":[\"image\",\"iouThreshold\",\"confidenceThreshold\"],\"model\":\"yolo26s.mlpackage\",\"outputs\":[\"coordinates\",\"con",
-      "rss_mb": 166,
+      "log": "{\"ts\":\"2026-10-22T16:14:34.229Z\",\"svc\":\"detector\",\"msg\":\"runner ready\",\"compute\":\"ane\",\"inputs\":[\"iouThreshold\",\"image\",\"confidenceThreshold\"],\"model\":\"yolo26s.mlpackage\",\"outputs\":[\"coordinates\",\"con",
+      "rss_mb": 169,
       "status": {
-        "ts": "2026-10-22T14:54:18.169Z",
-        "pid": 83165,
+        "ts": "2026-10-22T16:17:34.272Z",
+        "pid": 16314,
         "model": "yolo26s",
         "family": "coco",
         "taxonomy_version": 3,
         "compute": "ane",
-        "processed": 82,
+        "processed": 96,
         "dropped": 0,
         "inflight": 0,
-        "raw_boxes": 91,
-        "kept_boxes": 42,
+        "raw_boxes": 80,
+        "kept_boxes": 35,
         "bursts": 0,
-        "rss_mb": 111
+        "rss_mb": 113
       }
     },
     {
       "label": "com.ranch.go2rtc",
       "pid": 33461,
       "last_exit": 0,
-      "log": "[OOO] ch=0x05 #16331 frameType=0x01 pktTotal=205 expected pkt 0, got 204 - reset",
-      "rss_mb": 176
+      "log": "[OOO] ch=0x05 #115087 frameType=0x01 pktTotal=139 expected pkt 0, got 138 - reset",
+      "rss_mb": 155
     },
     {
       "label": "com.ranch.ingest",
-      "pid": 83152,
+      "pid": 16305,
       "last_exit": -15,
-      "log": "{\"ts\":\"2026-10-22T14:54:29.019Z\",\"svc\":\"ingest\",\"msg\":\"stream reset\",\"camera\":\"mops_cam\",\"failures\":8,\"stalled_s\":181,\"result\":\"recreated_by_bridge\"}",
-      "rss_mb": 199,
+      "log": "{\"ts\":\"2026-10-22T16:14:34.565Z\",\"svc\":\"ingest\",\"msg\":\"camera stale\",\"camera\":\"mops_cam\",\"newest_age_s\":null}",
+      "rss_mb": 170,
       "status": {
-        "ts": "2026-10-22T14:54:18.087Z",
-        "pid": 83160,
+        "ts": "2026-10-22T16:17:34.515Z",
+        "pid": 16324,
         "cameras": [
-          "back_pasture_cam",
           "back_yard_cam",
+          "wash_stall",
           "donkey_cam",
-          "front_porch_cam",
           "mops_cam",
+          "front_porch_cam",
           "tractor_cam",
-          "wash_stall"
+          "back_pasture_cam"
         ],
-        "rss_mb": 196,
-        "resets": 0,
+        "rss_mb": 167,
         "bursts": 0,
         "burst_frames": 0,
         "burst_throttled": 0,
         "burst_budget_per_min": 60,
         "motion_threshold": 0.08,
         "motion": {
-          "donkey_cam": {
-            "n": 12,
-            "p50": 0.004,
-            "p90": 0.005,
-            "max": 0.006
-          },
-          "wash_stall": {
-            "n": 12,
-            "p50": 0.008,
-            "p90": 0.012,
-            "max": 0.014
-          },
           "back_yard_cam": {
             "n": 12,
-            "p50": 0.021,
-            "p90": 0.034,
-            "max": 0.036
+            "p50": 0.024,
+            "p90": 0.03,
+            "max": 0.031
           },
-          "back_pasture_cam": {
+          "donkey_cam": {
             "n": 12,
-            "p50": 0.013,
-            "p90": 0.031,
-            "max": 0.033
-          },
-          "tractor_cam": {
-            "n": 12,
-            "p50": 0.01,
-            "p90": 0.012,
-            "max": 0.013
+            "p50": 0.005,
+            "p90": 0.006,
+            "max": 0.006
           },
           "front_porch_cam": {
             "n": 12,
             "p50": 0.016,
+            "p90": 0.019,
+            "max": 0.021
+          },
+          "tractor_cam": {
+            "n": 12,
+            "p50": 0.016,
             "p90": 0.022,
-            "max": 0.023
+            "max": 0.024
+          },
+          "back_pasture_cam": {
+            "n": 12,
+            "p50": 0.012,
+            "p90": 0.015,
+            "max": 0.017
+          },
+          "wash_stall": {
+            "n": 12,
+            "p50": 0.01,
+            "p90": 0.013,
+            "max": 0.013
           }
         }
       }
@@ -120,71 +118,71 @@
       "label": "com.ranch.mosquitto",
       "pid": 2214,
       "last_exit": 0,
-      "log": "1792680678: New client connected from 127.0.0.1:60207 as status-83169 (p4, c1, k60).",
-      "rss_mb": 9
+      "log": "1792685696: New client connected from 127.0.0.1:51503 as status-16748 (p4, c1, k60).",
+      "rss_mb": 7
     },
     {
       "label": "com.ranch.netprobe",
-      "pid": 83158,
+      "pid": 16311,
       "last_exit": -15,
-      "log": "{\"ts\":\"2026-10-22T14:54:50.307Z\",\"svc\":\"netprobe\",\"msg\":\"probe\",\"camera\":\"mops_cam\",\"ip\":\"10.0.0.234\",\"producer\":true,\"consumers\":0,\"rx_bytes_delta\":null,\"remote\":null,\"ping_ms\":null}",
-      "rss_mb": 121,
+      "log": "{\"ts\":\"2026-10-22T16:17:06.372Z\",\"svc\":\"netprobe\",\"msg\":\"probe\",\"camera\":\"mops_cam\",\"ip\":\"10.0.0.234\",\"producer\":true,\"consumers\":0,\"rx_bytes_delta\":null,\"remote\":null,\"ping_ms\":null}",
+      "rss_mb": 123,
       "status": {
-        "ts": "2026-10-22T14:54:48.068Z",
-        "pid": 83164,
+        "ts": "2026-10-22T16:17:19.176Z",
+        "pid": 16318,
         "back_yard_cam": {
           "camera": "back_yard_cam",
           "ip": "10.0.0.205",
           "producer": true,
-          "consumers": 2,
-          "rx_bytes_delta": 2749113,
+          "consumers": 1,
+          "rx_bytes_delta": 2750829,
           "remote": "10.0.0.205:37734",
-          "ping_ms": 7.756
-        },
-        "back_pasture_cam": {
-          "camera": "back_pasture_cam",
-          "ip": "10.0.0.125",
-          "producer": true,
-          "consumers": 2,
-          "rx_bytes_delta": 3078291,
-          "remote": "10.0.0.125:33131",
-          "ping_ms": 4.77
+          "ping_ms": 275.727
         },
         "donkey_cam": {
           "camera": "donkey_cam",
           "ip": "10.0.0.127",
           "producer": true,
-          "consumers": 2,
-          "rx_bytes_delta": 2119287,
+          "consumers": 1,
+          "rx_bytes_delta": 2177228,
           "remote": "10.0.0.127:40065",
-          "ping_ms": 4.993
+          "ping_ms": 275.645
         },
-        "front_porch_cam": {
-          "camera": "front_porch_cam",
-          "ip": "10.0.0.106",
+        "back_pasture_cam": {
+          "camera": "back_pasture_cam",
+          "ip": "10.0.0.125",
           "producer": true,
-          "consumers": 2,
-          "rx_bytes_delta": 848330,
-          "remote": "10.0.0.106:55564",
-          "ping_ms": 7.187
-        },
-        "tractor_cam": {
-          "camera": "tractor_cam",
-          "ip": "10.0.0.111",
-          "producer": true,
-          "consumers": 2,
-          "rx_bytes_delta": 2934140,
-          "remote": "10.0.0.111:52073",
-          "ping_ms": 7.372
+          "consumers": 1,
+          "rx_bytes_delta": 2628941,
+          "remote": "10.0.0.125:50105",
+          "ping_ms": 465.713
         },
         "wash_stall": {
           "camera": "wash_stall",
           "ip": "10.0.0.150",
           "producer": true,
-          "consumers": 2,
-          "rx_bytes_delta": 1766889,
-          "remote": "10.0.0.150:56928",
-          "ping_ms": 5.38
+          "consumers": 1,
+          "rx_bytes_delta": 1834870,
+          "remote": "10.0.0.150:57155",
+          "ping_ms": 507.428
+        },
+        "tractor_cam": {
+          "camera": "tractor_cam",
+          "ip": "10.0.0.111",
+          "producer": true,
+          "consumers": 1,
+          "rx_bytes_delta": 2925802,
+          "remote": "10.0.0.111:52073",
+          "ping_ms": 528.492
+        },
+        "front_porch_cam": {
+          "camera": "front_porch_cam",
+          "ip": "10.0.0.106",
+          "producer": true,
+          "consumers": 0,
+          "rx_bytes_delta": null,
+          "remote": null,
+          "ping_ms": 906.356
         },
         "mops_cam": {
           "camera": "mops_cam",
@@ -209,140 +207,147 @@
       "pid": 2091,
       "last_exit": 0,
       "log": "",
-      "rss_mb": 6
+      "rss_mb": 5
     },
     {
       "label": "com.ranch.recorder",
       "pid": 77918,
       "last_exit": -15,
-      "log": "2026-10-22T14:54:49Z mops_cam: start",
-      "rss_mb": 1832
-    },
-    {
-      "label": "com.ranch.seed-recorder",
-      "pid": 80417,
-      "last_exit": -15,
-      "log": "",
-      "rss_mb": 24
+      "log": "2026-10-22T16:17:00Z mops_cam: rtsp ended, reconnect in 30 s",
+      "rss_mb": 1771
     },
     {
       "label": "com.ranch.status",
-      "pid": 83163,
-      "last_exit": -15,
-      "log": "{\"ts\":\"2026-10-22T14:51:18.185Z\",\"svc\":\"status\",\"msg\":\"listening\",\"host\":\"10.0.0.1\",\"port\":5090,\"db\":\"/usr/local/ranch/var/ranch-events.sqlite\"}",
-      "rss_mb": 154
+      "pid": 16747,
+      "last_exit": 0,
+      "log": "{\"ts\":\"2026-10-22T16:14:56.690Z\",\"svc\":\"status\",\"msg\":\"listening\",\"host\":\"127.0.0.1\",\"port\":5091,\"db\":\"/usr/local/ranch/var/ranch-events.sqlite\"}",
+      "rss_mb": 165
     },
     {
       "label": "com.ranch.tailscaled",
       "pid": 2058,
       "last_exit": 0,
       "log": "",
-      "rss_mb": 56
+      "rss_mb": 51
+    },
+    {
+      "label": "com.ranch.web",
+      "pid": 16756,
+      "last_exit": 0,
+      "log": "✓ Running next.config took 1.7ms",
+      "rss_mb": 157
     },
     {
       "label": "com.ranch.wyze-bridge",
       "pid": 2245,
       "last_exit": 0,
-      "log": "{\"level\":\"info\",\"c\":\"camera\",\"cam\":\"mops_cam\",\"protocol\":\"tutk\",\"time\":\"2026-10-22T10:54:27-04:00\",\"message\":\"camera connected successfully\"}",
-      "rss_mb": 33
+      "log": "",
+      "rss_mb": 30
     }
   ],
   "cameras": [
     {
       "name": "back_pasture_cam",
       "online": true,
-      "last_frame_ts": "2026-10-22T14:54:43.876Z",
-      "last_frame_age_s": 10,
-      "frames_10m": 47,
+      "last_frame_ts": "2026-10-22T16:17:34.635Z",
+      "last_frame_age_s": 1,
+      "frames_10m": 54,
       "horse_last_min": 0,
       "model": "V4",
       "fw": "10.0.0.27",
       "ip": "10.0.0.125",
-      "seed_frames": 660,
+      "buffer_frames": 167,
+      "buffer_age_s": 1,
       "width": 2560,
       "height": 1440
     },
     {
       "name": "back_yard_cam",
       "online": true,
-      "last_frame_ts": "2026-10-22T14:54:49.712Z",
-      "last_frame_age_s": 4,
-      "frames_10m": 54,
+      "last_frame_ts": "2026-10-22T16:17:34.629Z",
+      "last_frame_age_s": 1,
+      "frames_10m": 55,
       "horse_last_min": 0,
       "model": "V4",
       "fw": "10.0.0.27",
       "ip": "10.0.0.205",
-      "seed_frames": 1246,
+      "buffer_frames": 266,
+      "buffer_age_s": 1,
       "width": 2560,
       "height": 1440
     },
     {
       "name": "donkey_cam",
       "online": true,
-      "last_frame_ts": "2026-10-22T14:54:43.556Z",
-      "last_frame_age_s": 10,
-      "frames_10m": 48,
+      "last_frame_ts": "2026-10-22T16:17:22.158Z",
+      "last_frame_age_s": 13,
+      "frames_10m": 54,
       "horse_last_min": 0,
       "model": "V4",
       "fw": "10.0.0.27",
       "ip": "10.0.0.127",
-      "seed_frames": 1260,
+      "buffer_frames": 169,
+      "buffer_age_s": 2,
       "width": 2560,
       "height": 1440
     },
     {
       "name": "front_porch_cam",
       "online": true,
-      "last_frame_ts": "2026-10-22T14:54:44.965Z",
-      "last_frame_age_s": 9,
-      "frames_10m": 72,
+      "last_frame_ts": "2026-10-22T16:17:34.627Z",
+      "last_frame_age_s": 1,
+      "frames_10m": 56,
       "horse_last_min": 0,
       "model": "V3",
       "fw": "10.0.0.22",
       "ip": "10.0.0.106",
-      "seed_frames": 1097,
+      "buffer_frames": 137,
+      "buffer_age_s": 2,
       "width": 1920,
       "height": 1080
     },
     {
       "name": "mops_cam",
       "online": false,
-      "last_frame_ts": "2026-10-22T14:39:01.528Z",
-      "last_frame_age_s": 952,
+      "last_frame_ts": "2026-10-22T16:07:02.045Z",
+      "last_frame_age_s": 633,
       "frames_10m": 0,
       "horse_last_min": null,
       "model": "V3 Pro",
       "fw": "10.0.0.22",
       "ip": "10.0.0.234",
-      "seed_frames": 1266,
+      "buffer_frames": 0,
+      "buffer_age_s": null,
       "width": 2560,
       "height": 1440
     },
     {
       "name": "tractor_cam",
       "online": true,
-      "last_frame_ts": "2026-10-22T14:54:53.981Z",
-      "last_frame_age_s": 0,
-      "frames_10m": 47,
+      "last_frame_ts": "2026-10-22T16:17:34.630Z",
+      "last_frame_age_s": 1,
+      "frames_10m": 54,
       "horse_last_min": 0,
       "model": "V4",
       "fw": "10.0.0.27",
       "ip": "10.0.0.111",
-      "seed_frames": 669,
+      "buffer_frames": 217,
+      "buffer_age_s": 0,
       "width": 2560,
       "height": 1440
     },
     {
       "name": "wash_stall",
       "online": true,
-      "last_frame_ts": "2026-10-22T14:54:49.702Z",
-      "last_frame_age_s": 4,
-      "frames_10m": 48,
+      "last_frame_ts": "2026-10-22T16:17:29.721Z",
+      "last_frame_age_s": 6,
+      "frames_10m": 55,
       "horse_last_min": 0,
       "model": "V4",
       "fw": "10.0.0.27",
       "ip": "10.0.0.150",
-      "seed_frames": 1262,
+      "buffer_frames": 163,
+      "buffer_age_s": 1,
       "width": 2560,
       "height": 1440
     }
@@ -350,134 +355,64 @@
   "labels_1h": [
     {
       "label": "car",
-      "n": 760,
-      "conf": 0.96
-    },
-    {
-      "label": "truck",
-      "n": 24,
-      "conf": 0.89
-    },
-    {
-      "label": "person",
-      "n": 20,
-      "conf": 0.99
+      "n": 614,
+      "conf": 0.98
     },
     {
       "label": "bird",
-      "n": 15,
-      "conf": 0.85
+      "n": 13,
+      "conf": 0.83
     },
     {
-      "label": "atv",
-      "n": 4,
-      "conf": 0.78
-    },
-    {
-      "label": "horse",
-      "n": 1,
-      "conf": 0.81
+      "label": "person",
+      "n": 6,
+      "conf": 1
     }
   ],
   "labels_by_camera_1h": [
     {
-      "camera": "back_pasture_cam",
-      "label": "person",
-      "n": 1,
-      "conf": 0.96,
-      "raw": {
-        "person": 1
-      }
-    },
-    {
       "camera": "back_yard_cam",
       "label": "car",
-      "n": 520,
-      "conf": 0.99,
+      "n": 612,
+      "conf": 0.98,
       "raw": {
-        "car": 520
+        "car": 612
       }
     },
     {
       "camera": "back_yard_cam",
-      "label": "truck",
-      "n": 4,
-      "conf": 0.92,
+      "label": "person",
+      "n": 6,
+      "conf": 1,
       "raw": {
-        "bus": 2,
-        "truck": 2
+        "person": 6
       }
     },
     {
       "camera": "donkey_cam",
       "label": "car",
-      "n": 236,
-      "conf": 0.91,
+      "n": 2,
+      "conf": 0.94,
       "raw": {
-        "car": 236
-      }
-    },
-    {
-      "camera": "front_porch_cam",
-      "label": "truck",
-      "n": 20,
-      "conf": 0.89,
-      "raw": {
-        "truck": 20
-      }
-    },
-    {
-      "camera": "front_porch_cam",
-      "label": "person",
-      "n": 19,
-      "conf": 1,
-      "raw": {
-        "person": 19
-      }
-    },
-    {
-      "camera": "front_porch_cam",
-      "label": "car",
-      "n": 3,
-      "conf": 0.99,
-      "raw": {
-        "car": 3
-      }
-    },
-    {
-      "camera": "front_porch_cam",
-      "label": "horse",
-      "n": 1,
-      "conf": 0.81,
-      "raw": {
-        "cow": 1
+        "car": 2
       }
     },
     {
       "camera": "mops_cam",
       "label": "bird",
-      "n": 15,
-      "conf": 0.85,
+      "n": 12,
+      "conf": 0.83,
       "raw": {
-        "bird": 15
-      }
-    },
-    {
-      "camera": "tractor_cam",
-      "label": "atv",
-      "n": 4,
-      "conf": 0.78,
-      "raw": {
-        "motorcycle": 4
+        "bird": 12
       }
     },
     {
       "camera": "wash_stall",
-      "label": "car",
+      "label": "bird",
       "n": 1,
       "conf": 0.84,
       "raw": {
-        "car": 1
+        "bird": 1
       }
     }
   ],
@@ -503,8 +438,8 @@
   "horse_label": "equine",
   "events": [],
   "totals": {
-    "frames": 47667,
-    "detections": 68147,
+    "frames": 48268,
+    "detections": 68072,
     "events": 0
   }
 }

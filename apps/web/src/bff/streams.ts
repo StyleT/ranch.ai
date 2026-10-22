@@ -1,5 +1,6 @@
-// HTTP passthroughs: frames from the daemon, camera streams from go2rtc (docs/WEB-DASHBOARD.md §3). No WebSocket
-// upgrades (MSE/WebRTC) are possible through a route handler, so streams are fMP4, HLS, MJPEG or a single JPEG.
+// HTTP passthroughs from the status daemon: kept frames, the newest buffered frame per camera, and the live MJPEG
+// the daemon assembles from the recorder's buffer (docs/CAMERA-ARCHITECTURE.md). The web app never touches go2rtc
+// or a camera; "live" means the recorder's rolling buffer, ~1 frame / 2 s.
 import { env } from './env.ts';
 import { daemonFetch, UpstreamError, log } from './daemon.ts';
 import { getStatus } from './home.ts';
@@ -13,42 +14,36 @@ export async function proxyFrame(path: string, w: string | null, cacheControl: s
   return new Response(up.body, { status: 200, headers: h });
 }
 
-const FORMATS = { mp4: 'stream.mp4', m3u8: 'stream.m3u8', mjpeg: 'stream.mjpeg', jpeg: 'frame.jpeg' } as const;
-export type Fmt = keyof typeof FORMATS;
+/** Newest buffered frame for a camera, falling back to the last kept frame when the buffer is empty. */
+export async function proxyLatest(camera: string, w: string | null): Promise<Response> {
+  const r = await proxyFrame(`/api/buffer/${encodeURIComponent(camera)}`, w, 'no-store');
+  return r.status === 404 ? proxyFrame(`/api/frame/${encodeURIComponent(camera)}`, w, 'no-store') : r;
+}
+
 let open = 0;
 const STREAM_MAX_MS = 10 * 60_000;
-
-/** Proxy one go2rtc stream for a known camera; the client's abort closes the upstream (go2rtc drops the consumer). */
-export async function proxyStream(camera: string, fmtIn: string | null, seg: string | null, signal: AbortSignal): Promise<Response> {
+/** Proxy the daemon's buffer MJPEG for a known camera; the client's abort closes the upstream. fmt=jpeg gives one frame. */
+export async function proxyStream(camera: string, fmt: string | null, w: string | null, signal: AbortSignal): Promise<Response> {
   const status = await getStatus();
   if (!status.cameras.some((c) => c.name === camera)) throw new UpstreamError(404, 'not_found', `no camera ${camera}`);
-  const excluded = env.keepaliveExclude.includes(camera);
-  let fmt: Fmt = (fmtIn && fmtIn in FORMATS ? fmtIn : 'mp4') as Fmt;
-  if (excluded && (fmt === 'mp4' || fmt === 'm3u8')) fmt = 'mjpeg';
-  // HLS segment continuation: ?seg=<name> fetches go2rtc's hls/<name> for the same source
-  const path = seg ? (/^[\w.-]+$/.test(seg) ? `/api/hls/${seg}?src=${encodeURIComponent(camera)}` : null) : `/api/${FORMATS[fmt]}?src=${encodeURIComponent(camera)}`;
-  if (!path) throw new UpstreamError(400, 'bad_request', 'bad segment');
-  const continuous = fmt !== 'jpeg' && !seg;
-  if (continuous && open >= env.maxStreams) throw new UpstreamError(429, 'too_many_streams', `at most ${env.maxStreams} live streams`);
-  if (continuous) open++; // reserve the slot before the upstream connect so concurrent requests cannot all pass the check
-  const ctrl = new AbortController();
-  let finished = false;
-  const onAbort = () => ctrl.abort();
-  signal.addEventListener('abort', onAbort);
-  const hardStop = continuous ? setTimeout(() => ctrl.abort(), STREAM_MAX_MS) : null;
-  const done = () => { if (finished) return; finished = true; signal.removeEventListener('abort', onAbort); if (hardStop) clearTimeout(hardStop); if (continuous) { open--; log('stream closed', { camera, fmt, open }); } };
+  if (fmt === 'jpeg') return proxyLatest(camera, w);
+  if (open >= env.maxStreams) throw new UpstreamError(429, 'too_many_streams', `at most ${env.maxStreams} live streams`);
+  open++;
+  const ctrl = new AbortController(); let finished = false;
+  const onAbort = () => ctrl.abort(); signal.addEventListener('abort', onAbort);
+  const hardStop = setTimeout(() => ctrl.abort(), STREAM_MAX_MS);
+  const done = () => { if (finished) return; finished = true; signal.removeEventListener('abort', onAbort); clearTimeout(hardStop); open--; log('stream closed', { camera, open }); };
   let up: Response;
-  try { up = await fetch(env.go2rtcUrl + path, { signal: ctrl.signal, cache: 'no-store' }); }
-  catch (e) { done(); throw new UpstreamError(503, 'go2rtc_unreachable', e instanceof Error ? e.message : String(e)); }
-  if (!up.ok || !up.body) { done(); throw new UpstreamError(up.status === 404 ? 404 : 502, 'go2rtc', `go2rtc ${path} -> ${up.status}`); }
-  if (continuous) log('stream open', { camera, fmt, open });
+  try { up = await fetch(`${env.daemonUrl}/api/buffer/${encodeURIComponent(camera)}/stream${w ? `?w=${encodeURIComponent(w)}` : ''}`, { signal: ctrl.signal, cache: 'no-store' }); }
+  catch (e) { done(); throw new UpstreamError(503, 'daemon_unreachable', e instanceof Error ? e.message : String(e)); }
+  if (!up.ok || !up.body) { done(); throw new UpstreamError(up.status === 429 ? 429 : 502, 'upstream', `daemon stream -> ${up.status}`); }
+  log('stream open', { camera, open });
   const reader = up.body.getReader();
   const body = new ReadableStream<Uint8Array>({
     async pull(c) { try { const { value, done: end } = await reader.read(); if (end) { c.close(); done(); return; } c.enqueue(value); } catch (e) { done(); c.error(e); } },
     cancel() { done(); ctrl.abort(); },
   });
   ctrl.signal.addEventListener('abort', done);
-  const h = new Headers({ 'content-type': up.headers.get('content-type') ?? 'application/octet-stream', 'cache-control': 'no-store' });
-  return new Response(body, { status: 200, headers: h });
+  return new Response(body, { status: 200, headers: { 'content-type': up.headers.get('content-type') ?? 'multipart/x-mixed-replace; boundary=frame', 'cache-control': 'no-store' } });
 }
 export const openStreams = () => open;

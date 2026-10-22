@@ -2,7 +2,6 @@ import { Status, Tracks, CountSeries } from '@ranch/contracts';
 import type { HomeData, CameraCard, DaemonView, ActivityItem } from '@/lib/types';
 import { deriveAlerts } from '@/lib/alerts/derive';
 import { daemonJson, cached } from './daemon.ts';
-import { env } from './env.ts';
 
 export const getStatus = () => cached('status', 3000, () => daemonJson(Status, '/api/status', { timeoutMs: 8000 }));
 
@@ -17,7 +16,7 @@ export function cameraCards(status: Status, spark: Map<string, (number | null)[]
     name: c.name, online: c.online, last_frame_ts: c.last_frame_ts, last_frame_age_s: c.last_frame_age_s, frames_per_min: +(c.frames_10m / 10).toFixed(1),
     equine_now: c.horse_last_min, equine_spark: spark.get(c.name) ?? [], thumb: `/api/ui/frame/${encodeURIComponent(c.name)}`, thumb_version: c.last_frame_ts ?? '',
     detections_1h: (byCam.get(c.name) ?? []).sort((a, b) => b.n - a.n), model: c.model, fw: c.fw, ip: c.ip, width: c.width ?? null, height: c.height ?? null,
-    excluded_from_keepalive: env.keepaliveExclude.includes(c.name),
+    buffer_frames: c.buffer_frames, buffer_age_s: c.buffer_age_s ?? null,
   }));
 }
 

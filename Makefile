@@ -44,10 +44,10 @@ taxonomy-pull:    ## Bring the mini's active taxonomy version into the repo (pac
 # ---- web app (apps/web, docs/WEB-DASHBOARD.md) ---------------------------------------------------------------------
 STATUS_PORT ?= 5091
 tunnel:
-	@ssh -f -N -o ExitOnForwardFailure=yes -L $(STATUS_PORT):127.0.0.1:$(STATUS_PORT) -L 1984:127.0.0.1:1984 $(HOST) 2>/dev/null || true
+	@ssh -f -N -o ExitOnForwardFailure=yes -L $(STATUS_PORT):127.0.0.1:$(STATUS_PORT) $(HOST) 2>/dev/null || true
 
-web-dev: tunnel        ## Next dev on the laptop against the mini's daemon and go2rtc over an ssh tunnel
-	RANCH_DAEMON_URL=http://127.0.0.1:$(STATUS_PORT) RANCH_GO2RTC_URL=http://127.0.0.1:1984 RANCH_APP_DIR=$(CURDIR) npm -w apps/web run dev
+web-dev: tunnel        ## Next dev on the laptop against the mini's status daemon over an ssh tunnel
+	RANCH_DAEMON_URL=http://127.0.0.1:$(STATUS_PORT) RANCH_APP_DIR=$(CURDIR) npm -w apps/web run dev
 
 web-build:        ## Build apps/web locally (the same command Ansible runs on the mini)
 	npm -w apps/web run build

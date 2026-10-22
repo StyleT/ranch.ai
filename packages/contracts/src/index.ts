@@ -13,7 +13,7 @@ export const DaemonRow = z.looseObject({
 });
 export const CameraRow = z.looseObject({
   name: z.string(), online: z.boolean(), last_frame_ts: Iso.nullable(), last_frame_age_s: NullableNum, frames_10m: z.number(),
-  horse_last_min: NullableNum, model: z.string().nullable(), fw: z.string().nullable(), ip: z.string().nullable(), seed_frames: z.number(),
+  horse_last_min: NullableNum, model: z.string().nullable(), fw: z.string().nullable(), ip: z.string().nullable(), buffer_frames: z.number(), buffer_age_s: NullableNum.optional(),
   width: NullableNum.optional(), height: NullableNum.optional(),
 });
 export const RanchEvent = z.looseObject({
@@ -22,7 +22,7 @@ export const RanchEvent = z.looseObject({
 });
 export const Status = z.looseObject({
   ts: Iso, host: z.string(), uptime_s: z.number(), load: z.array(z.number()), disk_free_gb: NullableNum, disk_total_gb: NullableNum,
-  seed: z.looseObject({ total: z.number(), window_start: z.string().nullable(), window_hours: NullableNum }),
+  buffer: z.looseObject({ total: z.number(), stale_s: z.number().optional() }),
   daemons: z.array(DaemonRow), cameras: z.array(CameraRow),
   labels_1h: z.array(z.looseObject({ label: z.string(), n: z.number(), conf: z.number() })),
   labels_by_camera_1h: z.array(z.looseObject({ camera: z.string(), label: z.string(), n: z.number(), conf: z.number(), raw: z.record(z.string(), z.number()) })),

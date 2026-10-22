@@ -1,5 +1,5 @@
 // Builds the one JSON document the status page renders. Everything is read from what the pipeline already
-// produces: SQLite, launchd, the daemon logs, the seed directory, df, the bridge API and retained MQTT status.
+// produces: SQLite, launchd, the daemon logs, the recorder buffer, df, the bridge API and retained MQTT status.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readdirSync } from 'node:fs';
@@ -17,11 +17,11 @@ const exec = promisify(execFile);
 export type DaemonRow = { label: string; pid: number | null; last_exit: number; rss_mb: number | null; log: string; status?: Record<string, unknown> | undefined }
 export type CameraRow = {
   name: string; online: boolean; last_frame_ts: string | null; last_frame_age_s: number | null; frames_10m: number; width: number | null; height: number | null;
-  horse_last_min: number | null; model: string | null; fw: string | null; ip: string | null; seed_frames: number;
+  horse_last_min: number | null; model: string | null; fw: string | null; ip: string | null; buffer_frames: number; buffer_age_s: number | null;
 }
 export type Status = {
   ts: string; host: string; uptime_s: number; load: number[]; disk_free_gb: number | null; disk_total_gb: number | null;
-  seed: { total: number; window_start: string | null; window_hours: number | null };
+  buffer: { total: number; stale_s: number };   // frames in the recorder's rolling on-disk buffer (docs/CAMERA-ARCHITECTURE.md)
   daemons: DaemonRow[]; cameras: CameraRow[]; labels_1h: { label: string; n: number; conf: number }[];
   labels_by_camera_1h: { camera: string; label: string; n: number; conf: number; raw: Record<string, number> }[];
   label_order: string[]; taxonomy_version: number | null; taxonomy_matches_repo: boolean; horse_label: string;
@@ -87,11 +87,22 @@ async function bridgeCameras(): Promise<typeof bridgeCache.cams> {
   return bridgeCache.cams;
 }
 
-function seedCounts(): Record<string, number> {
-  const dir = join(config.mediaDir, 'seed'); const out: Record<string, number> = {};
-  try { for (const c of readdirSync(dir)) { try { out[c] = readdirSync(join(dir, c)).length; } catch { out[c] = 0; } } } catch { /* no seed dir */ }
+/** The recorder's rolling buffer per camera: file count and the age of the newest frame. A camera is online when
+ *  that age is under STALE_S (docs/CAMERA-ARCHITECTURE.md); the buffer, not a camera, is what everything reads. */
+export const STALE_S = Number(process.env.RANCH_STALE_S ?? 30);
+export function bufferState(): Record<string, { frames: number; newest: string | null; ageS: number | null }> {
+  const out: Record<string, { frames: number; newest: string | null; ageS: number | null }> = {};
+  try {
+    for (const c of readdirSync(config.bufferDir)) {
+      try { const files = readdirSync(join(config.bufferDir, c)).filter((f) => f.endsWith('.jpg')).sort(); const newest = files[files.length - 1] ?? null;
+        out[c] = { frames: files.length, newest, ageS: newest ? (Date.now() - bufferNameMs(newest)) / 1000 : null }; } catch { out[c] = { frames: 0, newest: null, ageS: null }; }
+    }
+  } catch { /* no buffer dir */ }
   return out;
 }
+/** Buffer file names are UTC `YYYY-MM-DDTHH-MM-SSZ.jpg`. */
+export const bufferNameMs = (name: string): number => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z/.exec(name); return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : NaN; };
+export const bufferNewestPath = (camera: string): string | null => { const b = bufferState()[camera]; return b?.newest ? join(config.bufferDir, camera, b.newest) : null; };
 
 export async function collect(store: EventStore, mqttStatus: Map<string, Record<string, unknown>>): Promise<Status> {
   return collectStatus(store, mqttStatus) satisfies Promise<StatusContract>;
@@ -101,10 +112,11 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
   const now = new Date();
   const iso = (msAgo: number) => new Date(now.getTime() - msAgo).toISOString();
   const [daemons, df, bridge, logLines] = await Promise.all([launchd(), disk(), bridgeCameras(), lastLogLines()]);
-  const seed = seedCounts();
+  const buffer = bufferState();
   const db = store.db;
   const camNames = new Set<string>([
     ...Object.keys(bridge).filter((n) => !config.camerasExclude.includes(n)),
+    ...Object.keys(buffer),
     ...(db.prepare('SELECT DISTINCT camera FROM frames').all() as { camera: string }[]).map((r) => r.camera),
   ]);
   const per10m = new Map((db.prepare('SELECT camera, COUNT(*) n FROM frames WHERE ts >= ? GROUP BY camera').all(iso(600e3)) as { camera: string; n: number }[]).map((r) => [r.camera, r.n]));
@@ -112,18 +124,20 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
   const cameras: CameraRow[] = [...camNames].sort().map((name) => {
     const last = store.lastFrame(name);
     const age = last ? (now.getTime() - new Date(last.ts).getTime()) / 1000 : null;
-    const b = bridge[name];
-    return { name, online: age !== null && age < 60, last_frame_ts: last?.ts ?? null, last_frame_age_s: age === null ? null : Math.round(age), width: last?.width ?? null, height: last?.height ?? null,
-      frames_10m: per10m.get(name) ?? 0, horse_last_min: horse.get(name) ?? null, model: b?.model ?? null, fw: b?.fw ?? null, ip: b?.ip ?? null, seed_frames: seed[name] ?? 0 };
+    const b = bridge[name]; const buf = buffer[name];
+    const bufAge = buf?.ageS !== null && buf?.ageS !== undefined && Number.isFinite(buf.ageS) ? buf.ageS : null;
+    // online = the recorder has a fresh buffered frame; a kept frame in the last minute is the fallback when no buffer exists
+    const online = bufAge !== null ? bufAge < STALE_S : age !== null && age < 60;
+    return { name, online, last_frame_ts: last?.ts ?? null, last_frame_age_s: age === null ? null : Math.round(age), width: last?.width ?? null, height: last?.height ?? null,
+      frames_10m: per10m.get(name) ?? 0, horse_last_min: horse.get(name) ?? null, model: b?.model ?? null, fw: b?.fw ?? null, ip: b?.ip ?? null, buffer_frames: buf?.frames ?? 0, buffer_age_s: bufAge === null ? null : Math.round(bufAge) };
   });
   const labels = db.prepare(`SELECT d.label, COUNT(*) n, ROUND(AVG(d.confidence), 2) conf FROM detections d JOIN frames f ON f.id = d.frame_id
     WHERE f.ts >= ? GROUP BY d.label ORDER BY n DESC LIMIT 12`).all(iso(3600e3)) as { label: string; n: number; conf: number }[];
   const n = (t: string) => (db.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as { n: number }).n;
-  const seedStart = process.env.SEED_START_EPOCH ? new Date(Number(process.env.SEED_START_EPOCH) * 1000).toISOString() : null;
   return {
     ts: now.toISOString(), host: hostname(), uptime_s: Math.round(uptime()), load: loadavg().map((v) => Math.round(v * 100) / 100),
     disk_free_gb: df.free, disk_total_gb: df.total,
-    seed: { total: Object.values(seed).reduce((s, v) => s + v, 0), window_start: seedStart, window_hours: process.env.SEED_HOURS ? Number(process.env.SEED_HOURS) : null },
+    buffer: { total: Object.values(buffer).reduce((s, v) => s + v.frames, 0), stale_s: STALE_S },
     daemons: daemons.map((d) => ({ ...d, log: logLines.get(d.label.replace('com.ranch.', '')) ?? '', status: mqttStatus.get(d.label.replace('com.ranch.', '')) })),
     cameras, labels_1h: labels, labels_by_camera_1h: store.detectionsByCamera(iso(3600e3)), label_order: [...getTaxonomy().label_order], taxonomy_version: getTaxonomyVersionId(), taxonomy_matches_repo: !differsFromRepo(repoTaxonomy, store.activeTaxonomy()), horse_label: horseIsEquine(String(mqttStatus.get('detector')?.family ?? 'coco')) ? 'equine' : 'horse', events: store.events({ limit: 10 }), totals: { frames: n('frames'), detections: n('detections'), events: n('events') },
   };

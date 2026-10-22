@@ -1,32 +1,30 @@
-// Status page for the ranch pipeline (docs/STATUS-DASHBOARD.md). One node:http server:
-//   GET /                  the page
+// The status daemon: the JSON + SSE API behind the web dashboard (apps/web, docs/WEB-DASHBOARD.md). One node:http
+// server on loopback; the HTML pages it used to serve moved to the Next.js app on 22 Oct.
 //   GET /api/status        everything the page shows, JSON (5 s cache)
 //   GET /api/frame/<cam>   latest kept frame for that camera; /api/frame/<id>?w=1280 a specific frame, resized on the fly
-//   GET /frames, /api/frames  the frame browser (docs/FRAMES-AND-BASELINE.md §2)
+//   GET /api/frames        the frame browser's rows (docs/FRAMES-AND-BASELINE.md §2)
 //   GET /api/baseline, /api/baseline/<date>?model=, /api/baseline-frame/<date>/<camera>/<file>  zero-shot baseline sets (§3)
 //   GET /api/events        server-sent events: every MQTT message on ranch/# plus a status document every 15 s
 //   GET /api/ping, /api/counts/series, /api/frames/series, /api/tracks, /api/frames/<id>   series and bursts for the web app (docs/WEB-DASHBOARD.md); contract in packages/contracts
-//   GET /taxonomy, /api/taxonomy[/versions[/<id>]]; POST /api/taxonomy/{validate,score,apply,revert}  the taxonomy editor (docs/TAXONOMY-UI.md)
+//   GET /api/taxonomy[/versions[/<id>]]; POST /api/taxonomy/{validate,score,apply,revert}  the taxonomy editor (docs/TAXONOMY-UI.md)
+//   GET /api/buffer/<cam>?w=   newest frame of the recorder's buffer; /api/buffer/<cam>/stream?w=  MJPEG of that buffer as it fills (docs/CAMERA-ARCHITECTURE.md): the only live view, no camera is touched
 import { createServer, type ServerResponse } from 'node:http';
 import { createReadStream, existsSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { join, normalize } from 'node:path';
+import { join, normalize, basename } from 'node:path';
 import { config } from '@ranch/config';
 import { EventStore, parseSince, type FrameReason } from '@ranch/events';
 import type { Ping, CountSeries, FrameSeries, TrackSummary } from '@ranch/contracts';
 import { connectBus } from '@ranch/bus';
-import { collect, type Status } from './collect.ts';
-import { page } from './page.ts';
-import { framesPage } from './frames.ts';
-import { taxonomyPage } from './taxonomy.ts';
+import { collect, bufferNewestPath, bufferNameMs, type Status } from './collect.ts';
 import { getTaxonomy, getTaxonomyVersionId, validateTaxonomy, canonical, loadTaxonomyFile, REPO_TAXONOMY_FILE, type Taxonomy } from '@ranch/taxonomy';
 import { activateFromStore, applyRow, differsFromRepo, TAXONOMY_TOPIC, type TaxonomyMessage } from '@ranch/taxonomy/store';
 import sharp from 'sharp';
 
-const PORT = Number(process.env.RANCH_STATUS_PORT ?? 5090);
-const HOST = process.env.RANCH_STATUS_HOST ?? '0.0.0.0';
+const PORT = Number(process.env.RANCH_STATUS_PORT ?? 5091);
+const HOST = process.env.RANCH_STATUS_HOST ?? '127.0.0.1';
 const BASELINE_DIR = process.env.RANCH_BASELINE_DIR ?? '/usr/local/ranch/app/evals/baseline';
 const LABELS_DIR = process.env.RANCH_LABELS_DIR ?? '/usr/local/ranch/app/evals/golden';
 const APP_DIR = process.env.RANCH_APP_DIR ?? process.cwd();
@@ -34,6 +32,7 @@ const REF_FRAMES = process.env.RANCH_REFERENCE_FRAMES ?? 'evals/baseline/2026-10
 const REF_LABELS = process.env.RANCH_REFERENCE_LABELS ?? 'labels-ranch-claude-revised-vlad-v1';
 const STATUS_ENV = process.env.RANCH_STATUS_ENV ?? `${process.env.HOME ?? '/Users/ranch'}/.config/ranch/status.env`;
 const exec = promisify(execFile);
+let bufferStreams = 0; const BUFFER_STREAM_MAX = Number(process.env.RANCH_BUFFER_STREAM_MAX ?? 4);
 /** Write token for the editor (docs/TAXONOMY-UI.md §6): KEY=VALUE file on the mini, never in the repo. */
 const writeToken = (() => { try { const m = /^RANCH_STATUS_WRITE_TOKEN=(\S+)/m.exec(readFileSync(STATUS_ENV, 'utf8')); return m?.[1] ?? null; } catch { return null; } })();
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
@@ -127,9 +126,7 @@ async function applyTaxonomy(t: Taxonomy, author: string, note: string, score: u
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
   try {
-    if (url.pathname === '/taxonomy') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(taxonomyPage); return;
-    } else if (url.pathname === '/api/taxonomy' && req.method === 'GET') {
+    if (url.pathname === '/api/taxonomy' && req.method === 'GET') {
       json(res, 200, taxonomyMeta()); return;
     } else if (url.pathname === '/api/taxonomy/versions') {
       json(res, 200, store.taxonomyVersions(200).map((v) => ({ ...v, score_json: undefined, score_summary: scoreSummaryOf(v) }))); return;
@@ -159,12 +156,8 @@ const server = createServer(async (req, res) => {
       }
       json(res, 404, { error: 'unknown action' }); return;
     }
-    if (url.pathname === '/') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(page);
-    } else if (url.pathname === '/api/status') {
+    if (url.pathname === '/api/status') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(await status()));
-    } else if (url.pathname === '/frames') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(framesPage);
     } else if (url.pathname === '/api/ping') {
       json(res, 200, { ok: true, ts: new Date().toISOString(), pid: process.pid, rss_mb: Math.round(process.memoryUsage().rss / 1048576), taxonomy_version: getTaxonomyVersionId(), api: 1 } satisfies Ping); return;
     } else if (url.pathname === '/api/counts/series' || url.pathname === '/api/frames/series') {
@@ -223,6 +216,33 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=3600' });
       if (w > 0 && w < 4000) sharp(path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 82 }).pipe(res).on('error', () => res.destroy());
       else createReadStream(path).on('error', () => res.destroy()).pipe(res);
+    } else if (/^\/api\/buffer\/[a-z0-9_]+$/.test(url.pathname)) {
+      const cam = url.pathname.split('/')[3]!; const path = bufferNewestPath(cam);
+      if (!path) { res.writeHead(404); res.end('no buffered frame'); return; }
+      const w = Number(url.searchParams.get('w') ?? 0);
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-frame-ts': new Date(bufferNameMs(basename(path))).toISOString() });
+      if (w > 0 && w < 4000) sharp(path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 82 }).pipe(res).on('error', () => res.destroy());
+      else createReadStream(path).on('error', () => res.destroy()).pipe(res);
+    } else if (/^\/api\/buffer\/[a-z0-9_]+\/stream$/.test(url.pathname)) {
+      // MJPEG assembled from the buffer as the recorder fills it (~1 frame / 2 s). Reads disk only: no camera, no go2rtc.
+      const cam = url.pathname.split('/')[3]!; const w = Number(url.searchParams.get('w') ?? 0);
+      if (bufferStreams >= BUFFER_STREAM_MAX) { res.writeHead(429, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'too_many_streams' })); return; }
+      bufferStreams++; log('buffer stream open', { camera: cam, open: bufferStreams });
+      res.writeHead(200, { 'content-type': 'multipart/x-mixed-replace; boundary=frame', 'cache-control': 'no-store', connection: 'keep-alive' });
+      let last = ''; let closed = false;
+      const stop = () => { if (closed) return; closed = true; clearInterval(timer); clearTimeout(hardStop); bufferStreams--; log('buffer stream closed', { camera: cam, open: bufferStreams }); };
+      const tick = async () => {
+        if (closed) return;
+        const path = bufferNewestPath(cam); if (!path || path === last) return; last = path;
+        try {
+          const buf = w > 0 && w < 4000 ? await sharp(path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer() : readFileSync(path);
+          if (closed) return;
+          res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${buf.length}\r\nX-Frame-Ts: ${new Date(bufferNameMs(basename(path))).toISOString()}\r\n\r\n`); res.write(buf); res.write('\r\n');
+        } catch { /* file rotated away; next tick */ }
+      };
+      const timer = setInterval(() => void tick(), 500); void tick();
+      const hardStop = setTimeout(() => { stop(); res.end(); }, 30 * 60_000);
+      req.on('close', stop); res.on('close', stop);
     } else if (url.pathname.startsWith('/api/frame/')) {
       const key = decodeURIComponent(url.pathname.slice('/api/frame/'.length));
       const f = /^\d+$/.test(key) ? store.frameById(Number(key)) : store.lastFrame(key);

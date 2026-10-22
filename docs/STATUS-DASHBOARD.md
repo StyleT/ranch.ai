@@ -1,3 +1,10 @@
+# Status daemon (`apps/status`, `com.ranch.status`)
+
+**22 Oct 2026: the pages moved.** The dashboard is now the Next.js app in `apps/web` on port 5090
+(`docs/WEB-DASHBOARD.md`). `apps/status` is its JSON + SSE API on `127.0.0.1:5091` and serves no HTML. The notes
+below describe the daemon's data sources and endpoints, which are unchanged except where marked; the page-layout
+sections are historical (the hand-written pages lived from 15 to 22 Oct).
+
 # Status dashboard (`apps/status`, `com.ranch.status`)
 
 *Plan written 15 Oct 2026, before implementation; built the same evening (`apps/status`, `com.ranch.status`). One page on the mini that replaces the `ssh ranch '...'`

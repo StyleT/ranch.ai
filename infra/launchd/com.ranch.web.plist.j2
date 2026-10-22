@@ -3,7 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.ranch.web</string>
-  <!-- The Next.js dashboard (apps/web, docs/WEB-DASHBOARD.md): standalone server built on the mini by roles/app. -->
+  <!-- The Next.js dashboard (apps/web, docs/WEB-DASHBOARD.md): standalone server built on the mini by roles/app.
+       Reads the status daemon only; live video is the recorder buffer streamed by the daemon (docs/CAMERA-ARCHITECTURE.md). -->
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
@@ -21,10 +22,8 @@
     <key>HOSTNAME</key><string>{{ web_host }}</string>
     <key>NEXT_TELEMETRY_DISABLED</key><string>1</string>
     <key>RANCH_DAEMON_URL</key><string>http://127.0.0.1:{{ status_port }}</string>
-    <key>RANCH_GO2RTC_URL</key><string>http://127.0.0.1:{{ go2rtc_api_port }}</string>
     <key>RANCH_APP_DIR</key><string>{{ ranch_app_dir }}</string>
     <key>RANCH_WEB_MAX_STREAMS</key><string>{{ web_max_streams }}</string>
-    <key>RANCH_KEEPALIVE_EXCLUDE</key><string>{{ keepalive_exclude | default('mops_cam') }}</string>
     <key>RANCH_TZ</key><string>{{ timezone }}</string>
   </dict>
   <key>RunAtLoad</key><true/>

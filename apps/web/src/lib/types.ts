@@ -9,7 +9,7 @@ export type CameraCard = {
   name: string; online: boolean; last_frame_ts: string | null; last_frame_age_s: number | null; frames_per_min: number;
   equine_now: number | null; equine_spark: (number | null)[]; thumb: string; thumb_version: string;
   detections_1h: { label: string; n: number; conf: number; raw: Record<string, number> }[];
-  model: string | null; fw: string | null; ip: string | null; width: number | null; height: number | null; excluded_from_keepalive: boolean;
+  model: string | null; fw: string | null; ip: string | null; width: number | null; height: number | null; buffer_frames: number; buffer_age_s: number | null;
 };
 
 export type ActivityItem = { t: string; camera: string; label: string; moving: boolean; members: number; seen: number; conf: number; frame_id: number; img: string };
@@ -40,7 +40,7 @@ export type CameraDetail = {
   bursts: BurstCard[];
   net: Record<string, unknown> | null;
   motion: { n: number; p50: number; p90: number; max: number } | null;
-  stream: { fmt_default: 'mp4' | 'mjpeg'; excluded: boolean };
+  stream: { kind: 'buffer-mjpeg'; fps: number };
 };
 
 export type Box = { label: string; raw_label: string | null; confidence: number; x: number; y: number; w: number; h: number; seen: number | null; dx: number | null; dy: number | null; gold: boolean };
@@ -49,7 +49,7 @@ export type DetectionsPage = { source: 'live' | 'baseline'; items: FrameCard[]; 
 
 export type SystemData = {
   ts: string; host: string; uptime_s: number; load: number[]; disk: { free_gb: number | null; total_gb: number | null };
-  totals: { frames: number; detections: number; events: number }; seed: { total: number; window_start: string | null; window_hours: number | null };
+  totals: { frames: number; detections: number; events: number }; buffer: { total: number; stale_s: number | null };
   daemons: DaemonView[]; netprobe: { camera: string; ip: string | null; producer: boolean | null; consumers: number | null; rx_bytes_delta: number | null; ping_ms: number | null }[];
   wifi: Record<string, unknown> | null; web: { rss_mb: number; heap_mb: number; uptime_s: number; build: Record<string, unknown> | null }; daemon_ping: Record<string, unknown> | null;
 };

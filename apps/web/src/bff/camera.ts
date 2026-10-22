@@ -2,7 +2,6 @@ import { CountSeries, FrameSeries, Tracks } from '@ranch/contracts';
 import type { CameraDetail, SeriesPoint, OnlinePoint, BurstCard } from '@/lib/types';
 import { daemonJson, cached, UpstreamError } from './daemon.ts';
 import { getStatus, cameraCards } from './home.ts';
-import { env } from './env.ts';
 
 export type Window = '1h' | '6h' | '24h' | '7d';
 export const WINDOWS: Record<Window, { ms: number; bucketS: number; bucket: string }> = {
@@ -34,13 +33,11 @@ export async function getCamera(name: string, window: Window): Promise<CameraDet
   for (const t of tracks) { const b = byHead.get(t.frame_id) ?? { t: t.ts, frame_id: t.frame_id, labels: [], moving: false, members: t.members, img: `/api/ui/frame/${t.frame_id}` }; if (!b.labels.includes(t.label)) b.labels.push(t.label); b.moving = b.moving || t.moving; byHead.set(t.frame_id, b); }
   const ingest = status.daemons.find((d) => d.label === 'com.ranch.ingest')?.status as { motion?: Record<string, { n: number; p50: number; p90: number; max: number }> } | undefined;
   const probe = status.daemons.find((d) => d.label === 'com.ranch.netprobe')?.status as Record<string, unknown> | undefined;
-  const excluded = env.keepaliveExclude.includes(name);
-  const equineFull = card.equine_spark; void equineFull;
   return {
     camera: { ...card, equine_spark: equine_series.slice(-12).map((p) => p.value) },
     window: { since: sinceIso, until: new Date(until).toISOString(), bucket_s: w.bucketS, label: window },
     equine_series, online_series, bursts: [...byHead.values()].slice(0, 20),
     net: (probe?.[name] as Record<string, unknown> | undefined) ?? null, motion: ingest?.motion?.[name] ?? null,
-    stream: { fmt_default: excluded ? 'mjpeg' : 'mp4', excluded },
+    stream: { kind: 'buffer-mjpeg', fps: 0.5 },
   };
 }

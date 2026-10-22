@@ -28,7 +28,9 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   `roles/services/tasks/main.yml` (`ranch_daemons`). A changed plist is re-bootstrapped (kickstart would keep the
   old definition).
 - Ports listed in `tailscale_blocked_ports` (group_vars) are refused on the Tailscale addresses by a pf anchor and are
-  LAN-only (today: 5090, the status page). Verify them with `ssh ranch curl 127.0.0.1:<port>`, not over the tailnet.
+  LAN-only (today: 5090, the dashboard). Verify them with `ssh ranch curl 127.0.0.1:<port>`, not over the tailnet.
+- The dashboard is `apps/web` (Next.js, `docs/WEB-DASHBOARD.md`) on 5090; `apps/status` is its JSON/SSE API on
+  `127.0.0.1:5091` and serves no HTML. `make web-dev` runs the app on the laptop against the mini's API.
 - Classes, subclasses and detector thresholds live in `packages/taxonomy/taxonomy.json` and nowhere else; the mini
   holds versions of it (editable on `:5090/taxonomy`). After a UI edit: `make taxonomy-pull`, commit. The repo file
   wins on provision.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Status, FramesResponse, Ping, parseContract, Tracks } from '../src/index.ts';
 
 test('contracts accept a minimal status and reject a broken one', () => {
-  const ok = { ts: '2026-10-22T12:00:00.000Z', host: 'ranch-ai', uptime_s: 1, load: [1, 1, 1], disk_free_gb: 100, disk_total_gb: 460, seed: { total: 0, window_start: null, window_hours: null },
+  const ok = { ts: '2026-10-22T12:00:00.000Z', host: 'ranch-ai', uptime_s: 1, load: [1, 1, 1], disk_free_gb: 100, disk_total_gb: 460, buffer: { total: 0, stale_s: 30 },
     daemons: [{ label: 'com.ranch.status', pid: 1, last_exit: 0, log: '' }], cameras: [], labels_1h: [], labels_by_camera_1h: [], label_order: ['horse'], taxonomy_version: 1,
     taxonomy_matches_repo: true, horse_label: 'equine', events: [], totals: { frames: 0, detections: 0, events: 0 }, extra_field: 1 };
   assert.equal(parseContract(Status, ok, 'status').host, 'ranch-ai');

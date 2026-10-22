@@ -9,7 +9,7 @@
     "bytes": 289228,
     "change": 0.027517786628540306,
     "reason": "change",
-    "kept": null,
+    "kept": 1,
     "burst_id": 170876,
     "seq": 0,
     "detections": [
@@ -42,7 +42,7 @@
         "bytes": 284481,
         "change": 0.463296568627451,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170876,
         "seq": 1,
         "detections": [
@@ -75,7 +75,7 @@
         "bytes": 311960,
         "change": 0.36446078431372547,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170876,
         "seq": 2,
         "detections": []
@@ -90,7 +90,7 @@
         "bytes": 290562,
         "change": 0.35294117647058826,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170876,
         "seq": 3,
         "detections": []
@@ -107,7 +107,7 @@
     "bytes": 302521,
     "change": 0.021837128948801743,
     "reason": "change",
-    "kept": null,
+    "kept": 1,
     "burst_id": 170863,
     "seq": 0,
     "detections": [
@@ -157,7 +157,7 @@
         "bytes": 266589,
         "change": 0.3457107843137255,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170863,
         "seq": 1,
         "detections": [
@@ -207,7 +207,7 @@
         "bytes": 292146,
         "change": 0.30104166666666665,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170863,
         "seq": 2,
         "detections": [
@@ -240,7 +240,7 @@
         "bytes": 261625,
         "change": 0.34417892156862745,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170863,
         "seq": 3,
         "detections": [
@@ -292,7 +292,7 @@
     "bytes": 289908,
     "change": 0.05635680487472767,
     "reason": "change",
-    "kept": null,
+    "kept": 1,
     "burst_id": 170850,
     "seq": 0,
     "detections": [
@@ -359,7 +359,7 @@
         "bytes": 292488,
         "change": 0.23186274509803922,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170850,
         "seq": 1,
         "detections": [
@@ -409,7 +409,7 @@
         "bytes": 292019,
         "change": 0.11299019607843137,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170850,
         "seq": 2,
         "detections": [
@@ -459,7 +459,7 @@
         "bytes": 242426,
         "change": 0.23511029411764706,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170850,
         "seq": 3,
         "detections": [
@@ -494,7 +494,7 @@
     "bytes": 377080,
     "change": 0.059379680691721136,
     "reason": "change",
-    "kept": null,
+    "kept": 1,
     "burst_id": 170815,
     "seq": 0,
     "detections": [
@@ -561,7 +561,7 @@
         "bytes": 365219,
         "change": 0.4707720588235294,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170815,
         "seq": 1,
         "detections": [
@@ -628,7 +628,7 @@
         "bytes": 232431,
         "change": 0.6205269607843137,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170815,
         "seq": 2,
         "detections": [
@@ -695,7 +695,7 @@
         "bytes": 318158,
         "change": 0.4987745098039216,
         "reason": "change",
-        "kept": null,
+        "kept": 1,
         "burst_id": 170815,
         "seq": 3,
         "detections": [
