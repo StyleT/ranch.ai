@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.web</string>
+  <!-- The Next.js dashboard (apps/web, docs/WEB-DASHBOARD.md): standalone server built on the mini by roles/app. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '{{ ranch_bin_dir }}/node' '--max-old-space-size={{ web_heap_mb }}' '{{ ranch_app_dir }}/apps/web/.next/standalone/apps/web/server.js' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.web -p user.notice</string>
+  </array>
+  <key>UserName</key><string>{{ ranch_user }}</string>
+  <key>WorkingDirectory</key><string>{{ ranch_app_dir }}/apps/web/.next/standalone/apps/web</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/{{ ranch_user }}</string>
+    <key>PATH</key><string>{{ ranch_bin_dir }}:/usr/bin:/bin</string>
+    <key>NODE_ENV</key><string>production</string>
+    <key>PORT</key><string>{{ web_port }}</string>
+    <key>HOSTNAME</key><string>{{ web_host }}</string>
+    <key>NEXT_TELEMETRY_DISABLED</key><string>1</string>
+    <key>RANCH_DAEMON_URL</key><string>http://127.0.0.1:{{ status_port }}</string>
+    <key>RANCH_GO2RTC_URL</key><string>http://127.0.0.1:{{ go2rtc_api_port }}</string>
+    <key>RANCH_APP_DIR</key><string>{{ ranch_app_dir }}</string>
+    <key>RANCH_WEB_MAX_STREAMS</key><string>{{ web_max_streams }}</string>
+    <key>RANCH_KEEPALIVE_EXCLUDE</key><string>{{ keepalive_exclude | default('mops_cam') }}</string>
+    <key>RANCH_TZ</key><string>{{ timezone }}</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>15</integer>
+</dict>
+</plist>

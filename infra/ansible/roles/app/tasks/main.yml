@@ -92,10 +92,37 @@
   notify: restart app daemons
 
 # Only code the daemons load triggers a restart; docs, infra and eval data do not.
+# Next.js build on the mini (docs/WEB-DASHBOARD.md §5): only when apps/web (minus tests), packages/ or the lockfile
+# changed since the last build, judged by a content hash kept in the build dir. ~1-2 min, ~1.5 GB peak: a provision
+# with a web change needs that much free memory.
+- name: Web app built
+  ansible.builtin.shell: |
+    set -e; cd {{ ranch_app_dir }}
+    want=$( { find apps/web packages -type f \
+        -not -path '*/.next/*' -not -path '*/node_modules/*' -not -path 'apps/web/test/*' -not -path 'apps/web/e2e/*' \
+        -not -path 'apps/web/test-results/*' -not -path 'apps/web/playwright-report/*' -not -path 'apps/web/coverage/*' -not -name 'next-env.d.ts' -not -name 'tsconfig.tsbuildinfo' -not -name '.DS_Store' \
+        -print0 | sort -z | xargs -0 shasum -a 256; shasum -a 256 package-lock.json; } | shasum -a 256 | cut -c1-64 )
+    have=$(cat {{ ranch_var_dir }}/build/web.sha256 2>/dev/null || true)
+    server=apps/web/.next/standalone/apps/web/server.js
+    if [ "$want" = "$have" ] && [ -f "$server" ]; then echo UNCHANGED; exit 0; fi
+    {% if ansible_check_mode %}echo "WOULD BUILD"; exit 0{% endif %}
+    mkdir -p {{ ranch_var_dir }}/build
+    export NODE_OPTIONS=--max-old-space-size=2048 NEXT_TELEMETRY_DISABLED=1 CI=1 RANCH_BUILD_COMMIT='{{ lookup('pipe', 'git -C ' ~ playbook_dir ~ ' rev-parse --short HEAD') }}'
+    {{ ranch_bin_dir }}/node {{ node_path.stdout | trim | dirname }}/npm run build -w apps/web > {{ ranch_var_dir }}/build/web-build.log 2>&1
+    echo "$want" > {{ ranch_var_dir }}/build/web.sha256
+    echo BUILT
+  environment: { HOME: "/Users/{{ ranch_user }}", PATH: "{{ node_path.stdout | trim | dirname }}:/usr/bin:/bin" }
+  become: true
+  become_user: "{{ ranch_user }}"
+  register: web_build
+  changed_when: "'BUILT' in web_build.stdout or 'WOULD BUILD' in web_build.stdout"
+  check_mode: false
+  notify: restart app daemons
+
 - name: App daemons restart when their code changed
   ansible.builtin.debug:
     msg: "app code changed; app daemons will restart"
-  when: app_sync.stdout is search('(^|\s)[<>ch.*][^\s]*\s+(apps/|packages/|package(-lock)?\.json)')
+  when: app_sync.stdout is search('(^|\s)[<>ch.*][^\s]*\s+(apps/(?!web/(test|e2e)/)|packages/|package(-lock)?\.json)')
   changed_when: true
   notify: restart app daemons
 

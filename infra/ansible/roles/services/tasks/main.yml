@@ -14,6 +14,7 @@
       - com.ranch.detector
       - com.ranch.netprobe
       - com.ranch.status
+      - com.ranch.web
 
 - name: Ranch bin dir
   ansible.builtin.file:
