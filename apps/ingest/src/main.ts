@@ -13,7 +13,8 @@ import { connectBus, topics, type Bus } from '@ranch/bus';
 
 const GRAB_S = Number(process.env.RANCH_GRAB_S ?? 5);
 const FLOOR_S = Number(process.env.RANCH_FLOOR_S ?? 10);
-const THRESHOLD = Number(process.env.RANCH_CHANGE_THRESHOLD ?? 0.04);
+const THRESHOLD = Number(process.env.RANCH_CHANGE_THRESHOLD ?? 0.04);     // whole-frame mean diff: lighting, large changes
+const MOTION = Number(process.env.RANCH_MOTION_THRESHOLD ?? 0.08);        // block-max diff against the last kept frame: something moved
 const RETENTION_D = Number(process.env.RANCH_FRAMES_RETENTION_D ?? 7);
 // Stall watchdog (incident 16 Oct, docs/CAMERAS.md): a camera's TUTK session can die while go2rtc keeps the dead
 // producer and every new consumer attaches to it and hangs, forever. If a camera has produced nothing for
@@ -30,10 +31,13 @@ const KEEPALIVE = (process.env.RANCH_KEEPALIVE ?? '1') !== '0';
 // global per-minute budget of member frames across all cameras keeps the cost bounded.
 const BURST_MAX = Number(process.env.RANCH_BURST_MAX ?? 4);
 const BURST_GAP_S = Number(process.env.RANCH_BURST_GAP_S ?? 1);
-const BURST_CHANGE = Number(process.env.RANCH_BURST_CHANGE ?? 0.01);
+const BURST_CHANGE = Number(process.env.RANCH_BURST_CHANGE ?? 0.05);      // block-max diff between consecutive members: motion continues
 const BURST_COOLDOWN_S = Number(process.env.RANCH_BURST_COOLDOWN_S ?? 10);
 const BURST_BUDGET_PER_MIN = Number(process.env.RANCH_BURST_BUDGET_PER_MIN ?? 60);
 const burstStats = { bursts: 0, burst_frames: 0, throttled: 0, tokens: BURST_BUDGET_PER_MIN, lastRefill: Date.now(), lastThrottleLog: 0 };
+// motion metric of every grab since the last status message, per camera: p50/p90/max tell whether the thresholds fit
+const motionSamples = new Map<string, number[]>();
+const motionSummary = () => { const out: Record<string, { n: number; p50: number; p90: number; max: number }> = {}; for (const [cam, xs] of motionSamples) { const s = [...xs].sort((a, b) => a - b); if (s.length) out[cam] = { n: s.length, p50: +s[Math.floor(s.length * 0.5)]!.toFixed(3), p90: +s[Math.floor(s.length * 0.9)]!.toFixed(3), max: +s[s.length - 1]!.toFixed(3) }; } motionSamples.clear(); return out; };
 function takeBurstToken(): boolean {
   const now = Date.now();
   if (now - burstStats.lastRefill >= 60_000) { burstStats.tokens = BURST_BUDGET_PER_MIN; burstStats.lastRefill = now; }
@@ -44,7 +48,7 @@ const STALL_RESET_S = Number(process.env.RANCH_STALL_RESET_S ?? 180);
 const STALL_COOLDOWN_S = Number(process.env.RANCH_STALL_COOLDOWN_S ?? 300);
 const GO2RTC_CONFIG = process.env.RANCH_GO2RTC_CONFIG ?? '/usr/local/ranch/var/wyze-bridge/go2rtc.yaml';
 let resets = 0;
-const THUMB_W = 64; const THUMB_H = 36;
+const THUMB_W = 128; const THUMB_H = 72; const BLOCK = 8; // 16x9 blocks of 8x8 for the local motion metric
 
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), svc: 'ingest', msg, ...extra }) + '\n');
@@ -115,6 +119,21 @@ function meanAbsDiff(a: Buffer, b: Buffer): number {
   for (let i = 0; i < a.length; i++) sum += Math.abs(a[i]! - b[i]!);
   return sum / a.length / 255;
 }
+/**
+ * Local motion: the largest mean absolute difference over any 8x8 block of the greyscale thumbnail (0..1). A whole-
+ * frame mean (meanAbsDiff) sees lighting changes but not a distant animal; the block maximum sees the animal.
+ * Measured 22 Oct on consecutive frames (docs/MODEL-YOLO26.md): quiet cameras stay <= 0.021 day and night,
+ * real motion scores 0.06-0.59.
+ */
+export function blockMaxDiff(a: Buffer, b: Buffer): number {
+  let best = 0;
+  for (let by = 0; by < THUMB_H / BLOCK; by++) for (let bx = 0; bx < THUMB_W / BLOCK; bx++) {
+    let s = 0;
+    for (let y = 0; y < BLOCK; y++) for (let x = 0; x < BLOCK; x++) { const i = (by * BLOCK + y) * THUMB_W + bx * BLOCK + x; s += Math.abs(a[i]! - b[i]!); }
+    const m = s / (BLOCK * BLOCK) / 255; if (m > best) best = m;
+  }
+  return best;
+}
 
 /**
  * Extend a change keep into a burst (docs/MODEL-YOLO26.md part B): grab again every BURST_GAP_S; a grab becomes a
@@ -130,7 +149,7 @@ export async function extendBurst(o: { headId: number; camera: string; dir: stri
     let jpeg: Buffer; try { jpeg = await o.grab(); } catch { stopped = 'error'; break; }
     const img = sharp(jpeg);
     const [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]);
-    const change = meanAbsDiff(thumb, prevThumb);
+    const change = blockMaxDiff(thumb, prevThumb);
     if (change < BURST_CHANGE) { stopped = 'still'; break; }
     if (seq === 1) o.store.markBurstHead(o.headId);
     const ts = new Date().toISOString(); const path = join(o.dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
@@ -158,8 +177,10 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
       const img = sharp(jpeg);
       const [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]);
       const change = lastThumb ? meanAbsDiff(thumb, lastThumb) : 1;
+      const motion = lastThumb ? blockMaxDiff(thumb, lastThumb) : 0;
+      if (lastThumb) (motionSamples.get(camera) ?? motionSamples.set(camera, []).get(camera)!).push(motion);
       const elapsed = (Date.now() - lastKept) / 1000;
-      const reason = change >= THRESHOLD ? 'change' : elapsed >= FLOOR_S ? 'floor' : null;
+      const reason = change >= THRESHOLD || motion >= MOTION ? 'change' : elapsed >= FLOOR_S ? 'floor' : null;
       if (reason) {
         const now = new Date();
         const ts = now.toISOString();
@@ -218,11 +239,11 @@ async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const bus = await connectBus('ingest');
   const cameras = await cameraList();
-  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, keepalive_exclude: config.keepaliveExclude, burst: { max: BURST_MAX, gap_s: BURST_GAP_S, change: BURST_CHANGE, cooldown_s: BURST_COOLDOWN_S, budget_per_min: BURST_BUDGET_PER_MIN }, media: config.mediaDir, db: config.dbPath });
+  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, keepalive_exclude: config.keepaliveExclude, motion_threshold: MOTION, burst: { max: BURST_MAX, gap_s: BURST_GAP_S, change: BURST_CHANGE, cooldown_s: BURST_COOLDOWN_S, budget_per_min: BURST_BUDGET_PER_MIN }, media: config.mediaDir, db: config.dbPath });
   const stop = { v: false };
   const status = setInterval(() => {
     const m = process.memoryUsage();
-    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), resets, bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN }, { retain: true });
+    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), resets, bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN, motion_threshold: MOTION, motion: motionSummary() }, { retain: true });
   }, 60_000);
   const pruner = setInterval(() => void prune(store), 3600_000);
   await prune(store);

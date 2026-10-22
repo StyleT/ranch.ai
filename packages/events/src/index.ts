@@ -165,7 +165,7 @@ export class EventStore {
     if (q.reason) { where.push('f.reason = ?'); args.push(q.reason); }
     if (q.before) { where.push('f.id < ?'); args.push(q.before); }
     where.push('(f.seq IS NULL OR f.seq = 0)'); // burst members ride with their head
-    if (q.moving) where.push('EXISTS (SELECT 1 FROM detections d WHERE d.frame_id = f.id AND d.dx IS NOT NULL AND (d.dx*d.dx + d.dy*d.dy) >= 0.0004)');
+    if (q.moving) where.push('EXISTS (SELECT 1 FROM detections d JOIN frames m ON m.id = d.frame_id WHERE (m.id = f.id OR m.burst_id = f.id) AND d.dx IS NOT NULL AND (d.dx*d.dx + d.dy*d.dy) >= 0.0004)'); // anywhere in the burst
     const detCond: string[] = []; const detArgs: SQLInputValue[] = [];
     if (q.label) { detCond.push('d.label = ?'); detArgs.push(q.label); }
     if (q.minConf !== undefined) { detCond.push('d.confidence >= ?'); detArgs.push(q.minConf); }
