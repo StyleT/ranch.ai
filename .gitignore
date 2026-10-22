@@ -11,3 +11,4 @@ node_modules/
 evals/golden/frames/
 evals/golden/batches/
 evals/baseline/*/frames/
+.claude/
