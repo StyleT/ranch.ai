@@ -9,7 +9,7 @@
       - com.ranch.mosquitto
       - com.ranch.go2rtc
       - com.ranch.wyze-bridge
-      - com.ranch.seed-recorder
+      - com.ranch.recorder
       - com.ranch.ingest
       - com.ranch.detector
       - com.ranch.netprobe
@@ -36,7 +36,7 @@
   loop:
     - { name: quiet-audiomxd.sh, daemon: com.ranch.quiet-audiomxd }
     - { name: wyze-bridge.sh, daemon: com.ranch.wyze-bridge }
-    - { name: seed-recorder.sh, daemon: com.ranch.seed-recorder }
+    - { name: recorder.sh, daemon: com.ranch.recorder }
     - { name: ranch, daemon: "" }
   loop_control: { label: "{{ item.name }}" }
   register: scripts

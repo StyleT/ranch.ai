@@ -17,6 +17,8 @@
     <key>PATH</key><string>{{ ranch_bin_dir }}:{{ brew_prefix }}/bin:/usr/bin:/bin</string>
     <key>RANCH_DB</key><string>{{ ranch_var_dir }}/ranch-events.sqlite</string>
     <key>RANCH_MEDIA</key><string>{{ ranch_media_dir }}</string>
+    <key>RANCH_BUFFER</key><string>{{ ranch_media_dir }}/buffer</string>
+    <key>RANCH_CAMERAS</key><string>{{ ranch_cameras | join(' ') }}</string>
     <key>RANCH_MQTT_URL</key><string>mqtt://{{ mosquitto_listen }}:{{ mosquitto_port }}</string>
     <key>RANCH_CAMERAS_EXCLUDE</key><string>living_room_cam</string>
     <key>RANCH_TZ</key><string>{{ timezone }}</string>

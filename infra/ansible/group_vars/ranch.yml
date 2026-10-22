@@ -114,10 +114,9 @@ go2rtc_sha256: 919b78adc759d6b3883d1e1b2ac915ac0985bb903ff1897b4d228527bd64690c
 mosquitto_listen: 127.0.0.1
 mosquitto_port: 1883
 
-# Seed recorder (Phase 1 step 4): one native-resolution JPEG every seed_interval_s per camera, pulled
-# keyframe-only from the bridge's RTSP. Arithmetic (14 Oct): 1 fps at 2K is ~50 GB per camera per 48 h, so no;
-# 1 frame / 10 s at JPEG q4 is ~5 GB per camera per 48 h. Stops writing when the disk has < seed_min_free_gb.
-seed_cameras:            # all except living_room_cam (15 Oct); offline cameras are retried every minute
+# Every streamed camera (all except living_room_cam). The recorder owns one stream per camera; the sampler reads
+# the recorder's disk buffer for exactly these names (RANCH_CAMERAS), never the bridge. See docs/CAMERA-ARCHITECTURE.md.
+ranch_cameras:
   - back_yard_cam
   - wash_stall
   - donkey_cam
@@ -125,11 +124,13 @@ seed_cameras:            # all except living_room_cam (15 Oct); offline cameras 
   - front_porch_cam
   - tractor_cam
   - back_pasture_cam
-seed_interval_s: 10
-seed_jpeg_q: 4
-seed_min_free_gb: 40
-seed_start_epoch: 1792110720   # 2026-10-16T00:32Z, when recording began
-seed_hours: 16               # was 48; cut short 16 Oct 13:00 ET: seven continuous HD RTSP pulls were saturating the cameras' 2.4 GHz Wi-Fi; the sampler keeps a frame every 10 s anyway
+# Recorder (com.ranch.recorder, 22 Oct): the single owner of each camera's live stream. One keyframe-only ffmpeg
+# per camera pulls go2rtc's LOCAL RTSP (~1 frame / 2 s, ~3 % CPU/camera) into a rolling JPEG buffer at
+# <media>/buffer/<cam>/, kept recorder_buffer_min minutes (~0.2 GB total). Replaces the old seed-recorder and the
+# sampler's per-frame go2rtc grabs, which churned camera TUTK handshakes and overloaded the cameras.
+recorder_jpeg_q: 4
+recorder_buffer_min: 5
+recorder_min_free_gb: 20
 
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)
@@ -139,8 +140,10 @@ tailscale_blocked_ports:
   - 5090                                     # status dashboard
 ranch_daemons_retired:                       # unloaded and deleted by roles/services
   - com.ranch.logrotate                      # 16 Oct: custom rotation replaced by the unified log
+  - com.ranch.seed-recorder                  # 22 Oct: superseded by the always-on recorder (disk buffer)
 ranch_scripts_retired:
   - logrotate.sh
+  - seed-recorder.sh
 ranch_app_daemons:                           # restarted by roles/app when the tree changes
   - com.ranch.ingest
   - com.ranch.detector

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ranch.recorder</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec '/bin/bash' '{{ ranch_bin_dir }}/recorder.sh' 2&gt;&amp;1 | exec /usr/bin/logger -t ranch.recorder -p user.notice</string>
+  </array>
+  <key>UserName</key><string>{{ ranch_user }}</string>
+  <key>WorkingDirectory</key><string>{{ ranch_media_dir }}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>{{ brew_prefix }}/bin:/usr/bin:/bin</string>
+    <key>RECORDER_CAMERAS</key><string>{{ ranch_cameras | join(' ') }}</string>
+    <key>RECORDER_DIR</key><string>{{ ranch_media_dir }}/buffer</string>
+    <key>RECORDER_JPEG_Q</key><string>{{ recorder_jpeg_q }}</string>
+    <key>RECORDER_BUFFER_MIN</key><string>{{ recorder_buffer_min }}</string>
+    <key>RECORDER_MIN_FREE_GB</key><string>{{ recorder_min_free_gb }}</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+</dict>
+</plist>

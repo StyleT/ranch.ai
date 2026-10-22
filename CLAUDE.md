@@ -48,3 +48,9 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   for escalation/labeling, `claude-haiku-5-5` as judge. Frigate is a benchmark, never the runtime.
 - Memory budget is the constraint: one ~3 GB VLM resident, nothing else large. Measure before adding.
 - Local by default, cloud by exception; events not streams; one MCP tool surface; OTel on every stage.
+- **Cameras: one owner, consumers read disk (docs/CAMERA-ARCHITECTURE.md).** Exactly one service holds a
+  connection to each camera; `com.ranch.recorder` is the single live-stream consumer and writes a rolling disk
+  buffer at `<media>/buffer/<cam>/`. Every other process (sampler, detector, status) reads that buffer and NEVER
+  calls go2rtc or a camera. Prefer the local TUTK/LAN path; keep the bridge's WebRTC fallback. Never `DELETE`/
+  recreate a go2rtc stream from our code. This exists because go2rtc dials a camera on consumer-attach and drops
+  it at zero consumers, so dynamic/multiple consumers churn camera handshakes and overload the cameras (22 Oct).

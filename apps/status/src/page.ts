@@ -33,16 +33,15 @@ const age=s=>s==null?'never':s<60?s+' s':s<3600?Math.round(s/60)+' min':(s/3600)
 const local=iso=>iso?new Date(iso).toLocaleString('sv-SE').replace(' ','T').slice(5,19):'';
 function render(d){
   lastStatusAt=Date.now(); $('#hdr').textContent='· '+local(d.ts);
-  const seedWin=d.seed.window_start?Math.min(100,Math.round(100*(Date.now()-new Date(d.seed.window_start))/(d.seed.window_hours*3600e3))):null;
   $('#host').innerHTML=['up <b>'+age(d.uptime_s)+'</b>','load <b>'+d.load.join(' ')+'</b>','disk free <b>'+d.disk_free_gb+' / '+d.disk_total_gb+' GB</b>',
     'frames <b>'+d.totals.frames+'</b>','detections <b>'+d.totals.detections+'</b>','events <b>'+d.totals.events+'</b>',
-    'seed frames <b>'+d.seed.total+'</b>'+(seedWin!=null?' ('+seedWin+'% of '+d.seed.window_hours+' h window)':'')].map(x=>'<span>'+x+'</span>').join('');
+    'buffer <b>'+d.buffer.total+'</b> frames'].map(x=>'<span>'+x+'</span>').join('');
   $('#daemons tbody').innerHTML=d.daemons.map(x=>{const s=x.status||{};const st=Object.entries(s).filter(([k])=>!['ts','pid','cameras'].includes(k)).map(([k,v])=>k+'='+v).join(' ');
     return '<tr><td>'+esc(x.label.replace('com.ranch.',''))+'</td><td>'+(x.pid?'<span class="badge on">'+x.pid+'</span>':'<span class="badge off">down</span>')+'</td><td>'+x.last_exit+'</td><td><code>'+esc(st)+'</code></td><td><code>'+esc(x.log)+'</code></td></tr>'}).join('');
   $('#cams').innerHTML=d.cameras.map(c=>'<div class="card"><img src="/api/frame/'+encodeURIComponent(c.name)+'?t='+Math.floor(Date.now()/15000)+'" alt="" loading="lazy" onerror="this.style.opacity=.2">'
     +'<div><b>'+esc(c.name)+'</b> <span class="badge '+(c.online?'on':'off')+'">'+(c.online?'online':'offline')+'</span></div>'
     +'<div class="muted">last frame '+age(c.last_frame_age_s)+' ago · '+(c.frames_10m/10).toFixed(1)+' frames/min</div>'
-    +'<div>'+esc(d.horse_label||'horses')+(d.horse_label?'s':'')+': <b>'+(c.horse_last_min==null?'–':c.horse_last_min)+'</b> <span class="muted">· seed '+c.seed_frames+'</span></div>'
+    +'<div>'+esc(d.horse_label||'horses')+(d.horse_label?'s':'')+': <b>'+(c.horse_last_min==null?'–':c.horse_last_min)+'</b> <span class="muted">· buf '+c.buffer_frames+'</span></div>'
     +'<div class="muted">'+esc(c.model||'')+' '+esc(c.fw||'')+' '+esc(c.ip||'')+'</div></div>').join('');
   const cams=[...new Set(d.labels_by_camera_1h.map(r=>r.camera))].sort(); const labs=[...new Set(d.labels_by_camera_1h.map(r=>r.label))];
   const order=d.label_order||[]; labs.sort((a,b)=>(order.indexOf(a)+1||99)-(order.indexOf(b)+1||99)||a.localeCompare(b));

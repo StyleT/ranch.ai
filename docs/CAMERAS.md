@@ -3,6 +3,10 @@
 *Taken from the Wyze app "Firmware Update" screen on 14 Oct 2026, 19:14. Model is inferred from the firmware
 line: 4.36.x = Cam v3 (`HL_CAM3`), 4.52.x = Cam v4 (`HL_CAM4`), 4.58.x = Cam v3 Pro (`HL_CAM3P`).*
 
+> **How the system touches cameras is set by `docs/CAMERA-ARCHITECTURE.md`**: one owner (go2rtc + the recorder),
+> a rolling disk buffer, and every consumer reads disk — never a camera. Read that before changing anything that
+> connects to a camera or go2rtc.
+
 | Camera (Wyze name) | Stream name | Model | Firmware | LAN IP | 14 Oct 19:43 | What the frame shows | In scope |
 |---|---|---|---|---|---|---|---|
 | Back Yard Cam | `back_yard_cam` | Cam v4 | 4.52.17.26 | 192.168.1.204 | streaming 2560×1440 @ 20 fps | gravel parking, two cars, shed, lawn, fence line at right | person / vehicle only |

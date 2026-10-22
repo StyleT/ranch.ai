@@ -34,7 +34,7 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
 | User | `ranch`, uid 501, admin, password in Vlad's password manager, FileVault off, auto-login off |
 | Access | `ssh ranch` (Tailscale) / `ssh ranch-lan` (LAN); laptop key `~/.ssh/id_ed25519`; sshd keys-only; `sudo -n` works |
 | Installed | Xcode CLT (python 3.9.6), Homebrew 7.0.9, git, jq, ffmpeg, mosquitto (installed, not started), tailscale, fnm + Node 24, uv |
-| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.seed-recorder` (idle), `com.ranch.ingest`, `com.ranch.detector`, `com.ranch.netprobe`, `com.ranch.status`, `com.ranch.pf` (all `/Library/LaunchDaemons`; output in the unified log via `logger`) |
+| Daemons | `com.ranch.tailscaled`, `com.ranch.caffeinate`, `com.ranch.quiet-audiomxd`, `com.ranch.mosquitto`, `com.ranch.wyze-bridge`, `com.ranch.recorder`, `com.ranch.ingest`, `com.ranch.detector`, `com.ranch.netprobe`, `com.ranch.status`, `com.ranch.pf` (all `/Library/LaunchDaemons`; output in the unified log via `logger`). **Cameras: one owner + disk buffer — docs/CAMERA-ARCHITECTURE.md.** |
 | Status page | `com.ranch.status`, `apps/status`, port 5090 on all interfaces, no auth; ~1 Node process, `node:http` + SSE, reads SQLite/MQTT/launchd/logs/seed dir |
 | App paths | tree `/usr/local/ranch/app` (rsync of the laptop checkout), models `/usr/local/ranch/models`, DB `/usr/local/ranch/var/ranch-events.sqlite`, frames `/usr/local/ranch/media/frames/<cam>/<date>/` |
 | Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |

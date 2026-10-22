@@ -1,9 +1,11 @@
-// Tier 0: frame sampler. One JPEG per camera from go2rtc every RANCH_GRAB_S seconds (a one-shot HTTP request, no
-// decoder held open: see HANDOFF.md on ffmpeg memory). A frame is kept when the scene changed more than
-// RANCH_CHANGE_THRESHOLD against the last kept frame (mean abs diff of a 64x36 grey thumbnail) or when
-// RANCH_FLOOR_S has passed since the last kept one, so nothing is missed at night. Kept frames go to
-// <media>/frames/<camera>/<UTC date>/<ts>.jpg, a row in `frames`, and MQTT ranch/frames/<camera>.
-import { mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
+// Tier 0: frame sampler. Reads the newest JPEG from the recorder's rolling on-disk buffer per camera
+// (<buffer>/<camera>/<UTC ts>.jpg, written by com.ranch.recorder — the single owner of each camera stream,
+// docs/CAMERA-ARCHITECTURE.md) and NEVER contacts go2rtc or a camera. A frame is kept when the scene changed more
+// than RANCH_CHANGE_THRESHOLD against the last kept frame (mean abs diff of a 128x72 grey thumbnail) or when
+// RANCH_FLOOR_S has passed, so nothing is missed at night. Kept frames go to <media>/frames/<camera>/<UTC date>/
+// <ts>.jpg, a row in `frames`, and MQTT ranch/frames/<camera>. Because the sampler only reads disk, nothing it
+// does (polling, bursts, restarts) can ever cause a camera to reconnect.
+import { mkdirSync, writeFileSync, unlinkSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
@@ -11,31 +13,25 @@ import { config } from '@ranch/config';
 import { EventStore } from '@ranch/events';
 import { connectBus, topics, type Bus } from '@ranch/bus';
 
-const GRAB_S = Number(process.env.RANCH_GRAB_S ?? 5);
+const GRAB_S = Number(process.env.RANCH_GRAB_S ?? 5);        // how often we sample the newest buffered frame
 const FLOOR_S = Number(process.env.RANCH_FLOOR_S ?? 10);
 const THRESHOLD = Number(process.env.RANCH_CHANGE_THRESHOLD ?? 0.04);     // whole-frame mean diff: lighting, large changes
 const MOTION = Number(process.env.RANCH_MOTION_THRESHOLD ?? 0.08);        // block-max diff against the last kept frame: something moved
 const RETENTION_D = Number(process.env.RANCH_FRAMES_RETENTION_D ?? 7);
-// Stall watchdog (incident 16 Oct, docs/CAMERAS.md): a camera's TUTK session can die while go2rtc keeps the dead
-// producer and every new consumer attaches to it and hangs, forever. If a camera has produced nothing for
-// RANCH_STALL_RESET_S we delete its go2rtc stream and re-add it from the bridge's go2rtc.yaml, at most once per
-// RANCH_STALL_COOLDOWN_S. A camera that is really offline just gets a fresh (and equally idle) stream.
-// Keep-alive consumer (evidence 19 Oct, docs/CAMERAS.md): a one-shot frame.jpeg grab starts a fresh TUTK session
-// (LAN discovery + DTLS handshake) every time and fails about half the time on these 2.4 GHz cameras; with a
-// consumer holding the stream open, delivery was 275-337 frames/h instead of 65-226, and grabs answered in ~1 s
-// instead of 3-8 s. So each camera gets one persistent in-process fMP4 consumer whose body is discarded. No child
-// processes; go2rtc muxes without transcoding.
-const KEEPALIVE = (process.env.RANCH_KEEPALIVE ?? '1') !== '0';
-// Bursts (docs/MODEL-YOLO26.md part B): only a change keep opens one; it extends 1 s at a time while consecutive
-// grabs keep differing, stops at the first still grab or at BURST_MAX; one burst per camera per cooldown; and a
-// global per-minute budget of member frames across all cameras keeps the cost bounded.
+// A camera is "online" when its buffer has a frame newer than RANCH_STALE_S. Staleness means the recorder is not
+// getting frames (camera down / reconnecting); the sampler just waits — it never touches the camera.
+const STALE_S = Number(process.env.RANCH_STALE_S ?? 30);
+// Bursts (docs/MODEL-YOLO26.md part B): only a change keep opens one; it extends while consecutive buffered frames
+// keep differing, stops at the first still frame or at BURST_MAX; one burst per camera per cooldown; and a global
+// per-minute budget of member frames across all cameras keeps the cost bounded. Burst members are read from the
+// same on-disk buffer (zero camera load).
 const BURST_MAX = Number(process.env.RANCH_BURST_MAX ?? 4);
-const BURST_GAP_S = Number(process.env.RANCH_BURST_GAP_S ?? 1);
+const BURST_GAP_S = Number(process.env.RANCH_BURST_GAP_S ?? 2);           // recorder is ~1 frame / 2 s
 const BURST_CHANGE = Number(process.env.RANCH_BURST_CHANGE ?? 0.05);      // block-max diff between consecutive members: motion continues
 const BURST_COOLDOWN_S = Number(process.env.RANCH_BURST_COOLDOWN_S ?? 10);
 const BURST_BUDGET_PER_MIN = Number(process.env.RANCH_BURST_BUDGET_PER_MIN ?? 60);
 const burstStats = { bursts: 0, burst_frames: 0, throttled: 0, tokens: BURST_BUDGET_PER_MIN, lastRefill: Date.now(), lastThrottleLog: 0 };
-// motion metric of every grab since the last status message, per camera: p50/p90/max tell whether the thresholds fit
+// motion metric of every sample since the last status message, per camera: p50/p90/max tell whether the thresholds fit
 const motionSamples = new Map<string, number[]>();
 const motionSummary = () => { const out: Record<string, { n: number; p50: number; p90: number; max: number }> = {}; for (const [cam, xs] of motionSamples) { const s = [...xs].sort((a, b) => a - b); if (s.length) out[cam] = { n: s.length, p50: +s[Math.floor(s.length * 0.5)]!.toFixed(3), p90: +s[Math.floor(s.length * 0.9)]!.toFixed(3), max: +s[s.length - 1]!.toFixed(3) }; } motionSamples.clear(); return out; };
 function takeBurstToken(): boolean {
@@ -44,73 +40,52 @@ function takeBurstToken(): boolean {
   if (burstStats.tokens <= 0) { burstStats.throttled++; if (now - burstStats.lastThrottleLog > 60_000) { burstStats.lastThrottleLog = now; log('burst throttled', { budget_per_min: BURST_BUDGET_PER_MIN }); } return false; }
   burstStats.tokens--; return true;
 }
-const STALL_RESET_S = Number(process.env.RANCH_STALL_RESET_S ?? 180);
-const STALL_COOLDOWN_S = Number(process.env.RANCH_STALL_COOLDOWN_S ?? 300);
-const GO2RTC_CONFIG = process.env.RANCH_GO2RTC_CONFIG ?? '/usr/local/ranch/var/wyze-bridge/go2rtc.yaml';
-let resets = 0;
 const THUMB_W = 128; const THUMB_H = 72; const BLOCK = 8; // 16x9 blocks of 8x8 for the local motion metric
 
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), svc: 'ingest', msg, ...extra }) + '\n');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function cameraList(): Promise<string[]> {
+/** Cameras to sample: RANCH_CAMERAS if set, else the recorder's per-camera buffer subdirs. No camera/bridge call. */
+function cameraList(): string[] {
   if (config.cameras.length) return config.cameras;
-  const res = await fetch(`${config.bridgeUrl}/api/cameras`, { signal: AbortSignal.timeout(5000) });
-  const cams = (await res.json()) as { name: string }[];
-  return cams.map((c) => c.name).filter((n) => !config.camerasExclude.includes(n)).sort();
+  try {
+    return readdirSync(config.bufferDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && !config.camerasExclude.includes(d.name))
+      .map((d) => d.name).sort();
+  } catch { return []; }
 }
 
-async function grab(camera: string): Promise<Buffer> {
-  const res = await fetch(`${config.go2rtcUrl}/api/frame.jpeg?src=${encodeURIComponent(camera)}`, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error(`go2rtc ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+/** Buffer filename `2026-10-22T12-45-23Z.jpg` -> epoch ms. */
+function bufferNameMs(name: string): number {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z/.exec(name);
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : Date.now();
 }
 
-function streamSource(camera: string): string | undefined {
-  const text = readFileSync(GO2RTC_CONFIG, 'utf8');
-  // Match "  <camera>:\n    - wyze://..." in the bridge-generated YAML. Built with RegExp so the escapes survive.
-  const name = camera.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const m = new RegExp('^  ' + name + ':\\n\\s+- (\\S+)', 'm').exec(text);
-  return m?.[1];
+/** Newest JPEG in the camera's buffer (optionally strictly newer than `afterName`), with its age in seconds.
+ *  Filenames are UTC timestamps, so lexicographic order is chronological. Reads disk only. */
+function latestBufferFrame(camera: string, afterName?: string): { name: string; buf: Buffer; ageS: number } | null {
+  const dir = join(config.bufferDir, camera);
+  let names: string[];
+  try { names = readdirSync(dir).filter((n) => n.endsWith('.jpg')); } catch { return null; }
+  if (afterName) names = names.filter((n) => n > afterName);
+  if (!names.length) return null;
+  names.sort();
+  const name = names[names.length - 1]!;
+  let buf: Buffer;
+  try { buf = readFileSync(join(dir, name)); } catch { return null; }
+  if (buf.length < 1024) return null; // ffmpeg may be mid-write; skip a partial file, we'll catch it next poll
+  return { name, buf, ageS: (Date.now() - bufferNameMs(name)) / 1000 };
 }
 
-/** Drop the camera's go2rtc stream (dead producer plus leaked consumers), then recreate it from the bridge's
- *  config. The bridge's own HealthCheck (every 30 s) reconnects a camera whose stream has 0 producers, so the
- *  delete alone recovers too; it never notices a producer that exists but delivers nothing, which is our case. */
-async function resetStream(camera: string): Promise<'recreated_by_bridge' | 'recreated' | 'deleted'> {
-  const q = encodeURIComponent(camera);
-  const base = `${config.go2rtcUrl}/api/streams`;
-  await fetch(`${base}?src=${q}`, { method: 'DELETE', signal: AbortSignal.timeout(5000) });
-  // The bridge's HealthCheck usually re-adds the stream within ~10 s of the delete; give it a moment before
-  // we PUT our own copy, so the two do not race.
-  for (let i = 0; i < 6; i++) {
-    await sleep(2000);
-    const r = await fetch(`${base}?src=${q}`, { signal: AbortSignal.timeout(5000) });
-    if (r.ok) return 'recreated_by_bridge';
-  }
-  const src = streamSource(camera);
-  if (!src) return 'deleted';
-  const r = await fetch(`${base}?name=${q}&src=${encodeURIComponent(src)}`, { method: 'PUT', signal: AbortSignal.timeout(5000) });
-  return r.ok ? 'recreated' : 'deleted';
-}
-
-async function keepAlive(camera: string, stop: { v: boolean }): Promise<void> {
-  let failures = 0;
-  while (!stop.v) {
-    const t0 = Date.now();
-    try {
-      const res = await fetch(`${config.go2rtcUrl}/api/stream.mp4?src=${encodeURIComponent(camera)}`);
-      if (!res.ok || !res.body) throw new Error(`go2rtc ${res.status}`);
-      log('keepalive connected', { camera });
-      for await (const _chunk of res.body) { if (stop.v) break; }
-      failures = 0;
-    } catch (e) {
-      failures++;
-      if (failures === 1 || failures % 12 === 0) log('keepalive failed', { camera, failures, error: String(e).slice(0, 80) });
-    }
-    if (Date.now() - t0 > 60_000) failures = 0; // a long-lived session that ended is not a failure streak
-    await sleep(Math.min(60_000, 2_000 * (failures + 1)));
+/** Wait up to `timeoutMs` for a buffered frame newer than `afterName` (used by bursts to read consecutive frames). */
+async function nextBufferFrame(camera: string, afterName: string, timeoutMs: number): Promise<{ name: string; buf: Buffer } | null> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const f = latestBufferFrame(camera, afterName);
+    if (f) return f;
+    if (Date.now() >= deadline) return null;
+    await sleep(200);
   }
 }
 
@@ -136,10 +111,10 @@ export function blockMaxDiff(a: Buffer, b: Buffer): number {
 }
 
 /**
- * Extend a change keep into a burst (docs/MODEL-YOLO26.md part B): grab again every BURST_GAP_S; a grab becomes a
- * member only if it differs from the previous member by >= BURST_CHANGE; the first still grab ends the burst; at
- * most BURST_MAX frames; every member costs one token of the global per-minute budget. Returns what was added so
- * the caller can continue its own change detection from the last member. Exported for the unit test.
+ * Extend a change keep into a burst (docs/MODEL-YOLO26.md part B): read another buffered frame every BURST_GAP_S; a
+ * frame becomes a member only if it differs from the previous member by >= BURST_CHANGE; the first still frame ends
+ * the burst; at most BURST_MAX frames; every member costs one token of the global per-minute budget. `grab` returns
+ * the next buffered frame (the caller threads the buffer cursor through it). Exported for the unit test.
  */
 export async function extendBurst(o: { headId: number; camera: string; dir: string; headThumb: Buffer; grab: () => Promise<Buffer>; store: EventStore; bus: Bus; gapMs?: number }): Promise<{ members: number; frameIds: number[]; lastThumb?: Buffer; stopped: 'still' | 'max' | 'budget' | 'error' }> {
   const frameIds = [o.headId]; let prevThumb = o.headThumb; let seq = 1; let stopped: 'still' | 'max' | 'budget' | 'error' = 'max';
@@ -148,7 +123,9 @@ export async function extendBurst(o: { headId: number; camera: string; dir: stri
     if (!takeBurstToken()) { stopped = 'budget'; break; }
     let jpeg: Buffer; try { jpeg = await o.grab(); } catch { stopped = 'error'; break; }
     const img = sharp(jpeg);
-    const [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]);
+    let meta: sharp.Metadata; let thumb: Buffer;
+    try { [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]); }
+    catch { stopped = 'error'; break; }
     const change = blockMaxDiff(thumb, prevThumb);
     if (change < BURST_CHANGE) { stopped = 'still'; break; }
     if (seq === 1) o.store.markBurstHead(o.headId);
@@ -167,52 +144,52 @@ export async function extendBurst(o: { headId: number; camera: string; dir: stri
 }
 
 async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: { v: boolean }): Promise<void> {
-  let lastThumb: Buffer | undefined; let lastKept = 0; let failures = 0; let lastBurstEnd = 0;
-  let lastOk = Date.now(); let lastReset = 0; let failingSince = 0; let failClass = '';
-  const classify = (e: unknown) => { const m = String(e); return /Timeout/.test(m) ? 'timeout' : /empty/.test(m) ? 'empty' : /404/.test(m) ? '404' : /fetch failed/.test(m) ? 'unreachable' : m.slice(0, 40); };
+  let lastThumb: Buffer | undefined; let lastKept = 0; let lastBurstEnd = 0;
+  let lastName = ''; let staleSince = 0;
   while (!stop.v) {
     const t0 = Date.now();
-    try {
-      const jpeg = await grab(camera);
-      const img = sharp(jpeg);
-      const [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]);
-      const change = lastThumb ? meanAbsDiff(thumb, lastThumb) : 1;
-      const motion = lastThumb ? blockMaxDiff(thumb, lastThumb) : 0;
-      if (lastThumb) (motionSamples.get(camera) ?? motionSamples.set(camera, []).get(camera)!).push(motion);
-      const elapsed = (Date.now() - lastKept) / 1000;
-      const reason = change >= THRESHOLD || motion >= MOTION ? 'change' : elapsed >= FLOOR_S ? 'floor' : null;
-      if (reason) {
-        const now = new Date();
-        const ts = now.toISOString();
-        const dir = join(config.mediaDir, 'frames', camera, ts.slice(0, 10));
-        mkdirSync(dir, { recursive: true });
-        const path = join(dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
-        writeFileSync(path, jpeg);
-        const id = store.insertFrame({ ts, camera, path, reason, change, bytes: jpeg.length, ...(meta.width ? { width: meta.width } : {}), ...(meta.height ? { height: meta.height } : {}) });
-        await bus.publish(topics.frames(camera), { id, ts, camera, path, reason, change, width: meta.width, height: meta.height });
-        lastThumb = thumb; lastKept = now.getTime();
-        if (reason === 'change' && BURST_MAX > 1 && now.getTime() - lastBurstEnd > BURST_COOLDOWN_S * 1000) {
-          const b = await extendBurst({ headId: id, camera, dir, headThumb: thumb, grab: () => grab(camera), store, bus });
-          if (b.members > 0) { lastThumb = b.lastThumb!; lastKept = Date.now(); lastBurstEnd = Date.now(); }
-        }
-      }
-      if (failingSince) { log('grab recovered', { camera, down_s: Math.round((Date.now() - failingSince) / 1000), failures, last_error: failClass }); failingSince = 0; }
-      failures = 0; lastOk = Date.now();
-    } catch (e) {
-      failures++;
-      const cls = classify(e);
-      // Log the edges (first failure, class change) and a heartbeat every 12th, not every retry.
-      if (!failingSince) { failingSince = Date.now(); failClass = cls; log('grab failing', { camera, error: cls }); }
-      else if (cls !== failClass) { log('grab error changed', { camera, from: failClass, to: cls, failures }); failClass = cls; }
-      else if (failures % 12 === 0) log('grab still failing', { camera, failures, error: cls, down_s: Math.round((Date.now() - failingSince) / 1000) });
-      const now = Date.now();
-      if (now - lastOk > STALL_RESET_S * 1000 && now - lastReset > STALL_COOLDOWN_S * 1000) {
-        lastReset = now; resets++;
-        try { const result = await resetStream(camera); log('stream reset', { camera, failures, stalled_s: Math.round((now - lastOk) / 1000), result }); }
-        catch (err) { log('stream reset failed', { camera, error: String(err) }); }
-      }
-      await sleep(Math.min(60_000, 5_000 * failures));
+    const f = latestBufferFrame(camera, lastName);
+    if (!f) {
+      // no frame newer than the last we processed; report the camera down if the whole buffer is stale
+      const cur = latestBufferFrame(camera);
+      const ageS = cur ? cur.ageS : Infinity;
+      if (ageS > STALE_S && !staleSince) { staleSince = Date.now(); log('camera stale', { camera, newest_age_s: Number.isFinite(ageS) ? Math.round(ageS) : null }); }
+      await sleep(1000);
       continue;
+    }
+    if (staleSince) { log('camera recovered', { camera, down_s: Math.round((Date.now() - staleSince) / 1000) }); staleSince = 0; }
+    lastName = f.name;
+    let meta: sharp.Metadata; let thumb: Buffer;
+    try {
+      const img = sharp(f.buf);
+      [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]);
+    } catch { await sleep(500); continue; } // partial/corrupt jpeg mid-write; try the next
+    const change = lastThumb ? meanAbsDiff(thumb, lastThumb) : 1;
+    const motion = lastThumb ? blockMaxDiff(thumb, lastThumb) : 0;
+    if (lastThumb) (motionSamples.get(camera) ?? motionSamples.set(camera, []).get(camera)!).push(motion);
+    const elapsed = (Date.now() - lastKept) / 1000;
+    const reason = change >= THRESHOLD || motion >= MOTION ? 'change' : elapsed >= FLOOR_S ? 'floor' : null;
+    if (reason) {
+      const now = new Date();
+      const ts = now.toISOString();
+      const dir = join(config.mediaDir, 'frames', camera, ts.slice(0, 10));
+      mkdirSync(dir, { recursive: true });
+      const path = join(dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
+      writeFileSync(path, f.buf);
+      const id = store.insertFrame({ ts, camera, path, reason, change, bytes: f.buf.length, ...(meta.width ? { width: meta.width } : {}), ...(meta.height ? { height: meta.height } : {}) });
+      await bus.publish(topics.frames(camera), { id, ts, camera, path, reason, change, width: meta.width, height: meta.height });
+      lastThumb = thumb; lastKept = now.getTime();
+      if (reason === 'change' && BURST_MAX > 1 && now.getTime() - lastBurstEnd > BURST_COOLDOWN_S * 1000) {
+        const cursor = { name: f.name };
+        const b = await extendBurst({ headId: id, camera, dir, headThumb: thumb, store, bus, grab: async () => {
+          const nf = await nextBufferFrame(camera, cursor.name, BURST_GAP_S * 1000 + 2500);
+          if (!nf) throw new Error('no buffered frame');
+          cursor.name = nf.name; return nf.buf;
+        } });
+        if (b.members > 0) { lastThumb = b.lastThumb!; lastKept = Date.now(); lastBurstEnd = Date.now(); }
+      }
+    } else {
+      lastThumb = thumb;
     }
     await sleep(Math.max(0, GRAB_S * 1000 - (Date.now() - t0)));
   }
@@ -238,21 +215,20 @@ async function prune(store: EventStore): Promise<void> {
 async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const bus = await connectBus('ingest');
-  const cameras = await cameraList();
-  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, keepalive_exclude: config.keepaliveExclude, motion_threshold: MOTION, burst: { max: BURST_MAX, gap_s: BURST_GAP_S, change: BURST_CHANGE, cooldown_s: BURST_COOLDOWN_S, budget_per_min: BURST_BUDGET_PER_MIN }, media: config.mediaDir, db: config.dbPath });
+  const cameras = cameraList();
+  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, motion_threshold: MOTION, retention_d: RETENTION_D, stale_s: STALE_S, buffer: config.bufferDir, burst: { max: BURST_MAX, gap_s: BURST_GAP_S, change: BURST_CHANGE, cooldown_s: BURST_COOLDOWN_S, budget_per_min: BURST_BUDGET_PER_MIN }, media: config.mediaDir, db: config.dbPath });
   const stop = { v: false };
   const status = setInterval(() => {
     const m = process.memoryUsage();
-    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), resets, bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN, motion_threshold: MOTION, motion: motionSummary() }, { retain: true });
+    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN, motion_threshold: MOTION, motion: motionSummary() }, { retain: true });
   }, 60_000);
   const pruner = setInterval(() => void prune(store), 3600_000);
   await prune(store);
   const shutdown = async () => { stop.v = true; clearInterval(status); clearInterval(pruner); await bus.close(); store.close(); process.exit(0); };
   process.on('SIGTERM', () => void shutdown()); process.on('SIGINT', () => void shutdown());
-  await Promise.all([
-    ...cameras.map((c) => sampleCamera(c, store, bus, stop)),
-    ...(KEEPALIVE ? cameras.filter((c) => !config.keepaliveExclude.includes(c)).map((c) => keepAlive(c, stop)) : []),
-  ]);
+  // A per-camera loop never throws out (read/decode errors are caught inside), so one bad camera can't exit the
+  // process; guard anyway so an unexpected error is logged and that camera restarts instead of killing the daemon.
+  await Promise.all(cameras.map((c) => sampleCamera(c, store, bus, stop).catch((e) => log('camera loop crashed', { camera: c, error: String(e) }))));
 }
 
 // Run the daemon only when this file is the entry point (the burst test imports extendBurst).
