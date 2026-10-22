@@ -83,3 +83,16 @@ the VLM second opinion. Each is its own leaderboard row later.
 1. `packages/taxonomy` with tests (every consumer's names come from it; the reverse mapping is consistent).
 2. Detector filter + `raw_label` migration; bench `--taxonomy`; ingest/status/schema consumers.
 3. Score `filter-v1`, add the leaderboard row, provision, verify the dashboard counts for an hour.
+
+## As built, 21 Oct
+
+`packages/taxonomy` (classes, subclasses, attributes, scene fields, ignored, `MODEL_MAPPINGS.coco` with thresholds,
+`SCORING_MAP`, `LABEL_ORDER`; tests guard consistency). Consumers: `apps/detector` (filter, `raw_label` kept,
+schema v3), `apps/detector/src/bench.ts --taxonomy coco`, `apps/detector/src/score.ts` (per-label thresholds),
+`apps/status` (order), `evals/label/schema.ts` (enums and reverse mapping). `RANCH_DETECTOR_FAMILY` selects the
+mapping; the runner floor is 0.05 (`RANCH_DETECTOR_THRESHOLD`).
+
+Gate result (`evals/LEADERBOARD.md`, filter-v1): shipped on the relative gate (no class regressed, FPPF(all)
+0.81 → 0.27, horse recall 0.30 → 0.55). The absolute 0.1 budget is not reachable with thresholds because the
+remaining false positives are confidence-insensitive `person` boxes; options are the yolo11s swap (0.17) or
+suppressing static objects per camera, both separate rows.

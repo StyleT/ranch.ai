@@ -1,2 +1,2 @@
 { "name": "@ranch/evals", "version": "0.0.1", "private": true, "type": "module",
-  "dependencies": { "@ranch/config": "*", "@ranch/events": "*", "@anthropic-ai/sdk": "^0.80.0", "zod": "^4.1.0", "sharp": "^0.34.3" } }
+  "dependencies": { "@ranch/config": "*", "@ranch/events": "*", "@ranch/taxonomy": "*", "@anthropic-ai/sdk": "^0.80.0", "zod": "^4.1.0", "sharp": "^0.34.3" } }

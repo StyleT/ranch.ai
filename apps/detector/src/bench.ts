@@ -11,13 +11,14 @@ import { execSync } from 'node:child_process';
 import { hostname } from 'node:os';
 import { Runner } from './runner.ts';
 import { scoreSet, type Scored, type Pred, type Box } from './score.ts';
+import { mapDetection, thresholdFor, interestLabels, MODEL_MAPPINGS } from '@ranch/taxonomy';
 
 const { values: a } = parseArgs({ options: {
   frames: { type: 'string' }, labels: { type: 'string' }, predictions: { type: 'string', multiple: true }, model: { type: 'string', multiple: true },
   compute: { type: 'string', default: 'ane' }, threshold: { type: 'string', default: '0.25' }, iou: { type: 'string', default: '0.5' },
   bin: { type: 'string', default: '/usr/local/ranch/bin/detector' }, out: { type: 'string' }, tag: { type: 'string', default: 'run' }, warmup: { type: 'string', default: '5' },
   'min-label-conf': { type: 'string' },      // drop gold boxes whose labeler confidence is below this (uses the structured label when present)
-  'merge-pred-classes': { type: 'string' },  // e.g. "cow=horse,sheep=horse": rename prediction classes before scoring
+  taxonomy: { type: 'string' },              // model family (e.g. coco): apply the production mapping and per-label thresholds (docs/TAXONOMY.md)
 } });
 if (!a.frames) { console.error('--frames is required'); process.exit(2); }
 const readJsonl = <T,>(p: string): T[] => readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as T);
@@ -28,7 +29,9 @@ interface FrameRow { path: string; camera: string; period: string; frame_id?: nu
 const frames = readJsonl<FrameRow>(a.frames);
 const labelsFile = a.labels;
 const minLabelConf = a['min-label-conf'] ? Number(a['min-label-conf']) : 0;
-const mergeMap = new Map((a['merge-pred-classes'] ?? '').split(',').filter(Boolean).map((kv) => kv.split('=') as [string, string]));
+const threshold = Number(a.threshold), iouMin = Number(a.iou);
+const family = a.taxonomy;
+if (family && !MODEL_MAPPINGS[family]) { console.error(`unknown taxonomy family ${family}`); process.exit(2); }
 interface LabelRow { path: string; boxes: Box[]; label?: { animals?: { box: Box; confidence: number }[]; people?: { box: Box; confidence: number }[]; vehicles?: { box: Box; confidence: number }[] } }
 const goldBoxes = (r: LabelRow): Box[] => {
   if (!minLabelConf || !r.label) return r.boxes;
@@ -37,9 +40,12 @@ const goldBoxes = (r: LabelRow): Box[] => {
   return r.boxes.filter((b) => (conf.get(`${b.x},${b.y},${b.w},${b.h}`) ?? 1) >= minLabelConf);
 };
 const gold = labelsFile ? new Map(readJsonl<LabelRow>(labelsFile).map((r) => [r.path, goldBoxes(r)])) : undefined;
-const mergePred = (ps: Pred[]): Pred[] => mergeMap.size ? ps.map((p) => ({ ...p, label: mergeMap.get(p.label) ?? p.label })) : ps;
+// With --taxonomy, predictions are mapped like production does (unmapped classes dropped, labels renamed) but kept
+// at every confidence so AP still sweeps; the per-label thresholds then act as the operating point.
+const mergePred = (ps: Pred[]): Pred[] => family ? ps.flatMap((p) => { const m = mapDetection(family, p.label, p.confidence, false); return m ? [{ ...p, label: m.label }] : []; }) : ps;
+const scoreThreshold: number | ((l: string) => number) = family ? (l: string) => Math.max(threshold, thresholdFor(family, l)) : threshold;
+const thresholdsByLabel = family ? Object.fromEntries(interestLabels(family).map((l) => [l, Math.max(threshold, thresholdFor(family, l))])) : undefined;
 const scoredFrames = gold ? frames.filter((f) => gold.has(f.path)) : frames; // score only labeled frames
-const threshold = Number(a.threshold), iouMin = Number(a.iou);
 const pct = (xs: number[], p: number) => { const s = [...xs].sort((u, v) => u - v); return s[Math.min(s.length - 1, Math.floor(p * s.length))] ?? 0; };
 
 const results: Record<string, unknown>[] = [];
@@ -61,10 +67,10 @@ for (const model of a.model ?? []) {
 }
 
 for (const run of runs) {
-  const row: Record<string, unknown> = { model: run.name, tag: a.tag, ...run.provenance, latency: run.latency ?? null };
+  const row: Record<string, unknown> = { model: run.name, tag: a.tag, taxonomy: family ?? null, ...run.provenance, latency: run.latency ?? null };
   if (gold) {
     const scored: Scored[] = scoredFrames.map((f) => ({ frame: f, gold: gold.get(f.path) ?? [], pred: run.preds.get(f.path) ?? [] }));
-    row.score = scoreSet(scored, { threshold, iou: iouMin });
+    row.score = scoreSet(scored, { threshold: scoreThreshold, iou: iouMin, ...(thresholdsByLabel ? { thresholdsByLabel } : {}) });
     const all = (row.score as { slices: Record<string, { classes: Record<string, { recall: number; precision: number; ap: number; gold: number }>; fppf_all: number; horse_count: { exact: number }; horse_recall_ci: { lo: number; hi: number } | null }> }).slices.all!;
     const op = (row.score as { operating_points: { r_at_fppf01: { recall: number; threshold: number | null }; r_at_p90: { recall: number } } }).operating_points;
     const h = all.classes.horse;
@@ -83,7 +89,7 @@ if (a.out) {
     frames: { file: a.frames, sha256: sha(a.frames), dataset: existsSync(datasetJson) ? (JSON.parse(readFileSync(datasetJson, 'utf8')) as { id: string }).id : null, n: frames.length, scored: scoredFrames.length },
     labels: labelsFile ? { file: labelsFile, sha256: sha(labelsFile), dataset: (readJsonl<{ dataset?: string }>(labelsFile)[0]?.dataset) ?? null } : null,
     class_mapping: { donkey: 'horse', delivery_vehicle: 'truck', tractor: 'truck', atv: 'truck', trailer: 'truck', people: 'person' },
-    min_label_conf: minLabelConf || null, merge_pred_classes: Object.fromEntries(mergeMap),
+    min_label_conf: minLabelConf || null, taxonomy: family ? { family, thresholds: thresholdsByLabel, mapping: MODEL_MAPPINGS[family]!.map } : null,
     threshold, iou: iouMin, results,
   }, null, 2) + '\n');
   console.log('wrote', a.out);

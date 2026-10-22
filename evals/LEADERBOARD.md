@@ -5,7 +5,7 @@ Protocol: `docs/EVALUATION.md`. One row per result file in `evals/results/`. CI 
 
 | date | tag | model | frames | labels | R@FPPF≤0.1 | horse recall @0.25 (95 % CI) | AP horse | FPPF all @0.25 | count-exact | p50 ms | RSS MB | result |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-10-20 | zero-shot | yolo11n | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1 | 0.00 @– | R 0.26 [0.09–0.50] | 0.26 | 0.81 | 0.85 | 8.0 | 51 | **prod** `2026-10-20-zero-shot.json` |
+| 2026-10-20 | zero-shot | yolo11n | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1 | 0.00 @– | R 0.26 [0.09–0.50] | 0.26 | 0.81 | 0.85 | 8.0 | 51 | `2026-10-20-zero-shot.json` (prod until 21 Oct) |
 | 2026-10-20 | zero-shot | yolo11s | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1 | 0.00 @– | R 0.35 [0.17–0.56] | 0.35 | 0.73 | 0.87 | 18.5 | 51 | `2026-10-20-zero-shot.json` |
 | 2026-10-20 | zero-shot | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1 | 0.17 @0.8 | R 0.35 [0.15–0.57] | 0.42 | 1.93 | 0.84 | 31.0 | 47 | `2026-10-20-zero-shot.json` |
 | 2026-10-20 | zero-shot | rfdetr-nano-float32 | frames-ranch-v1 (100 labeled) | labels-ranch-claude-v1 | 0.17 @0.8 | R 0.35 [0.15–0.57] | 0.41 | 2.04 | 0.85 | 25.9 | 206 | `2026-10-20-zero-shot.json` |
@@ -25,6 +25,9 @@ Protocol: `docs/EVALUATION.md`. One row per result file in `evals/results/`. CI 
 | 2026-10-20 | revised-labelconf05-quadruped | yolo11s | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.00 @– | R 0.60 [0.38–0.83] | 0.59 | 0.69 | 0.88 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
 | 2026-10-20 | revised-labelconf05-quadruped | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.35 @0.65 | R 0.60 [0.38–0.82] | 0.65 | 1.89 | 0.85 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
 | 2026-10-20 | revised-labelconf05-quadruped | rfdetr-nano-float32 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.30 @0.8 | R 0.60 [0.38–0.82] | 0.63 | 2.00 | 0.86 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
+| 2026-10-21 | **filter-v1** (taxonomy coco mapping + per-label thresholds) | yolo11n | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.00 @– | R 0.55 [0.32–0.80] | 0.55 | 0.27 | 0.89 | | | **prod** `2026-10-21-filter-v1.json` |
+| 2026-10-21 | **filter-v1** (taxonomy coco mapping + per-label thresholds) | yolo11s | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.40 @0.85 | R 0.60 [0.38–0.83] | 0.59 | 0.17 | 0.88 | | | `2026-10-21-filter-v1.json` |
+| 2026-10-21 | **filter-v1** (taxonomy coco mapping + per-label thresholds) | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.45 @0.5 | R 0.60 [0.38–0.82] | 0.65 | 0.18 | 0.85 | | | `2026-10-21-filter-v1.json` |
 
 Notes 2026-10-20: 23 horse-class gold boxes (14 horses + 9 donkeys mapped to horse) in the 100 labeled frames; intervals are wide, as EVALUATION.md §4.2 warns. 12 of the 23 are missed by every model at 0.25: all seven large daytime donkeys (356–489 px wide), three animals under 120 px, one frame-filling night horse. IoU 0.3 changes nothing: misses are misses, not misplaced boxes. No model meets the FPPF ≤ 0.1 budget at any threshold except RF-DETR at 0.8 (recall 0.17).
 
@@ -42,3 +45,12 @@ static patch); everything else accepted → `labels-ranch-claude-revised-vlad-v1
 Horse numbers are unchanged by the revision (no horse box was touched). Per class on the revised set, yolo11s at
 0.25: car recall 1.00 (28/28, 4 FP), person recall 1.00 with precision 0.42 (7 FP: night horses called person),
 horse 8/20, truck 0/14 (the tractors), the 10 "other" boxes never matched.
+
+filter-v1, 21 Oct: the production detector now applies the taxonomy mapping (docs/TAXONOMY.md): unmapped COCO
+classes dropped, cow/sheep counted as horse at 0.50, person at 0.60, per-label thresholds elsewhere. Against the
+reference labels, yolo11n goes from FPPF(all) 0.81 / horse recall 0.30 to 0.27 / 0.55 with no regression on any
+class, so it ships (relative gate). The absolute 0.1 false-positive budget is still not met by any zero-shot
+model: the remaining false boxes are `person` on yolo11n (20 in 100 frames) and they are confidence-insensitive
+(14 survive at 0.98), so no threshold reaches them. They sit on a static object in the back yard by day and on
+horses at night. yolo11s makes a quarter as many (7, 6 at 0.98) with higher horse recall at +10 ms per frame;
+that swap is the next row to decide, with the fine-tune question.

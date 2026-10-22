@@ -16,10 +16,10 @@ export interface NewFrame {
 }
 export interface Detection {
   id: number; frame_id: number; model: string; label: string; confidence: number;
-  x: number; y: number; w: number; h: number; latency_ms: number | null;
+  x: number; y: number; w: number; h: number; latency_ms: number | null; raw_label: string | null;
 }
 export interface NewDetection {
-  model: string; label: string; confidence: number; x: number; y: number; w: number; h: number; latency_ms?: number;
+  model: string; label: string; confidence: number; x: number; y: number; w: number; h: number; latency_ms?: number; raw_label?: string;
 }
 export type Verdict = 'true_positive' | 'false_positive';
 export interface RanchEvent {
@@ -178,11 +178,11 @@ export class EventStore {
   // ---- detections
   insertDetections(frameId: number, ds: NewDetection[]): void {
     const stmt = this.db.prepare(
-      'INSERT INTO detections (frame_id, model, label, confidence, x, y, w, h, latency_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO detections (frame_id, model, label, confidence, x, y, w, h, latency_ms, raw_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     );
     this.db.exec('BEGIN');
     try {
-      for (const d of ds) stmt.run(frameId, d.model, d.label, d.confidence, d.x, d.y, d.w, d.h, d.latency_ms ?? null);
+      for (const d of ds) stmt.run(frameId, d.model, d.label, d.confidence, d.x, d.y, d.w, d.h, d.latency_ms ?? null, d.raw_label ?? null);
       this.db.exec('COMMIT');
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }

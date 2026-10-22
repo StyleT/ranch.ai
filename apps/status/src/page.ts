@@ -45,7 +45,7 @@ function render(d){
     +'<div>horses: <b>'+(c.horse_last_min==null?'–':c.horse_last_min)+'</b> <span class="muted">· seed '+c.seed_frames+'</span></div>'
     +'<div class="muted">'+esc(c.model||'')+' '+esc(c.fw||'')+' '+esc(c.ip||'')+'</div></div>').join('');
   const cams=[...new Set(d.labels_by_camera_1h.map(r=>r.camera))].sort(); const labs=[...new Set(d.labels_by_camera_1h.map(r=>r.label))];
-  const order=['horse','person','dog','cow','sheep','car','truck']; labs.sort((a,b)=>(order.indexOf(a)+1||99)-(order.indexOf(b)+1||99)||a.localeCompare(b));
+  const order=d.label_order||[]; labs.sort((a,b)=>(order.indexOf(a)+1||99)-(order.indexOf(b)+1||99)||a.localeCompare(b));
   const cell=new Map(d.labels_by_camera_1h.map(r=>[r.camera+'|'+r.label,r]));
   $('#percam thead').innerHTML='<tr><th>label</th>'+cams.map(c=>'<th><a href="/frames?camera='+encodeURIComponent(c)+'&since=1h" style="color:#9ecbff">'+esc(c.replace('_cam',''))+'</a></th>').join('')+'</tr>';
   $('#percam tbody').innerHTML=labs.map(l=>'<tr><td'+(l==='horse'?' style="color:var(--ok);font-weight:600"':'')+'>'+esc(l)+'</td>'+cams.map(c=>{const r=cell.get(c+'|'+l);return '<td>'+(r?'<a href="/frames?camera='+encodeURIComponent(c)+'&label='+encodeURIComponent(l)+'&since=1h" style="color:inherit">'+r.n+'</a> <span class="muted">'+r.conf+'</span>':'<span class="muted">·</span>')+'</td>'}).join('')+'</tr>').join('')||'<tr><td class="muted">none</td></tr>';

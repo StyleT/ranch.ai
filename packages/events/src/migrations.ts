@@ -81,4 +81,12 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       CREATE INDEX frames_camera_kept_ts ON frames (camera, kept, ts);
     `,
   },
+  {
+    version: 3,
+    name: 'detections.raw_label',
+    sql: `
+      -- The model's own class before the taxonomy mapping (docs/TAXONOMY.md), e.g. "cow" for a label "horse".
+      ALTER TABLE detections ADD COLUMN raw_label TEXT;
+    `,
+  },
 ];

@@ -148,7 +148,9 @@ ranch_app_daemons:                           # restarted by roles/app when the t
 # yolo11n is the placeholder until the Post 1 benchmark picks the winner.
 detector_model: yolo11n.mlpackage
 detector_compute: ane            # all | ane | gpu | cpu
-detector_threshold: "0.25"
+# The runner's floor; what is kept, under which label and at which threshold is packages/taxonomy (docs/TAXONOMY.md).
+detector_threshold: "0.05"
+detector_family: coco            # key into MODEL_MAPPINGS; a fine-tuned model gets its own
 
 # Status page (com.ranch.status, apps/status, docs/STATUS-DASHBOARD.md). No auth; LAN + tailnet only.
 status_port: 5090

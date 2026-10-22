@@ -14,8 +14,8 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
 2. ~~Phase 1 steps 6–7~~ done 20 Oct: `labels-ranch-claude-v1` (100 frames, $1.44) and the first leaderboard rows
    (`evals/LEADERBOARD.md`, `evals/results/`). Horse recall 0.26–0.35 at 0.25, wide CIs; 12 of 23 horse-class
    boxes missed by every model, seven of them large daytime donkeys. Reference labels: `labels-ranch-claude-revised-vlad-v1` (Vlad removed Claude's five cat boxes, rest accepted). Datasets on the Hub (`vladlenfedosov/ranch-frames`).
-   Next: Post 1 from these numbers; a class filter for tier 1 (today the detector's "bench"/"bottle" boxes are
-   pure noise); then Phase 1b human labels on the same 100 frames; and the fine-tune question (donkey class). Then step 7: the recall benchmark. The detector
+   21 Oct: class filter shipped (`docs/TAXONOMY.md`, `packages/taxonomy`): FPPF(all) 0.81 → 0.27, horse recall 0.30 →
+   0.55 on the reference labels. Next: Post 1; the yolo11s swap row; Phase 1b human labels; the fine-tune question. Then step 7: the recall benchmark. The detector
    evidence makes this urgent: yolo11n emits thousands of confident night false positives (bench, bottle,
    clock, airplane) per day; nothing downstream should trust tier 1 until the benchmark and a class filter exist.
 3. Post 1 draft from the measured numbers, plus the dropout story as the "what went wrong" section.

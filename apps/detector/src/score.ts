@@ -7,7 +7,10 @@ export interface Pred extends Box { confidence: number }
 export interface FrameRef { path: string; camera: string; period: string }
 export interface Scored { frame: FrameRef; gold: Box[]; pred: Pred[] }
 
-export const INTEREST = ['horse', 'person', 'dog', 'cow', 'sheep', 'car', 'truck'] as const;
+import { interestLabels } from '@ranch/taxonomy';
+export const INTEREST: readonly string[] = interestLabels('coco');
+export type ThresholdFn = (label: string) => number;
+const thr = (t: number | ThresholdFn, label: string) => (typeof t === 'function' ? t(label) : t);
 
 export function iou(a: Box, b: Box): number {
   const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y), x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
@@ -26,14 +29,14 @@ export function matchFrame(gold: Box[], pred: Pred[], label: string, iouMin: num
 
 export interface ClassMetrics { label: string; gold: number; tp: number; fp: number; fn: number; precision: number; recall: number; f1: number; ap: number }
 
-export function classMetrics(frames: Scored[], label: string, threshold: number, iouMin: number): ClassMetrics {
+export function classMetrics(frames: Scored[], label: string, threshold: number | ThresholdFn, iouMin: number): ClassMetrics {
   let tp = 0, fp = 0, fn = 0, gold = 0;
   const sweep: { conf: number; hit: boolean }[] = [];
   for (const f of frames) {
     const all = matchFrame(f.gold, f.pred, label, iouMin); // AP uses every prediction (threshold 0.05 files)
     gold += f.gold.filter((b) => b.label === label).length;
     all.preds.forEach((p, i) => sweep.push({ conf: p.confidence, hit: all.hits[i]! }));
-    const at = matchFrame(f.gold, f.pred.filter((p) => p.confidence >= threshold), label, iouMin);
+    const at = matchFrame(f.gold, f.pred.filter((p) => p.confidence >= thr(threshold, label)), label, iouMin);
     tp += at.hits.filter(Boolean).length; fp += at.hits.filter((h) => !h).length; fn += at.fn;
   }
   // AP: precision envelope over recall from the confidence sweep (COCO-style all-point interpolation)
@@ -46,18 +49,18 @@ export function classMetrics(frames: Scored[], label: string, threshold: number,
   return { label, gold, tp, fp, fn, precision, recall, f1: precision + recall ? 2 * precision * recall / (precision + recall) : 0, ap: gold ? ap : 0 };
 }
 
-export function fppf(frames: Scored[], threshold: number, iouMin: number, labels?: readonly string[]): number {
+export function fppf(frames: Scored[], threshold: number | ThresholdFn, iouMin: number, labels?: readonly string[]): number {
   if (!frames.length) return 0;
   let fp = 0;
   const labs = labels ?? [...new Set(frames.flatMap((f) => f.pred.map((p) => p.label)))];
-  for (const f of frames) for (const l of labs) { const m = matchFrame(f.gold, f.pred.filter((p) => p.confidence >= threshold), l, iouMin); fp += m.hits.filter((h) => !h).length; }
+  for (const f of frames) for (const l of labs) { const m = matchFrame(f.gold, f.pred.filter((p) => p.confidence >= thr(threshold, l)), l, iouMin); fp += m.hits.filter((h) => !h).length; }
   return fp / frames.length;
 }
 
-export function countAccuracy(frames: Scored[], threshold: number, label = 'horse'): { mae: number; exact: number } {
+export function countAccuracy(frames: Scored[], threshold: number | ThresholdFn, label = 'horse'): { mae: number; exact: number } {
   if (!frames.length) return { mae: 0, exact: 0 };
   let err = 0, exact = 0;
-  for (const f of frames) { const g = f.gold.filter((b) => b.label === label).length; const p = f.pred.filter((b) => b.label === label && b.confidence >= threshold).length; err += Math.abs(g - p); if (g === p) exact++; }
+  for (const f of frames) { const g = f.gold.filter((b) => b.label === label).length; const p = f.pred.filter((b) => b.label === label && b.confidence >= thr(threshold, label)).length; err += Math.abs(g - p); if (g === p) exact++; }
   return { mae: err / frames.length, exact: exact / frames.length };
 }
 
@@ -89,7 +92,7 @@ export function slices(frames: Scored[]): Record<string, Scored[]> {
   return out;
 }
 
-export function scoreSet(frames: Scored[], opts: { threshold: number; iou: number; labels?: string[] }): Record<string, unknown> {
+export function scoreSet(frames: Scored[], opts: { threshold: number | ThresholdFn; iou: number; labels?: string[]; thresholdsByLabel?: Record<string, number> }): Record<string, unknown> {
   const labels = opts.labels ?? [...new Set(frames.flatMap((f) => f.gold.map((b) => b.label)))].sort();
   const bySlice: Record<string, unknown> = {};
   for (const [name, fs] of Object.entries(slices(frames))) {
@@ -103,5 +106,5 @@ export function scoreSet(frames: Scored[], opts: { threshold: number; iou: numbe
       horse_ap: horse.ap,
     };
   }
-  return { threshold: opts.threshold, iou: opts.iou, labels, operating_points: operatingPoints(frames, opts.iou), slices: bySlice };
+  return { threshold: typeof opts.threshold === 'function' ? 'per-label' : opts.threshold, thresholds_by_label: opts.thresholdsByLabel ?? null, iou: opts.iou, labels, operating_points: operatingPoints(frames, opts.iou), slices: bySlice };
 }

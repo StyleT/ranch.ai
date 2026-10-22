@@ -32,3 +32,9 @@ blanket ("bed"), a frame-filling horse ("bottle").
 Same two variants against `labels-ranch-claude-revised-vlad-v1` (Claude's labels after Vlad removed the five cat
 boxes). Horse metrics identical to the `labelconf05` runs; this is now the reference. Per-class table in
 LEADERBOARD.md notes: the models are solid on cars, over-eager on people at night, blind to tractors as trucks.
+
+## 2026-10-21-filter-v1.json
+
+The production configuration (`--taxonomy coco`): mapping and per-label thresholds from `packages/taxonomy`,
+reference labels at conf ≥ 0.5. Per class for yolo11n: car 28/28 (2 FP), horse 11/20 (2 FP), dog 1/1 (1 FP),
+person 4/5 but 20 FP, truck 0/14 (tractors), other 0/10. FPPF(all) 0.27, of which 0.20 is `person`.
