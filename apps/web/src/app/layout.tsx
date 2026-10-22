@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from './providers';
 import { AppShell } from '@/components/layout/AppShell';
+import { env } from '@/bff/env';
 
 export const metadata: Metadata = { title: { default: 'ranch-ai', template: '%s · ranch-ai' }, description: 'Home AI for a horse ranch', manifest: '/manifest.webmanifest' };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#0f1115' };
@@ -15,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="bg-bg text-fg">
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2">Skip to content</a>
-        <Providers>
+        <Providers tz={env.tz}>
           <AppShell>{children}</AppShell>
         </Providers>
       </body>
