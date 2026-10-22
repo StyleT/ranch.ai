@@ -19,7 +19,7 @@ export const page = `<!doctype html>
   #ticker div{padding:1px 0;border-bottom:1px solid var(--line)} .t{color:var(--dim)} .topic{color:#9ecbff}
   @media (max-width:600px){body{padding:10px} td,th{padding:3px 4px}}
 </style></head><body>
-<h1>ranch-ai <span id="hdr" class="muted"></span></h1>
+<h1>ranch-ai <span id="hdr" class="muted"></span> <a href="/frames" style="font-weight:400;font-size:13px;color:#9ecbff">frames</a> <a href="/taxonomy" style="font-weight:400;font-size:13px;color:#9ecbff">taxonomy</a></h1><div id="taxbanner"></div>
 <div id="host" class="kv muted"></div>
 <h2>Daemons</h2><div class="card" style="padding:0"><table id="daemons"><thead><tr><th>daemon</th><th>pid</th><th>exit</th><th>mqtt status</th><th>last log line</th></tr></thead><tbody></tbody></table></div>
 <h2>Cameras</h2><div id="cams" class="grid"></div>
@@ -42,13 +42,14 @@ function render(d){
   $('#cams').innerHTML=d.cameras.map(c=>'<div class="card"><img src="/api/frame/'+encodeURIComponent(c.name)+'?t='+Math.floor(Date.now()/15000)+'" alt="" loading="lazy" onerror="this.style.opacity=.2">'
     +'<div><b>'+esc(c.name)+'</b> <span class="badge '+(c.online?'on':'off')+'">'+(c.online?'online':'offline')+'</span></div>'
     +'<div class="muted">last frame '+age(c.last_frame_age_s)+' ago · '+(c.frames_10m/10).toFixed(1)+' frames/min</div>'
-    +'<div>horses: <b>'+(c.horse_last_min==null?'–':c.horse_last_min)+'</b> <span class="muted">· seed '+c.seed_frames+'</span></div>'
+    +'<div>'+esc(d.horse_label||'horses')+(d.horse_label?'s':'')+': <b>'+(c.horse_last_min==null?'–':c.horse_last_min)+'</b> <span class="muted">· seed '+c.seed_frames+'</span></div>'
     +'<div class="muted">'+esc(c.model||'')+' '+esc(c.fw||'')+' '+esc(c.ip||'')+'</div></div>').join('');
   const cams=[...new Set(d.labels_by_camera_1h.map(r=>r.camera))].sort(); const labs=[...new Set(d.labels_by_camera_1h.map(r=>r.label))];
   const order=d.label_order||[]; labs.sort((a,b)=>(order.indexOf(a)+1||99)-(order.indexOf(b)+1||99)||a.localeCompare(b));
   const cell=new Map(d.labels_by_camera_1h.map(r=>[r.camera+'|'+r.label,r]));
+  $('#taxbanner').innerHTML=d.taxonomy_matches_repo===false?'<div class="card" style="background:#3d2f12;color:var(--warn);padding:6px 10px;margin:6px 0">taxonomy v'+d.taxonomy_version+' is not in git (<a href="/taxonomy" style="color:inherit">taxonomy</a>; <code>make taxonomy-pull</code>)</div>':'';
   $('#percam thead').innerHTML='<tr><th>label</th>'+cams.map(c=>'<th><a href="/frames?camera='+encodeURIComponent(c)+'&since=1h" style="color:#9ecbff">'+esc(c.replace('_cam',''))+'</a></th>').join('')+'</tr>';
-  $('#percam tbody').innerHTML=labs.map(l=>'<tr><td'+(l==='horse'?' style="color:var(--ok);font-weight:600"':'')+'>'+esc(l)+'</td>'+cams.map(c=>{const r=cell.get(c+'|'+l);return '<td>'+(r?'<a href="/frames?camera='+encodeURIComponent(c)+'&label='+encodeURIComponent(l)+'&since=1h" style="color:inherit">'+r.n+'</a> <span class="muted">'+r.conf+'</span>':'<span class="muted">·</span>')+'</td>'}).join('')+'</tr>').join('')||'<tr><td class="muted">none</td></tr>';
+  $('#percam tbody').innerHTML=labs.map(l=>'<tr><td'+(l==='horse'?' style="color:var(--ok);font-weight:600"':'')+'>'+esc(l)+'</td>'+cams.map(c=>{const r=cell.get(c+'|'+l);const raw=r&&r.raw&&Object.keys(r.raw).filter(k=>k!==l).length?' title="'+esc(Object.entries(r.raw).map(([k,v])=>k+' '+v).join(', '))+'"':'';return '<td'+raw+'>'+(r?'<a href="/frames?camera='+encodeURIComponent(c)+'&label='+encodeURIComponent(l)+'&since=1h" style="color:inherit">'+r.n+'</a> <span class="muted">'+r.conf+(raw?' ◦':'')+'</span>':'<span class="muted">·</span>')+'</td>'}).join('')+'</tr>').join('')||'<tr><td class="muted">none</td></tr>';
   const max=Math.max(1,...d.labels_1h.map(l=>l.n));
   $('#labels').innerHTML=d.labels_1h.length?d.labels_1h.map(l=>'<div><span>'+esc(l.label)+' <b>'+l.n+'</b> <span class="muted">avg '+l.conf+'</span></span><div class="bar"><i style="width:'+(100*l.n/max)+'%"></i></div></div>').join(''):'<span class="muted">none</span>';
   $('#events tbody').innerHTML=d.events.length?d.events.map(e=>'<tr><td>'+local(e.ts)+'</td><td>'+esc(e.camera)+'</td><td>'+esc(e.type)+'</td><td>'+e.confidence.toFixed(2)+'</td><td>'+e.tier_decided+'</td><td>'+esc(e.verdict||'')+'</td></tr>').join(''):'<tr><td colspan="6" class="muted">none yet (Phase 2)</td></tr>';

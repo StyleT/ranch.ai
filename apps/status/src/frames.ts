@@ -25,7 +25,7 @@ export const framesPage = `<!doctype html>
   <select name="model" style="display:none"></select>
   <select name="camera"><option value="">all cameras</option></select>
   <select name="since"><option value="1h">last hour</option><option value="6h">6 h</option><option value="24h">24 h</option><option value="7d">7 days</option></select>
-  <input name="label" placeholder="label (horse, person…)" size="14">
+  <select name="label"><option value="">any label</option></select>
   <input name="min_conf" placeholder="min conf" size="7" type="number" step="0.05" min="0" max="1">
   <select name="reason"><option value="">any reason</option><option value="change">scene change</option><option value="floor">floor</option></select>
   <label><input type="checkbox" name="with_detections" value="1"> only with detections</label>
@@ -60,6 +60,7 @@ $('#prev').onclick=()=>show(cur-1);$('#next').onclick=()=>show(cur+1);$('#close'
 document.addEventListener('keydown',e=>{if(!$('#view').classList.contains('open'))return;if(e.key==='ArrowLeft')show(cur-1);if(e.key==='ArrowRight')show(cur+1);if(e.key==='Escape')$('#close').onclick()});
 $('#f').onsubmit=e=>{e.preventDefault();load(false)};$('#more').onclick=()=>load(true);$('[name=set]').onchange=syncSet;
 (async()=>{const s=await (await fetch('/api/status')).json();const sel=$('[name=camera]');for(const c of s.cameras)sel.insertAdjacentHTML('beforeend','<option>'+esc(c.name)+'</option>');
+  for(const l of (s.label_order||[]))$('[name=label]').insertAdjacentHTML('beforeend','<option>'+esc(l)+'</option>');
   sets=await (await fetch('/api/baseline')).json();for(const b of sets)$('[name=set]').insertAdjacentHTML('beforeend','<option value="'+esc(b.date)+'">baseline '+esc(b.date)+' ('+b.n+')</option>');
   const u=new URLSearchParams(location.search);for(const [k,v] of u){const el=$('[name='+k+']');if(!el)continue;if(el.type==='checkbox')el.checked=v==='1';else el.value=v}
   syncSet();if(u.get('model'))$('[name=model]').value=u.get('model');load(false)})();

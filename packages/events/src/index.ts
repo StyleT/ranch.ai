@@ -166,9 +166,40 @@ export class EventStore {
   }
 
   /** camera x label counts in a window, for the dashboard. */
-  detectionsByCamera(since: string): { camera: string; label: string; n: number; conf: number }[] {
-    return this.db.prepare(`SELECT f.camera, d.label, COUNT(*) n, ROUND(AVG(d.confidence), 2) conf FROM detections d JOIN frames f ON f.id = d.frame_id
-      WHERE f.ts >= ? GROUP BY f.camera, d.label ORDER BY f.camera, n DESC`).all(since) as never;
+  detectionsByCamera(since: string): { camera: string; label: string; n: number; conf: number; raw: Record<string, number> }[] {
+    const rows = this.db.prepare(`SELECT f.camera, d.label, COALESCE(d.raw_label, d.label) raw_label, COUNT(*) n, ROUND(AVG(d.confidence), 2) conf FROM detections d JOIN frames f ON f.id = d.frame_id
+      WHERE f.ts >= ? GROUP BY f.camera, d.label, raw_label ORDER BY f.camera, n DESC`).all(since) as unknown as { camera: string; label: string; raw_label: string; n: number; conf: number }[];
+    const out = new Map<string, { camera: string; label: string; n: number; conf: number; raw: Record<string, number> }>();
+    for (const r of rows) {
+      const k = `${r.camera}|${r.label}`; const o = out.get(k) ?? { camera: r.camera, label: r.label, n: 0, conf: 0, raw: {} };
+      o.conf = +((o.conf * o.n + r.conf * r.n) / (o.n + r.n)).toFixed(2); o.n += r.n; o.raw[r.raw_label] = (o.raw[r.raw_label] ?? 0) + r.n; out.set(k, o);
+    }
+    return [...out.values()].sort((a, b) => a.camera.localeCompare(b.camera) || b.n - a.n);
+  }
+
+  // ---- taxonomy versions (docs/TAXONOMY-UI.md §2) ----
+  activeTaxonomy(): TaxonomyVersionRow | undefined {
+    return this.db.prepare('SELECT * FROM taxonomy_versions WHERE active = 1 ORDER BY id DESC LIMIT 1').get() as unknown as TaxonomyVersionRow | undefined;
+  }
+  taxonomyVersion(id: number): TaxonomyVersionRow | undefined {
+    return this.db.prepare('SELECT * FROM taxonomy_versions WHERE id = ?').get(id) as unknown as TaxonomyVersionRow | undefined;
+  }
+  taxonomyVersions(limit = 50): Omit<TaxonomyVersionRow, 'json'>[] {
+    return this.db.prepare('SELECT id, created, author, note, parent_id, score_json, gate, active FROM taxonomy_versions ORDER BY id DESC LIMIT ?').all(limit) as unknown as Omit<TaxonomyVersionRow, 'json'>[];
+  }
+  insertTaxonomyVersion(v: { author: string; note?: string; json: string; parent_id?: number | null; score_json?: string | null; gate?: string | null }): number {
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('UPDATE taxonomy_versions SET active = 0 WHERE active = 1').run();
+      const r = this.db.prepare('INSERT INTO taxonomy_versions (created, author, note, json, parent_id, score_json, gate, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)')
+        .run(new Date().toISOString(), v.author, v.note ?? null, v.json, v.parent_id ?? null, v.score_json ?? null, v.gate ?? null);
+      this.db.exec('COMMIT');
+      return Number(r.lastInsertRowid);
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  }
+  /** Stored detection labels with counts, to refuse removing a subclass that is in use. */
+  labelsInUse(): { label: string; n: number }[] {
+    return this.db.prepare('SELECT label, COUNT(*) n FROM detections GROUP BY label').all() as unknown as { label: string; n: number }[];
   }
 
   lastFrame(camera: string): Frame | undefined {
@@ -245,6 +276,8 @@ export class EventStore {
     return this.db.prepare(`SELECT * FROM camera_counts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ts DESC LIMIT ?`).all(...args) as never;
   }
 }
+
+export interface TaxonomyVersionRow { id: number; created: string; author: string; note: string | null; json: string; parent_id: number | null; score_json: string | null; gate: string | null; active: number }
 
 interface Box { label: string; x: number; y: number; w: number; h: number }
 function iou(a: Box, b: Box): number {

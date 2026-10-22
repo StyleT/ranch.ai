@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process';
 import { hostname } from 'node:os';
 import { Runner } from './runner.ts';
 import { scoreSet, type Scored, type Pred, type Box } from './score.ts';
-import { mapDetection, thresholdFor, interestLabels, MODEL_MAPPINGS } from '@ranch/taxonomy';
+import { mapDetection, thresholdFor, interestLabels, getTaxonomy, getTaxonomyVersionId } from '@ranch/taxonomy';
 
 const { values: a } = parseArgs({ options: {
   frames: { type: 'string' }, labels: { type: 'string' }, predictions: { type: 'string', multiple: true }, model: { type: 'string', multiple: true },
@@ -31,7 +31,7 @@ const labelsFile = a.labels;
 const minLabelConf = a['min-label-conf'] ? Number(a['min-label-conf']) : 0;
 const threshold = Number(a.threshold), iouMin = Number(a.iou);
 const family = a.taxonomy;
-if (family && !MODEL_MAPPINGS[family]) { console.error(`unknown taxonomy family ${family}`); process.exit(2); }
+if (family && !getTaxonomy().mappings[family]) { console.error(`unknown taxonomy family ${family}`); process.exit(2); }
 interface LabelRow { path: string; boxes: Box[]; label?: { animals?: { box: Box; confidence: number }[]; people?: { box: Box; confidence: number }[]; vehicles?: { box: Box; confidence: number }[] } }
 const goldBoxes = (r: LabelRow): Box[] => {
   if (!minLabelConf || !r.label) return r.boxes;
@@ -70,7 +70,7 @@ for (const run of runs) {
   const row: Record<string, unknown> = { model: run.name, tag: a.tag, taxonomy: family ?? null, ...run.provenance, latency: run.latency ?? null };
   if (gold) {
     const scored: Scored[] = scoredFrames.map((f) => ({ frame: f, gold: gold.get(f.path) ?? [], pred: run.preds.get(f.path) ?? [] }));
-    row.score = scoreSet(scored, { threshold: scoreThreshold, iou: iouMin, ...(thresholdsByLabel ? { thresholdsByLabel } : {}) });
+    row.score = scoreSet(scored, { threshold: scoreThreshold, iou: iouMin, ...(thresholdsByLabel ? { thresholdsByLabel } : {}), ...(family ? { family } : {}) });
     const all = (row.score as { slices: Record<string, { classes: Record<string, { recall: number; precision: number; ap: number; gold: number }>; fppf_all: number; horse_count: { exact: number }; horse_recall_ci: { lo: number; hi: number } | null }> }).slices.all!;
     const op = (row.score as { operating_points: { r_at_fppf01: { recall: number; threshold: number | null }; r_at_p90: { recall: number } } }).operating_points;
     const h = all.classes.horse;
@@ -89,7 +89,7 @@ if (a.out) {
     frames: { file: a.frames, sha256: sha(a.frames), dataset: existsSync(datasetJson) ? (JSON.parse(readFileSync(datasetJson, 'utf8')) as { id: string }).id : null, n: frames.length, scored: scoredFrames.length },
     labels: labelsFile ? { file: labelsFile, sha256: sha(labelsFile), dataset: (readJsonl<{ dataset?: string }>(labelsFile)[0]?.dataset) ?? null } : null,
     class_mapping: { donkey: 'horse', delivery_vehicle: 'truck', tractor: 'truck', atv: 'truck', trailer: 'truck', people: 'person' },
-    min_label_conf: minLabelConf || null, taxonomy: family ? { family, thresholds: thresholdsByLabel, mapping: MODEL_MAPPINGS[family]!.map } : null,
+    min_label_conf: minLabelConf || null, taxonomy: family ? { family, file: process.env.RANCH_TAXONOMY_FILE ?? null, version_id: getTaxonomyVersionId(), thresholds: thresholdsByLabel, mapping: getTaxonomy().mappings[family] } : null,
     threshold, iou: iouMin, results,
   }, null, 2) + '\n');
   console.log('wrote', a.out);

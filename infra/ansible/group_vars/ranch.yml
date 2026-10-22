@@ -157,3 +157,6 @@ detector_family: coco            # key into MODEL_MAPPINGS; a fine-tuned model g
 
 # Status page (com.ranch.status, apps/status, docs/STATUS-DASHBOARD.md). No auth; LAN + tailnet only.
 status_port: 5090
+# Taxonomy editor (docs/TAXONOMY-UI.md): reference datasets the "Score draft" button uses; write token is generated on the mini.
+status_reference_frames: evals/baseline/2026-10-20
+status_reference_labels: labels-ranch-claude-revised-vlad-v1

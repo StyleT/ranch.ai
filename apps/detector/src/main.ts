@@ -6,7 +6,8 @@ import { config } from '@ranch/config';
 import { EventStore } from '@ranch/events';
 import { connectBus, topics } from '@ranch/bus';
 import { Runner } from './runner.ts';
-import { mapDetection, interestLabels } from '@ranch/taxonomy';
+import { mapDetection, interestLabels, getTaxonomyVersionId } from '@ranch/taxonomy';
+import { activateFromStore, applyRow, TAXONOMY_TOPIC, type TaxonomyMessage } from '@ranch/taxonomy/store';
 
 const MODEL = process.env.RANCH_DETECTOR_MODEL ?? '/usr/local/ranch/models/yolo11n.mlpackage';
 const COMPUTE = (process.env.RANCH_DETECTOR_COMPUTE ?? 'ane') as 'all' | 'ane' | 'gpu' | 'cpu';
@@ -14,7 +15,6 @@ const COMPUTE = (process.env.RANCH_DETECTOR_COMPUTE ?? 'ane') as 'all' | 'ane' |
 // under which label, at which per-label threshold (docs/TAXONOMY.md). RANCH_DETECTOR_FAMILY names the mapping.
 const THRESHOLD = Number(process.env.RANCH_DETECTOR_THRESHOLD ?? 0.05);
 const FAMILY = process.env.RANCH_DETECTOR_FAMILY ?? 'coco';
-const COUNT_LABELS = interestLabels(FAMILY);
 const MAX_QUEUE = 50;
 const modelName = basename(MODEL).replace(/\.(mlpackage|mlmodelc)$/, '');
 
@@ -27,8 +27,13 @@ async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const runner = new Runner({ model: MODEL, compute: COMPUTE, threshold: THRESHOLD });
   const info = await runner.info;
-  log('runner ready', { ...info, family: FAMILY, count_labels: COUNT_LABELS });
+  activateFromStore(store, log);
+  log('runner ready', { ...info, family: FAMILY, taxonomy_version: getTaxonomyVersionId(), count_labels: interestLabels(FAMILY) });
   const bus = await connectBus('detector');
+  await bus.subscribe(TAXONOMY_TOPIC, (_t, payload) => {
+    const m = payload as TaxonomyMessage; if (!m || typeof m.version_id !== 'number' || m.version_id === getTaxonomyVersionId()) return;
+    const row = store.taxonomyVersion(m.version_id); if (row) applyRow(row, log); else log('taxonomy version not found', { id: m.version_id });
+  });
 
   // per minute, per camera: max count per label
   const minute = new Map<string, Map<string, number>>(); // key `${camera}|${minuteTs}`
@@ -46,7 +51,7 @@ async function main(): Promise<void> {
       await bus.publish(topics.detections(f.camera), { ts: f.ts, camera: f.camera, frame_id: f.id, path: f.path, model: modelName, family: FAMILY, ms: r.ms, detections: kept, raw_boxes: r.detections.length });
       const key = `${f.camera}|${f.ts.slice(0, 16)}:00.000Z`;
       const m = minute.get(key) ?? new Map<string, number>();
-      for (const label of COUNT_LABELS) m.set(label, Math.max(m.get(label) ?? 0, kept.filter((d) => d.label === label).length));
+      for (const label of interestLabels(FAMILY)) m.set(label, Math.max(m.get(label) ?? 0, kept.filter((d) => d.label === label).length));
       minute.set(key, m);
     }).catch((e) => { inflight--; log('detect failed', { path: f.path, error: String(e) }); });
   });
@@ -63,7 +68,7 @@ async function main(): Promise<void> {
     }
   };
   const flusher = setInterval(() => void flush(), 15_000);
-  const status = setInterval(() => void bus.publish(topics.status('detector'), { ts: new Date().toISOString(), pid: process.pid, model: modelName, family: FAMILY, compute: COMPUTE, processed, dropped, inflight, raw_boxes: rawBoxes, kept_boxes: keptBoxes, rss_mb: Math.round(process.memoryUsage().rss / 1048576) }, { retain: true }), 60_000);
+  const status = setInterval(() => void bus.publish(topics.status('detector'), { ts: new Date().toISOString(), pid: process.pid, model: modelName, family: FAMILY, taxonomy_version: getTaxonomyVersionId(), compute: COMPUTE, processed, dropped, inflight, raw_boxes: rawBoxes, kept_boxes: keptBoxes, rss_mb: Math.round(process.memoryUsage().rss / 1048576) }, { retain: true }), 60_000);
 
   const shutdown = async () => { clearInterval(flusher); clearInterval(status); await flush(); runner.close(); await bus.close(); store.close(); process.exit(0); };
   process.on('SIGTERM', () => void shutdown()); process.on('SIGINT', () => void shutdown());

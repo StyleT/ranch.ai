@@ -13,6 +13,7 @@ export const topics = {
   counts: (camera: string) => `ranch/counts/${camera}`,
   events: (camera: string, type: string) => `ranch/events/${camera}/${type}`,
   status: (service: string) => `ranch/status/${service}`,
+  taxonomy: 'ranch/taxonomy',
 } as const;
 
 export interface Bus {

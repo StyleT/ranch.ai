@@ -167,7 +167,7 @@ async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const bus = await connectBus('ingest');
   const cameras = await cameraList();
-  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, media: config.mediaDir, db: config.dbPath });
+  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, retention_d: RETENTION_D, stall_reset_s: STALL_RESET_S, keepalive: KEEPALIVE, keepalive_exclude: config.keepaliveExclude, media: config.mediaDir, db: config.dbPath });
   const stop = { v: false };
   const status = setInterval(() => {
     const m = process.memoryUsage();
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown()); process.on('SIGINT', () => void shutdown());
   await Promise.all([
     ...cameras.map((c) => sampleCamera(c, store, bus, stop)),
-    ...(KEEPALIVE ? cameras.map((c) => keepAlive(c, stop)) : []),
+    ...(KEEPALIVE ? cameras.filter((c) => !config.keepaliveExclude.includes(c)).map((c) => keepAlive(c, stop)) : []),
   ]);
 }
 

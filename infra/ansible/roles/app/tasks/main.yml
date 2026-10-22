@@ -98,3 +98,18 @@
   when: app_sync.stdout is search('(^|\s)[<>ch.*][^\s]*\s+(apps/|packages/|package(-lock)?\.json)')
   changed_when: true
   notify: restart app daemons
+
+# The repo's taxonomy.json becomes the active version when it differs from the one on the mini (docs/TAXONOMY-UI.md §2).
+# In check mode it only reports (drift). Runs after the restart handler so the daemons see the same schema.
+- name: Flush handlers before the taxonomy sync
+  ansible.builtin.meta: flush_handlers
+
+- name: Taxonomy from the repo file is the active version
+  ansible.builtin.command:
+    cmd: "{{ ranch_bin_dir }}/node --no-warnings=ExperimentalWarning packages/taxonomy/src/cli.ts sync{{ ' --check' if ansible_check_mode else '' }}"
+    chdir: "{{ ranch_app_dir }}"
+  register: tax_sync
+  changed_when: "'inserted' in tax_sync.stdout or 'would insert' in tax_sync.stdout"
+  check_mode: false
+  become: true
+  become_user: "{{ ranch_user }}"

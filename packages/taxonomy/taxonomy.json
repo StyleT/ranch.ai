@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "classes": {
+    "animal": {
+      "subclasses": ["horse", "donkey", "dog", "cat", "deer", "coyote", "bird", "other"],
+      "attribute": { "name": "posture", "values": ["standing", "grazing", "drinking", "walking", "lying_sternal", "lying_flat", "unknown"] }
+    },
+    "person": {
+      "subclasses": ["friendly", "mailman", "unknown"],
+      "attribute": { "name": "look", "values": null }
+    },
+    "vehicle": {
+      "subclasses": ["car", "truck", "delivery_vehicle", "tractor", "atv", "trailer", "other"],
+      "attribute": null
+    }
+  },
+  "scene": {
+    "gate": ["open", "closed", "unknown"],
+    "trough": ["full", "half", "low", "empty", "unknown"],
+    "lighting": ["day", "dusk", "night_ir"]
+  },
+  "ignored": ["insect", "spider"],
+  "label_order": ["horse", "donkey", "person", "dog", "cat", "deer", "coyote", "bird", "car", "truck", "delivery_vehicle", "tractor", "atv", "trailer", "other"],
+  "mappings": {
+    "coco": {
+      "horse": { "class": "animal", "subclass": "horse", "threshold": 0.25, "note": "precision 1.00 at 0.25; recall is the problem" },
+      "cow": { "class": "animal", "subclass": "horse", "threshold": 0.5, "note": "how COCO models see donkeys and dark horses; +0.20 recall; also fires on blankets" },
+      "sheep": { "class": "animal", "subclass": "horse", "threshold": 0.5, "note": "same as cow" },
+      "dog": { "class": "animal", "subclass": "dog", "threshold": 0.4, "note": "one gold dog; fired on a donkey at 0.74" },
+      "cat": { "class": "animal", "subclass": "cat", "threshold": 0.6, "note": "no verified cat yet" },
+      "bird": { "class": "animal", "subclass": "bird", "threshold": 0.5 },
+      "bear": { "class": "animal", "subclass": "other", "threshold": 0.5, "note": "large-animal confusion, worth seeing" },
+      "elephant": { "class": "animal", "subclass": "other", "threshold": 0.5 },
+      "zebra": { "class": "animal", "subclass": "other", "threshold": 0.5 },
+      "giraffe": { "class": "animal", "subclass": "other", "threshold": 0.5 },
+      "person": { "class": "person", "subclass": "unknown", "threshold": 0.6, "note": "recall 1.00 at 0.25 with precision 0.42 (night horses as people)" },
+      "car": { "class": "vehicle", "subclass": "car", "threshold": 0.25, "note": "recall 1.00, precision 0.88" },
+      "truck": { "class": "vehicle", "subclass": "truck", "threshold": 0.25, "note": "tractors are never found as trucks (0/14)" },
+      "bus": { "class": "vehicle", "subclass": "truck", "threshold": 0.25 },
+      "motorcycle": { "class": "vehicle", "subclass": "atv", "threshold": 0.4 }
+    }
+  },
+  "scoring_map": {
+    "coco": { "donkey": "horse", "delivery_vehicle": "truck", "tractor": "truck", "atv": "truck", "trailer": "truck" }
+  }
+}

@@ -8,7 +8,7 @@ export interface FrameRef { path: string; camera: string; period: string }
 export interface Scored { frame: FrameRef; gold: Box[]; pred: Pred[] }
 
 import { interestLabels } from '@ranch/taxonomy';
-export const INTEREST: readonly string[] = interestLabels('coco');
+export const interest = (family = 'coco'): readonly string[] => interestLabels(family);
 export type ThresholdFn = (label: string) => number;
 const thr = (t: number | ThresholdFn, label: string) => (typeof t === 'function' ? t(label) : t);
 
@@ -92,7 +92,7 @@ export function slices(frames: Scored[]): Record<string, Scored[]> {
   return out;
 }
 
-export function scoreSet(frames: Scored[], opts: { threshold: number | ThresholdFn; iou: number; labels?: string[]; thresholdsByLabel?: Record<string, number> }): Record<string, unknown> {
+export function scoreSet(frames: Scored[], opts: { threshold: number | ThresholdFn; iou: number; labels?: string[]; thresholdsByLabel?: Record<string, number>; family?: string }): Record<string, unknown> {
   const labels = opts.labels ?? [...new Set(frames.flatMap((f) => f.gold.map((b) => b.label)))].sort();
   const bySlice: Record<string, unknown> = {};
   for (const [name, fs] of Object.entries(slices(frames))) {
@@ -100,7 +100,7 @@ export function scoreSet(frames: Scored[], opts: { threshold: number | Threshold
     bySlice[name] = {
       frames: fs.length,
       classes: Object.fromEntries(labels.map((l) => [l, classMetrics(fs, l, opts.threshold, opts.iou)])),
-      fppf_interest: fppf(fs, opts.threshold, opts.iou, INTEREST), fppf_all: fppf(fs, opts.threshold, opts.iou),
+      fppf_interest: fppf(fs, opts.threshold, opts.iou, interest(opts.family)), fppf_all: fppf(fs, opts.threshold, opts.iou),
       horse_count: countAccuracy(fs, opts.threshold),
       horse_recall_ci: name === 'all' || fs.length >= 20 ? bootstrap(fs, (s) => classMetrics(s, 'horse', opts.threshold, opts.iou).recall) : null,
       horse_ap: horse.ap,

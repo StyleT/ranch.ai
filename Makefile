@@ -1,7 +1,7 @@
 ANSIBLE_PLAYBOOK ?= $(HOME)/.local/bin/ansible-playbook
 HOST ?= ranch@ranch-ai.tail6d04cd.ts.net
 
-.PHONY: bootstrap provision check verify snapshot logs logs-last dataset-push
+.PHONY: bootstrap provision check verify snapshot logs logs-last dataset-push taxonomy-pull
 
 bootstrap:        ## One-time: Xcode CLT + Homebrew on a freshly erased mini
 	ssh $(HOST) 'bash -s' < infra/bootstrap.sh
@@ -35,3 +35,8 @@ dataset-push:     ## Upload a dataset to the Hub and tag it: make dataset-push I
 	  if [ -n "$(IMAGES)" ]; then hf upload $(HF_REPO) $(IMAGES) $(ID)/images --repo-type dataset --commit-message "$(ID): images" --exclude "*.DS_Store"; fi; \
 	  hf repo tag create $(HF_REPO) $(ID) --repo-type dataset -m "$(ID)" 2>/dev/null || echo "tag $(ID) exists"'
 	@echo "https://huggingface.co/datasets/$(HF_REPO)/tree/$(ID)"
+
+taxonomy-pull:    ## Bring the mini's active taxonomy version into the repo (packages/taxonomy/taxonomy.json + its score) for commit
+	@ssh $(HOST) 'cd /usr/local/ranch/app && /usr/local/ranch/bin/node --no-warnings=ExperimentalWarning packages/taxonomy/src/cli.ts export' > .scratch/taxonomy-export.json
+	@node -e 'const fs=require("fs");const e=JSON.parse(fs.readFileSync(".scratch/taxonomy-export.json","utf8"));fs.writeFileSync("packages/taxonomy/taxonomy.json",JSON.stringify(e.taxonomy,null,2)+"\n");if(e.version.score){const f="evals/results/taxonomy-v"+e.version.id+".json";fs.writeFileSync(f,JSON.stringify({version:e.version,taxonomy:e.taxonomy},null,2)+"\n");console.log("wrote",f)}console.log("packages/taxonomy/taxonomy.json <- v"+e.version.id+" ("+e.version.author+(e.version.note?": "+e.version.note:"")+")")'
+	@git status --short packages/taxonomy/taxonomy.json evals/results/

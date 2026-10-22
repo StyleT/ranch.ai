@@ -104,6 +104,16 @@
   become: true
   when: not ansible_check_mode
 
+# Write token for the status page's editors (docs/TAXONOMY-UI.md §6): generated once on the mini, never in the repo.
+- name: Status write token exists
+  ansible.builtin.shell: |
+    f=/Users/{{ ranch_user }}/.config/ranch/status.env
+    if [ ! -f "$f" ]; then (umask 077; printf 'RANCH_STATUS_WRITE_TOKEN=%s\n' "$(/usr/bin/openssl rand -hex 16)" > "$f"); echo CREATED; fi
+  register: status_env
+  changed_when: "'CREATED' in status_env.stdout"
+  become: true
+  become_user: "{{ ranch_user }}"
+
 - name: Install daemon plists
   ansible.builtin.template:
     src: "{{ playbook_dir }}/../launchd/{{ item }}.plist.j2"

@@ -1,114 +1,118 @@
-// The one place classes and subclasses are defined (docs/TAXONOMY.md). Every consumer (labeling schema, detector
-// filter, counting, retention, scoring, dashboard order) imports from here; nothing else may spell a class name.
+// The one place classes and subclasses are defined (docs/TAXONOMY.md, docs/TAXONOMY-UI.md). The values live in
+// taxonomy.json (the repo copy is the baseline; the active version on the mini is in SQLite, see store.ts).
+// Every consumer imports the helpers here; nothing else may spell a class name.
+import { z } from 'zod';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
-export const TAXONOMY = {
-  animal: {
-    subclasses: ['horse', 'donkey', 'dog', 'cat', 'deer', 'coyote', 'bird', 'other'],
-    attribute: { name: 'posture', values: ['standing', 'grazing', 'drinking', 'walking', 'lying_sternal', 'lying_flat', 'unknown'] },
-  },
-  person: {
-    // friendly = resident or regular, recognized by face or look (human labeler or a future recognition tier);
-    // mailman = postal or courier worker by uniform or vehicle; unknown otherwise.
-    subclasses: ['friendly', 'mailman', 'unknown'],
-    attribute: { name: 'look', values: null }, // free text
-  },
-  vehicle: {
-    subclasses: ['car', 'truck', 'delivery_vehicle', 'tractor', 'atv', 'trailer', 'other'],
-    attribute: null,
-  },
-} as const;
+export const CLASS_NAMES = ['animal', 'person', 'vehicle'] as const;
+export type ClassName = (typeof CLASS_NAMES)[number];
 
-export const SCENE = {
-  gate: ['open', 'closed', 'unknown'],
-  trough: ['full', 'half', 'low', 'empty', 'unknown'],
-  lighting: ['day', 'dusk', 'night_ir'],
-} as const;
+const Ident = z.string().regex(/^[a-z][a-z0-9_]*$/, 'lowercase identifier');
+const MappingEntrySchema = z.object({ class: z.enum(CLASS_NAMES), subclass: Ident, threshold: z.number().min(0).max(1), note: z.string().optional() });
+const ClassDef = z.object({
+  subclasses: z.array(Ident).min(1),
+  attribute: z.object({ name: Ident, values: z.array(Ident).min(1).nullable() }).nullable(),
+});
 
-/** Named so the rule is explicit: never boxed, never counted. */
-export const IGNORED = ['insect', 'spider'] as const;
+export const TaxonomySchema = z.object({
+  version: z.number().int().min(1),
+  classes: z.object({ animal: ClassDef, person: ClassDef, vehicle: ClassDef }),
+  scene: z.object({ gate: z.array(Ident).min(1), trough: z.array(Ident).min(1), lighting: z.array(Ident).min(1) }),
+  ignored: z.array(Ident),
+  label_order: z.array(Ident),
+  mappings: z.record(Ident, z.record(z.string().min(1), MappingEntrySchema)),
+  scoring_map: z.record(Ident, z.record(Ident, Ident)),
+}).superRefine((t, ctx) => {
+  // A subclass name may repeat across classes ("other" in animal and vehicle); the stored label is then ambiguous
+  // between those classes, which is accepted for catch-alls. Within a class, names are unique.
+  const subs = new Map<string, ClassName>();
+  for (const c of CLASS_NAMES) {
+    for (const s of t.classes[c].subclasses) if (!subs.has(s)) subs.set(s, c);
+    if (new Set(t.classes[c].subclasses).size !== t.classes[c].subclasses.length) ctx.addIssue({ code: 'custom', message: `duplicate subclass in ${c}`, path: ['classes', c, 'subclasses'] });
+  }
+  for (const [fam, map] of Object.entries(t.mappings)) {
+    for (const [raw, m] of Object.entries(map)) if (!t.classes[m.class].subclasses.includes(m.subclass)) ctx.addIssue({ code: 'custom', message: `${fam}: "${raw}" maps to unknown ${m.class}/${m.subclass}`, path: ['mappings', fam, raw] });
+    const labels = new Set(Object.values(map).map((m) => storedLabel(m.class, m.subclass)));
+    for (const [src, dst] of Object.entries(t.scoring_map[fam] ?? {})) {
+      if (!subs.has(src)) ctx.addIssue({ code: 'custom', message: `${fam}: scoring source "${src}" is not a subclass`, path: ['scoring_map', fam, src] });
+      if (!labels.has(dst)) ctx.addIssue({ code: 'custom', message: `${fam}: scoring target "${dst}" is not a label this family produces`, path: ['scoring_map', fam, src] });
+    }
+  }
+  for (const fam of Object.keys(t.scoring_map)) if (!t.mappings[fam]) ctx.addIssue({ code: 'custom', message: `scoring_map for unknown family "${fam}"`, path: ['scoring_map', fam] });
+  for (const l of t.label_order) if (l !== 'person' && !subs.has(l)) ctx.addIssue({ code: 'custom', message: `label_order entry "${l}" is not a subclass`, path: ['label_order'] });
+  if (new Set(t.label_order).size !== t.label_order.length) ctx.addIssue({ code: 'custom', message: 'duplicate in label_order', path: ['label_order'] });
+});
+export type Taxonomy = z.infer<typeof TaxonomySchema>;
+export type MappingEntry = z.infer<typeof MappingEntrySchema>;
 
-export type ClassName = keyof typeof TAXONOMY;
-export type Subclass<C extends ClassName = ClassName> = (typeof TAXONOMY)[C]['subclasses'][number];
-export type AnySubclass = Subclass<'animal'> | Subclass<'person'> | Subclass<'vehicle'>;
-export type Posture = (typeof TAXONOMY)['animal']['attribute']['values'][number];
+export function validateTaxonomy(obj: unknown): { ok: true; taxonomy: Taxonomy } | { ok: false; errors: string[] } {
+  const r = TaxonomySchema.safeParse(obj);
+  if (r.success) return { ok: true, taxonomy: r.data };
+  return { ok: false, errors: r.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`) };
+}
 
-export const CLASSES = Object.keys(TAXONOMY) as ClassName[];
-export function classOf(subclass: string): ClassName | undefined {
-  for (const c of CLASSES) if ((TAXONOMY[c].subclasses as readonly string[]).includes(subclass)) return c;
+export const REPO_TAXONOMY_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'taxonomy.json');
+export function loadTaxonomyFile(path = process.env.RANCH_TAXONOMY_FILE ?? REPO_TAXONOMY_FILE): Taxonomy {
+  const v = validateTaxonomy(JSON.parse(readFileSync(path, 'utf8')));
+  if (!v.ok) throw new Error(`invalid taxonomy ${path}: ${v.errors.join('; ')}`);
+  return v.taxonomy;
+}
+
+// ---- the active taxonomy in this process ------------------------------------------------------------------------
+let current: Taxonomy = loadTaxonomyFile();
+let currentVersionId: number | null = null;
+export function getTaxonomy(): Taxonomy { return current; }
+export function getTaxonomyVersionId(): number | null { return currentVersionId; }
+export function setTaxonomy(t: Taxonomy, versionId: number | null = null): void { current = t; currentVersionId = versionId; }
+
+/** Canonical JSON (sorted keys) for equality and hashing. */
+export function canonical(t: unknown): string {
+  const sort = (v: unknown): unknown => Array.isArray(v) ? v.map(sort) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, sort((v as Record<string, unknown>)[k])])) : v;
+  return JSON.stringify(sort(t));
+}
+
+// ---- helpers (all take an optional taxonomy; default = the active one) -------------------------------------------
+export function classOf(subclass: string, t: Taxonomy = current): ClassName | undefined {
+  for (const c of CLASS_NAMES) if (t.classes[c].subclasses.includes(subclass)) return c;
   return undefined;
 }
 
-/**
- * The label stored for a detection and shown on the dashboard: the subclass, except that a person's subclass is
- * an identity attribute, so people are stored as `person`. Vehicles and animals keep their subclass.
- */
-export function storedLabel(cls: ClassName, subclass: string): string {
-  return cls === 'person' ? 'person' : subclass;
-}
+/** The label stored for a detection and shown on the dashboard: the subclass, except that a person's subclass is an
+ *  identity attribute, so people are stored as `person`. */
+export function storedLabel(cls: ClassName, subclass: string): string { return cls === 'person' ? 'person' : subclass; }
 
-/** Dashboard and report ordering: what a horse owner looks for first. */
-export const LABEL_ORDER: readonly string[] = ['horse', 'donkey', 'person', 'dog', 'cat', 'deer', 'coyote', 'bird', 'car', 'truck', 'delivery_vehicle', 'tractor', 'atv', 'trailer', 'other'];
-export const orderIndex = (label: string): number => { const i = LABEL_ORDER.indexOf(label); return i < 0 ? 99 : i; };
-
-// ---- model mappings: a detector family's label space -> taxonomy, with per-label thresholds ----------------------
-export interface MappingEntry { class: ClassName; subclass: string; threshold: number; note?: string }
-export interface ModelMapping { family: string; map: Record<string, MappingEntry> }
-
-const coco = (cls: ClassName, subclass: string, threshold: number, note?: string): MappingEntry => (note ? { class: cls, subclass, threshold, note } : { class: cls, subclass, threshold });
-
-/** COCO-pretrained zero-shot detectors (yolo11*, rf-detr-*). Thresholds from evals/LEADERBOARD.md, 20 Oct 2026. */
-export const MODEL_MAPPINGS: Record<string, ModelMapping> = {
-  coco: {
-    family: 'coco',
-    map: {
-      horse: coco('animal', 'horse', 0.25, 'precision 1.00 at 0.25; recall is the problem'),
-      cow: coco('animal', 'horse', 0.5, 'how COCO models see donkeys and dark horses; +0.20 recall; also fires on blankets'),
-      sheep: coco('animal', 'horse', 0.5, 'same as cow'),
-      dog: coco('animal', 'dog', 0.4, 'one gold dog; fired on a donkey at 0.74'),
-      cat: coco('animal', 'cat', 0.6, 'no verified cat yet'),
-      bird: coco('animal', 'bird', 0.5),
-      bear: coco('animal', 'other', 0.5, 'large-animal confusion, worth seeing'),
-      elephant: coco('animal', 'other', 0.5),
-      zebra: coco('animal', 'other', 0.5),
-      giraffe: coco('animal', 'other', 0.5),
-      person: coco('person', 'unknown', 0.6, 'recall 1.00 at 0.25 with precision 0.42 (night horses as people)'),
-      car: coco('vehicle', 'car', 0.25, 'recall 1.00, precision 0.88'),
-      truck: coco('vehicle', 'truck', 0.25, 'tractors are never found as trucks (0/14)'),
-      bus: coco('vehicle', 'truck', 0.25),
-      motorcycle: coco('vehicle', 'atv', 0.4),
-    },
-  },
-};
+export const orderIndex = (label: string, t: Taxonomy = current): number => { const i = t.label_order.indexOf(label); return i < 0 ? 99 : i; };
 
 export interface Mapped { label: string; class: ClassName; subclass: string; raw_label: string; confidence: number; threshold: number }
 
 /** Map one raw detection; null when the label is unmapped or below its threshold (unless applyThreshold is false). */
-export function mapDetection(family: string, rawLabel: string, confidence: number, applyThreshold = true): Mapped | null {
-  const m = MODEL_MAPPINGS[family]?.map[rawLabel];
+export function mapDetection(family: string, rawLabel: string, confidence: number, applyThreshold = true, t: Taxonomy = current): Mapped | null {
+  const m = t.mappings[family]?.[rawLabel];
   if (!m) return null;
   if (applyThreshold && confidence < m.threshold) return null;
   return { label: storedLabel(m.class, m.subclass), class: m.class, subclass: m.subclass, raw_label: rawLabel, confidence, threshold: m.threshold };
 }
 
-/** Stored labels a family can produce (counting, retention "interest", dashboard columns). */
-export function interestLabels(family: string): string[] {
-  return [...new Set(Object.values(MODEL_MAPPINGS[family]?.map ?? {}).map((m) => storedLabel(m.class, m.subclass)))].sort((a, b) => orderIndex(a) - orderIndex(b));
+/** Stored labels a family can produce (counting, retention "interest", dashboard columns), in label order. */
+export function interestLabels(family: string, t: Taxonomy = current): string[] {
+  return [...new Set(Object.values(t.mappings[family] ?? {}).map((m) => storedLabel(m.class, m.subclass)))].sort((a, b) => orderIndex(a, t) - orderIndex(b, t));
 }
 
 /** Threshold for a stored label in a family: the lowest threshold among raw labels that map to it. */
-export function thresholdFor(family: string, label: string): number {
-  const ts = Object.values(MODEL_MAPPINGS[family]?.map ?? {}).filter((m) => storedLabel(m.class, m.subclass) === label).map((m) => m.threshold);
+export function thresholdFor(family: string, label: string, t: Taxonomy = current): number {
+  const ts = Object.values(t.mappings[family] ?? {}).filter((m) => storedLabel(m.class, m.subclass) === label).map((m) => m.threshold);
   return ts.length ? Math.min(...ts) : 1;
 }
 
-/**
- * Scoring direction: taxonomy subclass -> the stored label a family can express, so gold labels and mapped
- * predictions share a label space. Subclasses no COCO model can name collapse onto their nearest expressible one.
- */
-export const SCORING_MAP: Record<string, Record<string, string>> = {
-  coco: { donkey: 'horse', delivery_vehicle: 'truck', tractor: 'truck', atv: 'truck', trailer: 'truck' },
-};
-export function scoringLabel(family: string, cls: ClassName, subclass: string): string {
+/** Scoring direction: taxonomy subclass -> the stored label a family can express. */
+export function scoringLabel(family: string, cls: ClassName, subclass: string, t: Taxonomy = current): string {
   if (cls === 'person') return 'person';
-  return SCORING_MAP[family]?.[subclass] ?? subclass;
+  return t.scoring_map[family]?.[subclass] ?? subclass;
+}
+
+/** True when the family's `horse` label also collects other raw classes (then the dashboard says "equine"). */
+export function horseIsEquine(family: string, t: Taxonomy = current): boolean {
+  return Object.entries(t.mappings[family] ?? {}).some(([raw, m]) => m.class === 'animal' && m.subclass === 'horse' && raw !== 'horse');
 }

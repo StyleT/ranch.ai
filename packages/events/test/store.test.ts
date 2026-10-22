@@ -4,7 +4,7 @@ import { EventStore, parseSince, detectionsDiffer } from '../src/index.ts';
 
 test('migrates an empty database and round-trips frames, detections and events', () => {
   const s = new EventStore(':memory:');
-  assert.equal(s.schemaVersion, 3);
+  assert.equal(s.schemaVersion, 4);
   const fid = s.insertFrame({ ts: '2026-10-15T00:00:00.000Z', camera: 'front_porch_cam', path: '/x/a.jpg', reason: 'floor', change: 0.01 });
   s.insertDetections(fid, [{ model: 'yolo11n', label: 'horse', confidence: 0.9, x: 0.1, y: 0.2, w: 0.3, h: 0.4 }]);
   assert.equal(s.detectionsForFrame(fid)[0]?.label, 'horse');

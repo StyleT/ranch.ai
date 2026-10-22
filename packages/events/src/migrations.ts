@@ -89,4 +89,23 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       ALTER TABLE detections ADD COLUMN raw_label TEXT;
     `,
   },
+  {
+    version: 4,
+    name: 'taxonomy_versions',
+    sql: `
+      -- Versions of the class taxonomy (docs/TAXONOMY-UI.md §2). Exactly one row is active; history is never rewritten.
+      CREATE TABLE taxonomy_versions (
+        id INTEGER PRIMARY KEY,
+        created TEXT NOT NULL,
+        author TEXT NOT NULL,
+        note TEXT,
+        json TEXT NOT NULL,
+        parent_id INTEGER,
+        score_json TEXT,
+        gate TEXT,
+        active INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX taxonomy_versions_active ON taxonomy_versions (active);
+    `,
+  },
 ];

@@ -15,6 +15,10 @@ export const config = {
   /** Space-separated stream names; empty = ask the bridge and take every camera except RANCH_CAMERAS_EXCLUDE. */
   cameras: env('RANCH_CAMERAS', '').split(/\s+/).filter(Boolean),
   camerasExclude: env('RANCH_CAMERAS_EXCLUDE', 'living_room_cam').split(/\s+/).filter(Boolean),
+  /** Cameras sampled but NOT held open by a persistent keepalive consumer. Default mops_cam: it is the only
+   *  V3 Pro and the weakest-signal camera, and a continuous 2K-HD pull knocks it off its 2.4 GHz Wi-Fi (the same
+   *  effect that forced the seed recorder short on 16 Oct). It still gets periodic grabs like the Wyze app does. */
+  keepaliveExclude: env('RANCH_KEEPALIVE_EXCLUDE', 'mops_cam').split(/\s+/).filter(Boolean),
   timezone: env('RANCH_TZ', 'America/New_York'),
 } as const;
 
