@@ -106,3 +106,23 @@ as instructed with that recorded. yolo26n is not an improvement on yolo11n.
   only, each with `burst: [...]`; `snapshot.ts` never picks members.
 - Change keeps happen by day (last 3 days: 52/h at 07:00, 61/h at 14:00 local, a handful at night), so most
   bursts are expected after sunrise; a watcher reports the first morning's numbers.
+
+## Motion metric, 22 Oct morning
+
+The first morning showed the flaw in the 1 % whole-frame rule: 14 change keeps in two hours produced 5 bursts and
+one tracked box. A whole-frame mean absolute difference on a 64×36 thumbnail sees lighting, not a distant animal.
+Replaced by **block-max**: the largest mean absolute difference over any 8×8 block of a 128×72 greyscale
+thumbnail (`blockMaxDiff`). Measured on consecutive kept frames, 22 Oct:
+
+| | quiet cameras (night and day) | front_porch with horses | real movement events |
+|---|---|---|---|
+| block-max p50 / p90 / max | 0.004–0.016 / 0.005–0.031 / ≤ 0.04 | 0.031–0.038 / 0.12–0.14 | 0.064, 0.21, 0.53, 0.59 |
+
+Thresholds: `RANCH_MOTION_THRESHOLD` 0.08 opens a change keep (and so a burst) against the last kept frame;
+`RANCH_BURST_CHANGE` 0.05 extends a burst between consecutive members; the whole-frame rule (4 %) stays for
+lighting and large changes. Over 1,197 consecutive-frame pairs in the following 90 min, no detected animal's box
+moved ≥ 0.02 of the frame (mean 0.004): the horses were standing, so "moving only" was legitimately empty; the
+one pair above 0.08 was a real animal moving 0.018. The ingest status message now carries per-camera p50/p90/max
+of the metric over every grab (`motion`), so the thresholds are tuned from evidence, never by feel. The unit test
+proves a 100×60 px object (a horse at the far fence on a 2560 px frame) moving 60 px is seen by the block metric
+and invisible to the whole-frame mean.
