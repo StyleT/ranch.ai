@@ -29,6 +29,9 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   old definition).
 - Ports listed in `tailscale_blocked_ports` (group_vars) are refused on the Tailscale addresses by a pf anchor and are
   LAN-only (today: 5090, the status page). Verify them with `ssh ranch curl 127.0.0.1:<port>`, not over the tailnet.
+- Classes, subclasses and detector thresholds live in `packages/taxonomy/taxonomy.json` and nowhere else; the mini
+  holds versions of it (editable on `:5090/taxonomy`). After a UI edit: `make taxonomy-pull`, commit. The repo file
+  wins on provision.
 - Ansible runs from the laptop: `~/.local/bin/ansible-playbook` (installed with `uv tool`).
   Target interpreter is `/usr/bin/python3` (3.9.6 from Xcode CLT).
 - Secrets never enter the repo. Device credentials live on the mini in `~/.config/ranch/*.env` (mode 600);

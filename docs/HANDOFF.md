@@ -15,7 +15,9 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
    (`evals/LEADERBOARD.md`, `evals/results/`). Horse recall 0.26–0.35 at 0.25, wide CIs; 12 of 23 horse-class
    boxes missed by every model, seven of them large daytime donkeys. Reference labels: `labels-ranch-claude-revised-vlad-v1` (Vlad removed Claude's five cat boxes, rest accepted). Datasets on the Hub (`vladlenfedosov/ranch-frames`).
    21 Oct: class filter shipped (`docs/TAXONOMY.md`, `packages/taxonomy`): FPPF(all) 0.81 → 0.27, horse recall 0.30 →
-   0.55 on the reference labels. Next: Post 1; the yolo11s swap row; Phase 1b human labels; the fine-tune question. Then step 7: the recall benchmark. The detector
+   0.55 on the reference labels. 22 Oct: the taxonomy is editable on `:5090/taxonomy` with a measured gate and
+   versions (`docs/TAXONOMY-UI.md`); the status port is LAN-only. Next: Post 1; the yolo11s swap row; Phase 1b
+   human labels; the fine-tune question. Then step 7: the recall benchmark. The detector
    evidence makes this urgent: yolo11n emits thousands of confident night false positives (bench, bottle,
    clock, airplane) per day; nothing downstream should trust tier 1 until the benchmark and a class filter exist.
 3. Post 1 draft from the measured numbers, plus the dropout story as the "what went wrong" section.
@@ -45,6 +47,7 @@ make check       # drift report, changes nothing
 make verify      # after a reboot: asserts no console user, no noisy agents, audiomxd paused
 make snapshot    # infra/snapshots/<date>/ ; commit the result
 make logs        # live tail of every daemon (unified log); make logs-last H=3 for the last 3 hours
+make taxonomy-pull  # after editing classes/thresholds on :5090/taxonomy: bring the active version into the repo, commit
 # status page :5090 (cameras, daemons, detections per camera); :5090/frames browses kept frames with the boxes
 # drawn on them, and any baseline set with any model's predictions (docs/FRAMES-AND-BASELINE.md)
 make bootstrap   # only on a freshly erased mini (Xcode CLT + Homebrew), see infra/MANUAL.md

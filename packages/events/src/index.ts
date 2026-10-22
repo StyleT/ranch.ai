@@ -197,9 +197,10 @@ export class EventStore {
       return Number(r.lastInsertRowid);
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
-  /** Stored detection labels with counts, to refuse removing a subclass that is in use. */
+  /** Labels the taxonomy has stored (raw_label set, i.e. since the filter), to refuse removing a subclass in use.
+   *  Pre-taxonomy rows (raw_label NULL) carried raw COCO classes and do not count. */
   labelsInUse(): { label: string; n: number }[] {
-    return this.db.prepare('SELECT label, COUNT(*) n FROM detections GROUP BY label').all() as unknown as { label: string; n: number }[];
+    return this.db.prepare('SELECT label, COUNT(*) n FROM detections WHERE raw_label IS NOT NULL GROUP BY label').all() as unknown as { label: string; n: number }[];
   }
 
   lastFrame(camera: string): Frame | undefined {

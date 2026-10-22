@@ -108,3 +108,8 @@ newly powered ones were delivering. The page showed exactly that. The stall watc
 `/frames` frame browser with detection overlays, `/api/frames`, `/api/frame/<id>?w=` (sharp resize on the fly),
 `/api/baseline`, `/api/baseline/<date>?model=&min_conf=&camera=`, `/api/baseline-frame/<date>/<camera>/<file>?w=`.
 The main page's detections panel is per camera and links into the browser.
+
+## Added 22 Oct (docs/TAXONOMY-UI.md)
+
+`/taxonomy` editor; `GET /api/taxonomy`, `/api/taxonomy/versions[/<id>]`; `POST /api/taxonomy/validate|score`
+(open) and `apply|revert` (need `x-ranch-token`). Main page shows the taxonomy version and a drift banner.
