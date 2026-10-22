@@ -12,8 +12,10 @@
   --color-line: var(--line); --color-fg: var(--fg); --color-dim: var(--dim);
   --color-ok: var(--ok); --color-warn: var(--warn); --color-bad: var(--bad); --color-accent: var(--accent);
   --color-chart-1: var(--chart-1);
-  --color-label-horse: var(--ok); --color-label-person: var(--bad); --color-label-vehicle: var(--accent);
-  --color-label-gold: #19a86a; --color-label-other: #f2c14e;
+  /* detection overlay colours sit on photos, not on the surface, so they are theme-independent; validated with the
+     dataviz palette script 22 Oct: CVD separation >= 8.6 (deutan), normal-vision >= 17, contrast >= 3:1 on #171a21 */
+  --color-label-horse: #34c47f; --color-label-person: #f28c3a; --color-label-vehicle: #3f8fe6;
+  --color-label-gold: #c9ccd4; --color-label-other: #d9ab30;
 }
 :root, :root[data-theme=dark] { --bg:#0f1115; --surface:#171a21; --surface-2:#1f2430; --line:#262a33; --fg:#e6e8ee; --dim:#9aa2b5; --ok:#3ecf8e; --warn:#f5b84b; --bad:#ff6b6b; --accent:#9ecbff; --chart-1:#3987e5; color-scheme: dark; }
 :root[data-theme=light] { --bg:#fcfcfb; --surface:#ffffff; --surface-2:#f1f2f4; --line:#dcdfe5; --fg:#0b0b0b; --dim:#52514e; --ok:#1a7f4b; --warn:#9a6700; --bad:#c2362f; --accent:#1c5cab; --chart-1:#2a78d6; color-scheme: light; }

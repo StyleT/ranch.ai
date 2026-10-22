@@ -1,0 +1,32 @@
+14:48  up 8 days,  7:15, 1 user, load averages: 7.21 5.73 5.63
+
+
+System-wide memory free percentage: 86%
+
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                    47218.
+Pages active:                                 181689.
+Pages inactive:                               195922.
+Pages speculative:                              2051.
+Pages throttled:                                   0.
+Pages wired down:                              54625.
+Pages purgeable:                                1584.
+
+vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
+
+PID    COMMAND          %CPU MEM  
+77975  sed              0.0  1072K
+77972  ffmpeg           0.0  224M 
+77934  bash             0.0  1216K
+77932  bash             0.0  1328K
+77930  bash             0.0  1312K
+77928  bash             0.0  1216K
+77926  bash             0.0  1280K
+77924  bash             0.0  1296K
+77922  bash             0.0  1296K
+77921  bash             0.0  1312K
+77920  logger           0.0  1152K
+77919  bash             0.0  1424K
+77918  bash             0.0  1216K
+63123  containermanager 0.0  3072K
+63122  com.apple.geod   0.0  7808K

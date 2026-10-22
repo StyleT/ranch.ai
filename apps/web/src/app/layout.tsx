@@ -4,7 +4,7 @@ import { Providers } from './providers';
 import { AppShell } from '@/components/layout/AppShell';
 import { env } from '@/bff/env';
 
-export const metadata: Metadata = { title: { default: 'ranch-ai', template: '%s · ranch-ai' }, description: 'Home AI for a horse ranch', manifest: '/manifest.webmanifest' };
+export const metadata: Metadata = { title: { default: 'ranch-ai', template: '%s · ranch-ai' }, description: 'Home AI for a horse ranch', manifest: '/manifest.webmanifest', icons: { icon: '/icons/icon-192.png', apple: '/icons/icon-180.png' }, appleWebApp: { capable: true, title: 'ranch', statusBarStyle: 'black-translucent' } };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#0f1115' };
 
 // Theme is resolved before paint from localStorage (system|dark|light) so there is no flash.

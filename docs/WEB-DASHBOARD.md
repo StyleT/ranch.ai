@@ -77,4 +77,26 @@ Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/we
 - Regroup (22 Oct, after the camera-architecture merge): the web app reads the recorder buffer through the daemon;
   go2rtc removed from it; `seed` fields became `buffer` fields in the status contract.
 - M4 (22 Oct): cut-over. Status daemon on 127.0.0.1:5091 (API only, HTML pages deleted), web app on 5090.
-- Next: M5 Playwright e2e, axe, bundle, manifest; M6 agentic e2e with `claude -p` + Playwright MCP over the subscription.
+- M5 (22 Oct): deterministic e2e and hardening, below.
+- Next: M6 agentic e2e with `claude -p` + Playwright MCP over the subscription.
+
+## End-to-end tests (M5)
+
+`make e2e` (or `npm -w apps/web run e2e`) runs Playwright against a local standalone build and the fixture daemon
+(`apps/web/test/fixture-server.ts`: the recorded fixtures, images, an SSE stream with scripted MQTT, the buffer
+endpoints, taxonomy writes that need `x-ranch-token: test-token` and keep per-version contents, and a
+`?scenario=sse-stall` stream for the watchdog test). Projects: iPhone 13, iPad Mini, desktop Chromium. Specs:
+home (cards, online states, offline alerts, live badge, card → camera page), detections (filters → URL, deep link
+opens the viewer on a burst member, keyboard navigation, baseline sets), phone gestures (swipe advances, bottom
+tabs), taxonomy (edit → validate → score → gate table → apply refused without a token, applied with it → new
+active version → revert), system (daemons, parsed ingest status, probe table), evals (prod row, result file),
+axe on every page (no serious or critical violations; colour contrast checked separately), and the reconnect
+watchdog (after 45 s of silence the client reopens the stream). 22 Oct: 52 passed, 2 skipped (touch tests on
+desktop), ~20 s, two consecutive runs clean.
+
+Hardening: detection overlay colours re-chosen with the dataviz palette validator (CVD separation ≥ 8.6 ΔE
+deutan, normal-vision ≥ 17, contrast ≥ 3:1): horse `#34c47f`, person `#f28c3a`, vehicle `#3f8fe6`, gold
+`#c9ccd4` dashed, other `#d9ab30`; they sit on photos and are theme-independent. Home-screen install: manifest
+with 192/512 px icons and an Apple touch icon. Client JavaScript after build: 867 kB across all chunks (the
+shared runtime chunk 229 kB); no per-route first-load figure is printed by Next 16's build, so the number to
+watch is the total. Lighthouse was not run (no tool on the laptop); axe covers accessibility.

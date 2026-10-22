@@ -1,6 +1,6 @@
 'use client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { keys } from '@/lib/query/keys';
 import { apiGet, apiPost } from '@/lib/query/fetch';
 import type { TaxonomyMeta, TaxonomyVersionFull, ScoreResponse } from '@ranch/contracts';
@@ -13,7 +13,11 @@ export const useTaxonomyMeta = () => useQuery({ queryKey: keys.taxonomy(), query
 export function useDraft(active: Taxonomy | undefined, activeId: number | undefined) {
   const key = `ranch.taxonomy.draft.v${activeId ?? '?'}`;
   const [draft, dispatch] = useReducer((t: Taxonomy | null, a: Action | { type: 'load'; taxonomy: Taxonomy }) => (a.type === 'load' ? a.taxonomy : t ? reduce(t, a) : t), null);
-  useEffect(() => { if (!active) return; let stored: Taxonomy | null = null; try { const s = sessionStorage.getItem(key); if (s) stored = JSON.parse(s) as Taxonomy; } catch { /* ignore */ } dispatch({ type: 'load', taxonomy: stored ?? structuredClone(active) }); }, [active, key]);
+  const activeRef = useRef(active);
+  useEffect(() => { activeRef.current = active; });
+  // (Re)load the draft only when the active VERSION changes, never on a mere refetch of the same version: a refetch
+  // between an edit and its save must not wipe the edit.
+  useEffect(() => { const a = activeRef.current; if (!a || activeId === undefined) return; let stored: Taxonomy | null = null; try { const s = sessionStorage.getItem(key); if (s) stored = JSON.parse(s) as Taxonomy; } catch { /* ignore */ } dispatch({ type: 'load', taxonomy: stored ?? structuredClone(a) }); }, [activeId, key]);
   useEffect(() => { if (!draft || !active) return; try { if (isDirty(active, draft)) sessionStorage.setItem(key, JSON.stringify(draft)); else sessionStorage.removeItem(key); } catch { /* ignore */ } }, [draft, active, key]);
   const dirty = !!(draft && active && isDirty(active, draft));
   return { draft, dispatch, dirty, discard: () => { if (active) dispatch({ type: 'reset', taxonomy: active }); } };

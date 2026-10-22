@@ -65,7 +65,13 @@ function maybeIdle(): void {
 }
 
 /** The SSE response for one browser client. */
-export function liveResponse(signal: AbortSignal): Response {
+export function liveResponse(signal: AbortSignal, scenario: string | null = null): Response {
+  // Test scenario (docs/WEB-DASHBOARD.md §6): one status, then silence, so the browser watchdog must notice the stall.
+  if (scenario === 'sse-stall') {
+    const enc = new TextEncoder();
+    return new Response(new ReadableStream<Uint8Array>({ start(ctrl) { ctrl.enqueue(enc.encode(': connected\n\nevent: status\ndata: {}\n\n')); signal.addEventListener('abort', () => { try { ctrl.close(); } catch { /* closed */ } }); } }),
+      { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-store' } });
+  }
   const enc = new TextEncoder();
   let client: Client | null = null;
   const stream = new ReadableStream<Uint8Array>({

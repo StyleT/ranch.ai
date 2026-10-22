@@ -30,7 +30,7 @@ function HealthStrip({ d }: { d: HomeData }) {
   const h = d.health; const diskPct = h.disk.free_gb !== null && h.disk.total_gb ? Math.round((100 * h.disk.free_gb) / h.disk.total_gb) : null;
   const tile = (label: string, value: React.ReactNode, tone?: 'ok' | 'bad' | 'warn') => <div className="flex min-w-[96px] shrink-0 flex-col rounded-md bg-surface-2 px-2.5 py-1.5"><span className="text-[11px] uppercase tracking-wider text-dim">{label}</span><span className={`text-sm font-semibold ${tone ? `text-${tone}` : ''}`}>{value}</span></div>;
   return (
-    <Card data-testid={tid.healthStrip} className="flex gap-2 overflow-x-auto p-2">
+    <Card data-testid={tid.healthStrip} role="region" aria-label="Health" tabIndex={0} className="flex gap-2 overflow-x-auto p-2 focus-visible:outline focus-visible:outline-accent">
       {tile('host', `${h.host} · ${formatUptime(h.uptime_s)}`)}
       {tile('load', h.load.map((l) => l.toFixed(1)).join(' '))}
       {tile('disk free', diskPct !== null ? `${h.disk.free_gb} GB · ${diskPct}%` : '–', diskPct !== null && diskPct < 10 ? 'warn' : undefined)}
