@@ -3,6 +3,7 @@
 - name: Daemon list
   ansible.builtin.set_fact:
     ranch_daemons:
+      - com.ranch.pf
       - com.ranch.caffeinate
       - com.ranch.quiet-audiomxd
       - com.ranch.mosquitto
