@@ -148,8 +148,8 @@ ranch_app_daemons:                           # restarted by roles/app when the t
   - com.ranch.status
 
 # Tier-1 detector (com.ranch.detector). Model file lives in ranch_models_dir (synced from apps/detector/export).
-# yolo11n is the placeholder until the Post 1 benchmark picks the winner.
-detector_model: yolo11n.mlpackage
+# yolo26s since 22 Oct (evals/LEADERBOARD.md): horse recall 0.60, FPPF(all) 0.14 under the taxonomy, 22.6 ms p50 on the ANE.
+detector_model: yolo26s.mlpackage
 detector_compute: ane            # all | ane | gpu | cpu
 # The runner's floor; what is kept, under which label and at which threshold is packages/taxonomy (docs/TAXONOMY.md).
 detector_threshold: "0.05"

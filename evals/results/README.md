@@ -38,3 +38,8 @@ LEADERBOARD.md notes: the models are solid on cars, over-eager on people at nigh
 The production configuration (`--taxonomy coco`): mapping and per-label thresholds from `packages/taxonomy`,
 reference labels at conf ≥ 0.5. Per class for yolo11n: car 28/28 (2 FP), horse 11/20 (2 FP), dog 1/1 (1 FP),
 person 4/5 but 20 FP, truck 0/14 (tractors), other 0/10. FPPF(all) 0.27, of which 0.20 is `person`.
+
+## 2026-10-22-zero-shot-yolo26.json, -filter-v1-yolo26.json, -latency-yolo26.json
+
+YOLO26n/s added to both scoring forms and a fresh 300-frame latency run for the four YOLOs. See LEADERBOARD.md
+notes (yolo26s becomes prod; gate fails on the single dog box).

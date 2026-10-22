@@ -32,12 +32,26 @@ no runner work is needed. The NMS-free head (`nms=False`) would need a new decod
 the detector sees single frames. A static tractor and a standing person look the same to a per-frame model, and
 a horse that is lying flat and one that is rolling look the same.
 
-**Change: a kept sample is a burst of K frames.** When the sampler decides to keep a frame it grabs K−1 more at
-`RANCH_BURST_GAP_S` apart (defaults K=3, 1 s; the keep-alive consumer makes a grab ~1 s, so a burst is ~2 s of
-motion) and stores them as one group: `frames.burst_id` (= the first frame's id) and `frames.seq` (0..K−1). The
-head frame keeps the `change`/`floor` reason; members get reason `burst`. Retention treats a burst as a unit:
-the head's decision applies to all members, so identical floor bursts vanish together and a burst with motion
-stays whole.
+**Change: a sample that shows change becomes a burst; a still sample stays one frame.** (Vlad, 22 Oct: do not
+over-capture stills that were already processed; capture actual motion; keep resource use under control.)
+
+- *Trigger.* Only a `change` keep (thumbnail diff ≥ 4 % against the last kept frame) opens a burst. A `floor`
+  keep (10 s passed, nothing moved) stays a single frame as today; it is the liveness and time-lapse signal and
+  retention already removes identical ones.
+- *Extension.* After the head, the sampler grabs again after `RANCH_BURST_GAP_S` (1 s). The grab is kept as a
+  member only if it differs from the previous member by ≥ `RANCH_BURST_CHANGE` (1 %, lower than the trigger
+  because consecutive-second motion is subtle); a still grab ends the burst. Hard cap `RANCH_BURST_MAX` (4
+  frames). So a burst is as long as the motion, never longer, and a flash of change (one changed frame, then
+  still) costs exactly one extra grab.
+- *Cooldown.* `RANCH_BURST_COOLDOWN_S` (10 s) per camera: a camera cannot open a new burst until that long after
+  the last one ended; change keeps in the cooldown are single frames.
+- *Global budget.* A token bucket across cameras: `RANCH_BURST_BUDGET_PER_MIN` (60 member frames per minute, all
+  cameras). When exhausted, bursts degrade to single frames and the sampler logs `burst throttled` once per
+  minute; the retained `ranch/status/ingest` message carries `bursts`, `burst_frames`, `throttled` so the status
+  page shows the spend. Worst case the detector sees 60 extra frames per minute (~1 fps at 20 ms each: 2 % of a
+  core); typical nights are zero.
+- *Storage.* `frames.burst_id` (= head id) and `frames.seq`; members get reason `burst`. Retention keeps or
+  deletes a burst as a unit, by the head's decision.
 
 **Detector: boxes become short tracks.** Every member is detected as today (mapped through the taxonomy). When
 the last member arrives the detector associates boxes across the burst (same label, greedy IoU ≥ 0.3 between
@@ -52,9 +66,7 @@ suppression can key on; animals in motion become `moving`; a horse down is `stab
 successive bursts, which is exactly the `horse_down_prolonged` signal Phase 2 needs. Tier 2/3 get the burst, not
 one frame: a VLM or Claude sees three frames 1 s apart and can tell rolling from lying flat.
 
-**Cost.** 3× grabs only at keep time (~every 10 s per camera): ~2 grabs/s across 7 cameras, well inside what the
-keep-alive streams deliver; detector at 8–20 ms per frame stays below 5 % of one core; storage grows only for
-bursts with change or detections (retention). Memory unchanged.
+**Cost.** Bounded by the budget above, not by camera count or activity. Memory unchanged.
 
 **Dashboard.** `/frames` groups a burst into one card: the head frame with a filmstrip of the members, hover or
 arrow keys step through them; boxes carry a motion arrow when `moving`; filter "moving only". `/api/frames`
@@ -64,3 +76,11 @@ returns bursts (head + members + detections with track fields).
 
 ## Order of work
 A1–A6, then B: schema v5 → sampler → detector association → API/browser → retention test → provision → docs.
+
+## Part A, as measured (22 Oct)
+
+Rows in `evals/LEADERBOARD.md`. yolo26s under the production taxonomy: horse recall 0.60 (0.55 for yolo11n),
+precision 0.92 (0.85), FPPF(all) 0.14 (0.27), person precision 0.38 at recall 1.00 (0.17 at 0.80), 22.6 ms p50 on
+the ANE (18.2), RSS unchanged. First model to reach the 0.1 false-positive budget with usable horse recall (0.55
+at threshold 0.75). The relative gate fails on one class: the single gold dog (1/1 → 0/1). Swapped to production
+as instructed with that recorded. yolo26n is not an improvement on yolo11n.

@@ -1,9 +1,10 @@
 // Zero-shot baseline (docs/FRAMES-AND-BASELINE.md §3): freeze a stratified frame set and record what every current
 // model says about it, with no training and no tuning. Later changes are re-run on the same frames and diffed.
 //   node evals/baseline/snapshot.ts --id frames-<name>-vN --n 300 [--since 7d] [--seed 20261020] [--out-media /usr/local/ranch/media/baseline] [--out evals/baseline]
+//   node evals/baseline/snapshot.ts --existing evals/baseline/<date> --models yolo26n,yolo26s   add models' predictions to a frozen set (no new pick)
 // Writes <out>/<date>/frames.jsonl, predictions.<model>.jsonl (all boxes >= 0.05), manifest.json; images under <out-media>/<date>/<camera>/.
 import { parseArgs } from 'node:util';
-import { mkdirSync, copyFileSync, writeFileSync, readdirSync, createReadStream, statSync } from 'node:fs';
+import { mkdirSync, copyFileSync, writeFileSync, readdirSync, createReadStream, statSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, basename } from 'node:path';
 import { hostname } from 'node:os';
@@ -17,8 +18,9 @@ const { values: a } = parseArgs({ options: {
   'out-media': { type: 'string', default: '/usr/local/ranch/media/baseline' }, out: { type: 'string', default: 'evals/baseline' },
   models: { type: 'string', default: '/usr/local/ranch/models' }, threshold: { type: 'string', default: '0.05' }, tz: { type: 'string', default: config.timezone },
   exclude: { type: 'string', default: 'living_room_cam' }, id: { type: 'string' }, parent: { type: 'string' },
+  existing: { type: 'string' }, 'models-only': { type: 'string' },
 } });
-if (!a.id || !/^frames-[a-z0-9-]+-v\d+$/.test(a.id)) { console.error('--id frames-<name>-vN is required (docs/EVALUATION.md §2)'); process.exit(2); }
+if (!a.existing && (!a.id || !/^frames-[a-z0-9-]+-v\d+$/.test(a.id))) { console.error('--id frames-<name>-vN is required (docs/EVALUATION.md §2)'); process.exit(2); }
 
 let s = Number(a.seed) >>> 0;
 const rand = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -29,6 +31,30 @@ async function dirSha(p: string): Promise<string> { // package = directory: hash
   const h = createHash('sha256');
   const walk = async (d: string, rel: string) => { for (const e of readdirSync(d, { withFileTypes: true }).sort((x, y) => x.name.localeCompare(y.name))) { const q = join(d, e.name); if (e.isDirectory()) await walk(q, rel + e.name + '/'); else h.update(rel + e.name + ' ' + (await sha256(q)) + '\n'); } };
   await walk(p, ''); return h.digest('hex');
+}
+
+if (a.existing) {
+  // Frozen set: run the listed models only, append to manifest.json and dataset.json, touch nothing else.
+  const outDir = a.existing; const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8')) as { threshold: number; models: Record<string, unknown> };
+  const dataset = JSON.parse(readFileSync(join(outDir, 'dataset.json'), 'utf8')) as { id: string; preds: Record<string, string> };
+  const rows = readFileSync(join(outDir, 'frames.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as { path: string; frame_id: number; camera: string; ts: string });
+  const names = (a['models-only'] ?? '').split(',').filter(Boolean);
+  if (!names.length) { console.error('--models-only a,b is required with --existing'); process.exit(2); }
+  for (const name of names) {
+    const path = join(a.models!, `${name}.mlpackage`); const compute = name.includes('float32') ? 'gpu' : 'ane';
+    const runner = new Runner({ model: path, compute, threshold: manifest.threshold });
+    const info = await runner.info; const out: string[] = []; const t0 = Date.now(); let ms = 0;
+    for (const r of rows) { const res = await runner.detect(r.path); ms += res.ms; out.push(JSON.stringify({ frame_id: r.frame_id, path: r.path, camera: r.camera, ts: r.ts, model: name, ms: res.ms, detections: res.detections })); }
+    runner.close();
+    writeFileSync(join(outDir, `predictions.${name}.jsonl`), out.join('\n') + '\n');
+    const sha = await dirSha(path);
+    manifest.models[name] = { sha256: sha, compute, inputs: info.inputs, outputs: info.outputs, mean_ms: +(ms / rows.length).toFixed(2), wall_s: +((Date.now() - t0) / 1000).toFixed(1), added: new Date().toISOString() };
+    dataset.preds[`preds-${dataset.id}-${name}-${sha.slice(0, 8)}`] = `predictions.${name}.jsonl`;
+    console.log(JSON.stringify({ model: name, frames: rows.length, mean_ms: +(ms / rows.length).toFixed(2), sha8: sha.slice(0, 8) }));
+  }
+  writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  writeFileSync(join(outDir, 'dataset.json'), JSON.stringify(dataset, null, 2) + '\n');
+  process.exit(0);
 }
 
 const date = new Date().toISOString().slice(0, 10);
@@ -71,7 +97,7 @@ for (const m of models) {
 writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 const commit = (() => { try { return execSync('git rev-parse --short HEAD 2>/dev/null').toString().trim() || null; } catch { return null; } })();
 const framesSha = await sha256(join(outDir, 'frames.jsonl'));
-writeFileSync(join(outDir, 'dataset.json'), JSON.stringify({ id: a.id, kind: 'frames', version: Number(a.id.split('-v').pop()), created: new Date().toISOString(), parent: a.parent ?? null, n: rows.length,
+writeFileSync(join(outDir, 'dataset.json'), JSON.stringify({ id: a.id, kind: 'frames', version: Number(a.id!.split('-v').pop()), created: new Date().toISOString(), parent: a.parent ?? null, n: rows.length,
   sha256: { 'frames.jsonl': framesSha }, source: { query: 'frames table', since: a.since, seed: Number(a.seed), stratify: 'camera x day/night', exclude: a.exclude }, host: hostname(), commit, media_dir: mediaDir,
   preds: Object.fromEntries(Object.entries(manifest.models as Record<string, { sha256: string }>).map(([m, v]) => [`preds-${a.id}-${m}-${v.sha256.slice(0, 8)}`, `predictions.${m}.jsonl`])) }, null, 2) + '\n');
 console.log(JSON.stringify({ dataset: a.id, sha256: framesSha.slice(0, 12) }));

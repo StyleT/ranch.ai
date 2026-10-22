@@ -25,9 +25,13 @@ Protocol: `docs/EVALUATION.md`. One row per result file in `evals/results/`. CI 
 | 2026-10-20 | revised-labelconf05-quadruped | yolo11s | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.00 @– | R 0.60 [0.38–0.83] | 0.59 | 0.69 | 0.88 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
 | 2026-10-20 | revised-labelconf05-quadruped | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.35 @0.65 | R 0.60 [0.38–0.82] | 0.65 | 1.89 | 0.85 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
 | 2026-10-20 | revised-labelconf05-quadruped | rfdetr-nano-float32 | frames-ranch-v1 (100 labeled) | **labels-ranch-claude-revised-vlad-v1**, conf ≥ 0.5 + cow/sheep → horse | 0.30 @0.8 | R 0.60 [0.38–0.82] | 0.63 | 2.00 | 0.86 | | | `2026-10-20-revised-labelconf05-quadruped.json` |
-| 2026-10-21 | **filter-v1** (taxonomy coco mapping + per-label thresholds) | yolo11n | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.00 @– | R 0.55 [0.32–0.80] | 0.55 | 0.27 | 0.89 | | | **prod** `2026-10-21-filter-v1.json` |
+| 2026-10-21 | **filter-v1** (taxonomy coco mapping + per-label thresholds) | yolo11n | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.00 @– | R 0.55 [0.32–0.80] | 0.55 | 0.27 | 0.89 | | | `2026-10-21-filter-v1.json` (prod 21–22 Oct) |
 | 2026-10-21 | **filter-v1** (taxonomy coco mapping + per-label thresholds) | yolo11s | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.40 @0.85 | R 0.60 [0.38–0.83] | 0.59 | 0.17 | 0.88 | | | `2026-10-21-filter-v1.json` |
 | 2026-10-21 | **filter-v1** (taxonomy coco mapping + per-label thresholds) | rfdetr-nano-float16 | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.45 @0.5 | R 0.60 [0.38–0.82] | 0.65 | 0.18 | 0.85 | | | `2026-10-21-filter-v1.json` |
+| 2026-10-22 | zero-shot | yolo26n | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.00 @– | R 0.35 [0.15–0.56] | 0.35 | 0.63 | 0.87 | 0.0 |  | `2026-10-22-zero-shot-yolo26.json` |
+| 2026-10-22 | zero-shot | yolo26s | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.00 @– | R 0.40 [0.18–0.62] | 0.40 | 0.64 | 0.88 | 0.0 |  | `2026-10-22-zero-shot-yolo26.json` |
+| 2026-10-22 | filter-v1 (taxonomy coco) | yolo26n | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.00 @– | R 0.40 [0.19–0.64] | 0.40 | 0.19 | 0.88 | 0.0 |  | `2026-10-22-filter-v1-yolo26.json` |
+| 2026-10-22 | filter-v1 (taxonomy coco) | yolo26s | frames-ranch-v1 (100 labeled) | labels-ranch-claude-revised-vlad-v1, conf ≥ 0.5 | 0.55 @0.75 | R 0.60 [0.36–0.82] | 0.60 | 0.14 | 0.91 | 0.0 |  | **prod** `2026-10-22-filter-v1-yolo26.json` |
 
 Notes 2026-10-20: 23 horse-class gold boxes (14 horses + 9 donkeys mapped to horse) in the 100 labeled frames; intervals are wide, as EVALUATION.md §4.2 warns. 12 of the 23 are missed by every model at 0.25: all seven large daytime donkeys (356–489 px wide), three animals under 120 px, one frame-filling night horse. IoU 0.3 changes nothing: misses are misses, not misplaced boxes. No model meets the FPPF ≤ 0.1 budget at any threshold except RF-DETR at 0.8 (recall 0.17).
 
@@ -54,3 +58,12 @@ model: the remaining false boxes are `person` on yolo11n (20 in 100 frames) and 
 (14 survive at 0.98), so no threshold reaches them. They sit on a static object in the back yard by day and on
 horses at night. yolo11s makes a quarter as many (7, 6 at 0.98) with higher horse recall at +10 ms per frame;
 that swap is the next row to decide, with the fine-tune question.
+
+YOLO26, 22 Oct (`docs/MODEL-YOLO26.md`): yolo26n/yolo26s exported with the same NMS pipeline, same runner. Latency
+on the ANE over 300 frames (this run; the 15 Oct table used 40 night frames): yolo11n 18.2 ms p50, yolo11s 22.6,
+yolo26n 17.5, yolo26s 22.6; RSS 53–54 MB for all. Under the production taxonomy, yolo26s vs yolo11n: horse recall
+0.55 → 0.60, horse precision 0.85 → 0.92, FPPF(all) 0.27 → 0.14, person precision 0.17 → 0.38 at recall 1.00,
+count-exact 0.89 → 0.91, day/night horse recall 0.50/0.60 → 0.50/0.70; yolo26s is the first model to reach the
+0.1 false-positive budget with usable recall (R@FPPF≤0.1 = 0.55 at threshold 0.75). **Relative gate: FAIL on one
+class**, dog 1/1 → 0/1 (a single gold box; both models also put one false dog on a donkey). Swapped to production
+on Vlad's instruction with that recorded; yolo26n is not better than yolo11n (horse 0.40, person 2/5).

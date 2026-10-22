@@ -22,6 +22,8 @@
     "preds-frames-ranch-v1-rfdetr-nano-float16-a786ba8a": "predictions.rfdetr-nano-float16.jsonl",
     "preds-frames-ranch-v1-rfdetr-nano-float32-b7d49936": "predictions.rfdetr-nano-float32.jsonl",
     "preds-frames-ranch-v1-yolo11n-7edec780": "predictions.yolo11n.jsonl",
-    "preds-frames-ranch-v1-yolo11s-0b717c6c": "predictions.yolo11s.jsonl"
+    "preds-frames-ranch-v1-yolo11s-0b717c6c": "predictions.yolo11s.jsonl",
+    "preds-frames-ranch-v1-yolo26n-b4693414": "predictions.yolo26n.jsonl",
+    "preds-frames-ranch-v1-yolo26s-01e03dff": "predictions.yolo26s.jsonl"
   }
 }

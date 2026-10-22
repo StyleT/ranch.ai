@@ -11,6 +11,8 @@ Rules: docs/EVALUATION.md §2. Verify a dataset by comparing its `dataset.json` 
 | preds-frames-ranch-v1-yolo11s-0b717c6c | preds | 2026-10-20 | 300 | frames-ranch-v1 | 58d26b97e4df8b96… | `evals/baseline/2026-10-20/predictions.yolo11s.jsonl` | same repo and tag, `predictions.*.jsonl` |
 | labels-ranch-claude-v1 | labels | 2026-10-20 | 100 | frames-ranch-v1 | e7e0d99bef670c6c… | `evals/golden/labels-ranch-claude-v1.jsonl` (+ `.dataset.json`) | [tag labels-ranch-claude-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-claude-v1) `labels/` |
 | labels-ranch-claude-revised-vlad-v1 | labels | 2026-10-20 | 100 | labels-ranch-claude-v1 | 88fd9e2f3fd77486… | `evals/golden/labels-ranch-claude-revised-vlad-v1.jsonl` (+ `.dataset.json`) | [tag labels-ranch-claude-revised-vlad-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-claude-revised-vlad-v1) `labels/` |
+| preds-frames-ranch-v1-yolo26n-b4693414 | preds | 2026-10-22 | 300 | frames-ranch-v1 | 3a21179959c0fead… | `evals/baseline/2026-10-20/predictions.yolo26n.jsonl` | same repo, `frames-ranch-v1/predictions.yolo26n.jsonl` |
+| preds-frames-ranch-v1-yolo26s-01e03dff | preds | 2026-10-22 | 300 | frames-ranch-v1 | 3df0ebecf96b8aac… | `evals/baseline/2026-10-20/predictions.yolo26s.jsonl` | same repo, `frames-ranch-v1/predictions.yolo26s.jsonl` |
 
 Notes on `labels-ranch-claude-v1` (smoke-verified 20 Oct, see LEADERBOARD.md): reliable at labeler confidence ≥ 0.7;
 boxes at 0.25–0.45 are hedged guesses on dark blobs and include a static patch on front_porch_cam boxed as a cat in

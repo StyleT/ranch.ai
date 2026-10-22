@@ -1,0 +1,85 @@
+{
+  "ts": "2026-10-22T03:41:32.013Z",
+  "tag": "latency-yolo26",
+  "host": "ranch-ai",
+  "commit": null,
+  "command": "/usr/local/ranch/app/apps/detector/src/bench.ts --frames evals/baseline/2026-10-20/frames.jsonl --model /usr/local/ranch/models/yolo11n.mlpackage --model /usr/local/ranch/models/yolo11s.mlpackage --model /usr/local/ranch/models/yolo26n.mlpackage --model /usr/local/ranch/models/yolo26s.mlpackage --compute ane --tag latency-yolo26 --out evals/results/2026-10-22-latency-yolo26.json",
+  "frames": {
+    "file": "evals/baseline/2026-10-20/frames.jsonl",
+    "sha256": "b3f7c87146018c03e434d53529ab74aa3695c72ba608d38cdd3d2717b8438af5",
+    "dataset": "frames-ranch-v1",
+    "n": 300,
+    "scored": 300
+  },
+  "labels": null,
+  "class_mapping": {
+    "donkey": "horse",
+    "delivery_vehicle": "truck",
+    "tractor": "truck",
+    "atv": "truck",
+    "trailer": "truck",
+    "people": "person"
+  },
+  "min_label_conf": null,
+  "taxonomy": null,
+  "threshold": 0.25,
+  "iou": 0.5,
+  "results": [
+    {
+      "model": "/usr/local/ranch/models/yolo11n.mlpackage",
+      "tag": "latency-yolo26",
+      "taxonomy": null,
+      "compute": "ane",
+      "latency": {
+        "p50_ms": 18.17,
+        "p95_ms": 21.26,
+        "mean_ms": 16.99133333333331,
+        "fps_wall": 56.36978579481398,
+        "peak_rss_mb": 53,
+        "compiled_ms": null
+      }
+    },
+    {
+      "model": "/usr/local/ranch/models/yolo11s.mlpackage",
+      "tag": "latency-yolo26",
+      "taxonomy": null,
+      "compute": "ane",
+      "latency": {
+        "p50_ms": 22.65,
+        "p95_ms": 26.47,
+        "mean_ms": 21.28183333333333,
+        "fps_wall": 45.50280600637039,
+        "peak_rss_mb": 53,
+        "compiled_ms": null
+      }
+    },
+    {
+      "model": "/usr/local/ranch/models/yolo26n.mlpackage",
+      "tag": "latency-yolo26",
+      "taxonomy": null,
+      "compute": "ane",
+      "latency": {
+        "p50_ms": 17.48,
+        "p95_ms": 21.21,
+        "mean_ms": 16.726300000000005,
+        "fps_wall": 57.49329244921426,
+        "peak_rss_mb": 54,
+        "compiled_ms": null
+      }
+    },
+    {
+      "model": "/usr/local/ranch/models/yolo26s.mlpackage",
+      "tag": "latency-yolo26",
+      "taxonomy": null,
+      "compute": "ane",
+      "latency": {
+        "p50_ms": 22.56,
+        "p95_ms": 26.2,
+        "mean_ms": 21.107733333333325,
+        "fps_wall": 46.04051565377532,
+        "peak_rss_mb": 54,
+        "compiled_ms": null
+      }
+    }
+  ]
+}

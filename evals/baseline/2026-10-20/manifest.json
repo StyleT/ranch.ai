@@ -62,6 +62,38 @@
       ],
       "mean_ms": 20.27,
       "wall_s": 6.3
+    },
+    "yolo26n": {
+      "sha256": "b46934142ba058ccad3ecf176c9b724908a91411a8ab540ff278a4f4e1d1ba66",
+      "compute": "ane",
+      "inputs": [
+        "iouThreshold",
+        "confidenceThreshold",
+        "image"
+      ],
+      "outputs": [
+        "confidence",
+        "coordinates"
+      ],
+      "mean_ms": 16.39,
+      "wall_s": 5.1,
+      "added": "2026-10-22T03:40:28.813Z"
+    },
+    "yolo26s": {
+      "sha256": "01e03dff7930104c85bdfb71f62de36ba2c4eade367e751995c88d3cbe03a112",
+      "compute": "ane",
+      "inputs": [
+        "confidenceThreshold",
+        "iouThreshold",
+        "image"
+      ],
+      "outputs": [
+        "coordinates",
+        "confidence"
+      ],
+      "mean_ms": 20.75,
+      "wall_s": 6.5,
+      "added": "2026-10-22T03:40:35.326Z"
     }
   }
 }
