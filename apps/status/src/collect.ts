@@ -8,21 +8,22 @@ import { hostname, loadavg, uptime } from 'node:os';
 import { config } from '@ranch/config';
 import { getTaxonomy, getTaxonomyVersionId, horseIsEquine, loadTaxonomyFile, REPO_TAXONOMY_FILE } from '@ranch/taxonomy';
 import { differsFromRepo } from '@ranch/taxonomy/store';
+import type { Status as StatusContract } from '@ranch/contracts';
 const repoTaxonomy = loadTaxonomyFile(REPO_TAXONOMY_FILE);
 import type { EventStore, RanchEvent } from '@ranch/events';
 
 const exec = promisify(execFile);
 
-export interface DaemonRow { label: string; pid: number | null; last_exit: number; log: string; status?: Record<string, unknown> | undefined }
-export interface CameraRow {
-  name: string; online: boolean; last_frame_ts: string | null; last_frame_age_s: number | null; frames_10m: number;
+export type DaemonRow = { label: string; pid: number | null; last_exit: number; rss_mb: number | null; log: string; status?: Record<string, unknown> | undefined }
+export type CameraRow = {
+  name: string; online: boolean; last_frame_ts: string | null; last_frame_age_s: number | null; frames_10m: number; width: number | null; height: number | null;
   horse_last_min: number | null; model: string | null; fw: string | null; ip: string | null; seed_frames: number;
 }
-export interface Status {
+export type Status = {
   ts: string; host: string; uptime_s: number; load: number[]; disk_free_gb: number | null; disk_total_gb: number | null;
   seed: { total: number; window_start: string | null; window_hours: number | null };
   daemons: DaemonRow[]; cameras: CameraRow[]; labels_1h: { label: string; n: number; conf: number }[];
-  labels_by_camera_1h: { camera: string; label: string; n: number; conf: number }[];
+  labels_by_camera_1h: { camera: string; label: string; n: number; conf: number; raw: Record<string, number> }[];
   label_order: readonly string[]; taxonomy_version: number | null; taxonomy_matches_repo: boolean; horse_label: string;
   events: RanchEvent[]; totals: { frames: number; detections: number; events: number };
 }
@@ -51,12 +52,18 @@ async function lastLogLines(): Promise<Map<string, string>> {
   return lines;
 }
 
-async function launchd(): Promise<{ label: string; pid: number | null; last_exit: number }[]> {
+/** launchctl list for com.ranch.* plus each pid's RSS from ps (the measurement for every daemon, web and bridge included). */
+async function launchd(): Promise<{ label: string; pid: number | null; last_exit: number; rss_mb: number | null }[]> {
   try {
-    const { stdout } = await exec('sudo', ['-n', 'launchctl', 'list'], { timeout: 5000 });
+    // launchd holds the bash wrapper's pid; the daemon's node process and its logger are in that process group, so
+    // the RSS of a daemon is the sum over its group.
+    const [{ stdout }, ps] = await Promise.all([exec('sudo', ['-n', 'launchctl', 'list'], { timeout: 5000 }), exec('/bin/ps', ['-axo', 'pgid=,rss='], { timeout: 5000 }).catch(() => ({ stdout: '' }))]);
+    const rss = new Map<number, number>();
+    for (const l of ps.stdout.split('\n')) { const m = /^\s*(\d+)\s+(\d+)/.exec(l); if (m) rss.set(Number(m[1]), (rss.get(Number(m[1])) ?? 0) + Number(m[2])); }
     return stdout.split('\n').filter((l) => l.includes('com.ranch.')).map((l) => {
       const [pid, exit, label] = l.trim().split(/\s+/);
-      return { label: label ?? '', pid: pid === '-' ? null : Number(pid), last_exit: Number(exit ?? 0) };
+      const p = pid === '-' ? null : Number(pid);
+      return { label: label ?? '', pid: p, last_exit: Number(exit ?? 0), rss_mb: p === null || !rss.has(p) ? null : Math.round(rss.get(p)! / 1024) };
     }).sort((a, b) => a.label.localeCompare(b.label));
   } catch { return []; }
 }
@@ -87,6 +94,10 @@ function seedCounts(): Record<string, number> {
 }
 
 export async function collect(store: EventStore, mqttStatus: Map<string, Record<string, unknown>>): Promise<Status> {
+  return collectStatus(store, mqttStatus) satisfies Promise<StatusContract>;
+}
+
+async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<string, unknown>>): Promise<Status> {
   const now = new Date();
   const iso = (msAgo: number) => new Date(now.getTime() - msAgo).toISOString();
   const [daemons, df, bridge, logLines] = await Promise.all([launchd(), disk(), bridgeCameras(), lastLogLines()]);
@@ -102,7 +113,7 @@ export async function collect(store: EventStore, mqttStatus: Map<string, Record<
     const last = store.lastFrame(name);
     const age = last ? (now.getTime() - new Date(last.ts).getTime()) / 1000 : null;
     const b = bridge[name];
-    return { name, online: age !== null && age < 60, last_frame_ts: last?.ts ?? null, last_frame_age_s: age === null ? null : Math.round(age),
+    return { name, online: age !== null && age < 60, last_frame_ts: last?.ts ?? null, last_frame_age_s: age === null ? null : Math.round(age), width: last?.width ?? null, height: last?.height ?? null,
       frames_10m: per10m.get(name) ?? 0, horse_last_min: horse.get(name) ?? null, model: b?.model ?? null, fw: b?.fw ?? null, ip: b?.ip ?? null, seed_frames: seed[name] ?? 0 };
   });
   const labels = db.prepare(`SELECT d.label, COUNT(*) n, ROUND(AVG(d.confidence), 2) conf FROM detections d JOIN frames f ON f.id = d.frame_id
