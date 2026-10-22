@@ -67,8 +67,8 @@ leaderboard of taxonomy changes.
 
 ## 6. Security and limits
 
-No auth on :5090 still; the page can change what the detector counts, so this is the point where it stops being
-acceptable to leave the port open on the LAN. Minimum in this step: `RANCH_STATUS_WRITE_TOKEN` (on the mini in
+:5090 is LAN-only since 22 Oct (pf refuses it on the Tailscale addresses), and still without auth; the page can
+change what the detector counts, so a write needs more than "is on the LAN". Minimum in this step: `RANCH_STATUS_WRITE_TOKEN` (on the mini in
 `~/.config/ranch/status.env`), required as a header for every write endpoint; the page asks for it once and keeps
 it in session storage. Reads stay open. The token is the same mechanism the later MCP surface will use.
 

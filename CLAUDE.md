@@ -27,6 +27,8 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   pipe is safe. Template in `infra/launchd/<label>.plist.j2`, scripts in `infra/bin/`, registered in
   `roles/services/tasks/main.yml` (`ranch_daemons`). A changed plist is re-bootstrapped (kickstart would keep the
   old definition).
+- Ports listed in `tailscale_blocked_ports` (group_vars) are refused on the Tailscale addresses by a pf anchor and are
+  LAN-only (today: 5090, the status page). Verify them with `ssh ranch curl 127.0.0.1:<port>`, not over the tailnet.
 - Ansible runs from the laptop: `~/.local/bin/ansible-playbook` (installed with `uv tool`).
   Target interpreter is `/usr/bin/python3` (3.9.6 from Xcode CLT).
 - Secrets never enter the repo. Device credentials live on the mini in `~/.config/ranch/*.env` (mode 600);

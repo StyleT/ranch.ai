@@ -6,8 +6,11 @@ one-liners used to track the Phase 1 pipeline.*
 ## What it is
 
 One Node 24 process (`node:http` only, no framework, no bundler), serving one HTML page with a little inline
-script. Port 5090 on `0.0.0.0`, reachable over Tailscale and the ranch LAN. No auth yet, same trade-off as the
-bridge UI on 5080 and go2rtc on 1984; revisit before anything else joins the LAN.
+script. Port 5090 on `0.0.0.0`, but **LAN-only since 22 Oct**: a pf anchor (`/etc/pf.anchors/com.ranch`, managed
+by `roles/services`, `tailscale_blocked_ports`) refuses the port on the node's Tailscale addresses, and
+`com.ranch.pf` re-enables pf at boot. So `http://ranch-ai.local:5090` works on the ranch LAN and
+`ranch-ai.tail6d04cd.ts.net:5090` is refused; verification from the laptop goes through `ssh ranch curl
+127.0.0.1:5090/...`. No auth yet; the bridge UI (5080) and go2rtc (1984) are still open on the tailnet.
 
 ## Data sources (all already on the box)
 

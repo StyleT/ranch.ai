@@ -66,6 +66,43 @@
   become: true
   loop: "{{ ranch_daemons_retired | map('regex_replace', '^(.*)$', '/Library/LaunchDaemons/\\1.plist') | list + ranch_scripts_retired | map('regex_replace', '^(.*)$', ranch_bin_dir ~ '/\\1') | list }}"
 
+# Packet filter: close the listed ports on the node's Tailscale addresses (docs/STATUS-DASHBOARD.md).
+- name: Tailscale addresses of this node
+  ansible.builtin.command: /opt/homebrew/bin/tailscale ip
+  register: ts_ip
+  changed_when: false
+  check_mode: false
+
+- name: pf anchor com.ranch
+  ansible.builtin.template:
+    src: pf.anchors.com.ranch.j2
+    dest: /etc/pf.anchors/com.ranch
+    owner: root
+    group: wheel
+    mode: "0644"
+  vars:
+    tailscale_addrs: "{{ ts_ip.stdout_lines }}"
+  become: true
+  register: pf_anchor
+
+- name: pf.conf loads the com.ranch anchor
+  ansible.builtin.blockinfile:
+    path: /etc/pf.conf
+    marker: "# {mark} ANSIBLE MANAGED: com.ranch anchor"
+    block: |
+      anchor "com.ranch"
+      load anchor "com.ranch" from "/etc/pf.anchors/com.ranch"
+  become: true
+  register: pf_conf
+
+- name: pf enabled with the current ruleset
+  ansible.builtin.shell: /sbin/pfctl -E -f /etc/pf.conf 2>&1; /sbin/pfctl -s info 2>/dev/null | head -1
+  register: pf_apply
+  changed_when: pf_anchor.changed or pf_conf.changed
+  failed_when: "'Status: Enabled' not in pf_apply.stdout"
+  become: true
+  when: not ansible_check_mode
+
 - name: Install daemon plists
   ansible.builtin.template:
     src: "{{ playbook_dir }}/../launchd/{{ item }}.plist.j2"

@@ -134,6 +134,9 @@ seed_hours: 16               # was 48; cut short 16 Oct 13:00 ET: seven continuo
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)
 ranch_models_dir: /usr/local/ranch/models   # CoreML packages, not in git
+# Ports closed on the Tailscale addresses (pf anchor com.ranch): LAN-only services. 22 stays open on both.
+tailscale_blocked_ports:
+  - 5090                                     # status dashboard
 ranch_daemons_retired:                       # unloaded and deleted by roles/services
   - com.ranch.logrotate                      # 16 Oct: custom rotation replaced by the unified log
 ranch_scripts_retired:

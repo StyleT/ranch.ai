@@ -1,0 +1,7 @@
+# Managed by Ansible (roles/services, docs/STATUS-DASHBOARD.md). Ports that must not be reachable over Tailscale:
+# the LAN keeps them, the tailnet addresses of this node refuse them. "return" = immediate connection refused.
+{% for port in tailscale_blocked_ports %}
+{% for addr in tailscale_addrs %}
+block return in quick proto tcp from any to {{ addr }} port {{ port }}
+{% endfor %}
+{% endfor %}
