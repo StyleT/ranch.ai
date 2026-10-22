@@ -17,7 +17,7 @@ export const CameraRow = z.looseObject({
   width: NullableNum.optional(), height: NullableNum.optional(),
 });
 export const RanchEvent = z.looseObject({
-  id: z.number(), ts: Iso, camera: z.string(), type: z.string(), confidence: z.number(), tier_decided: z.number(),
+  id: z.string(), ts: Iso, camera: z.string(), type: z.string(), confidence: z.number(), tier_decided: z.number(),
   verdict: z.string().nullable(), created_at: Iso,
 });
 export const Status = z.looseObject({
