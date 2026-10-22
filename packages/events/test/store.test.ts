@@ -75,3 +75,26 @@ test('bursts: members ride with the head in listing and retention', () => {
   assert.equal(s.burstMembers(head).length, 3);                      // head + 2 members survive together
   s.close();
 });
+
+test('series and track summaries', () => {
+  const s = new EventStore(':memory:');
+  const t0 = Date.parse('2026-10-22T10:00:00Z'); const at = (sec: number) => new Date(t0 + sec * 1000).toISOString();
+  for (let m = 0; m < 10; m++) s.upsertCameraCount({ ts: at(m * 60), camera: 'cam', label: 'horse', count: m % 3, model: 'm' });
+  const cs = s.cameraCountSeries({ since: at(0), camera: 'cam', bucketS: 300 });
+  assert.equal(cs.length, 1); assert.equal(cs[0]!.points.length, 2); assert.equal(cs[0]!.points[0]!.max, 2); assert.equal(cs[0]!.points[0]!.n, 5);
+  const head = s.insertFrame({ ts: at(0), camera: 'cam', path: '/t/0.jpg', reason: 'change' }); s.markBurstHead(head);
+  const m1 = s.insertFrame({ ts: at(1), camera: 'cam', path: '/t/1.jpg', reason: 'change', burst_id: head, seq: 1 });
+  s.insertFrame({ ts: at(600), camera: 'cam', path: '/t/600.jpg', reason: 'floor' });
+  const [a] = s.insertDetections(head, [{ model: 'm', label: 'horse', confidence: 0.8, x: 0.1, y: 0.1, w: 0.2, h: 0.2 }]);
+  const [b] = s.insertDetections(m1, [{ model: 'm', label: 'horse', confidence: 0.9, x: 0.15, y: 0.1, w: 0.2, h: 0.2 }]);
+  s.updateTrack(a!, { track: 1, seen: 2, dx: 0.05, dy: 0 }); s.updateTrack(b!, { track: 1, seen: 2, dx: 0.05, dy: 0 });
+  const fs = s.frameSeries({ since: at(0), camera: 'cam', bucketS: 300 });
+  assert.deepEqual(fs[0]!.points.map((p) => p.frames), [1, 1]);          // members are not counted
+  const tr = s.trackSummaries({ since: at(0), camera: 'cam' });
+  assert.equal(tr.length, 1); assert.equal(tr[0]!.tracks, 1); assert.equal(tr[0]!.boxes, 2); assert.equal(tr[0]!.members, 2); assert.ok(tr[0]!.moving); assert.equal(tr[0]!.conf, 0.9);
+  assert.equal(s.trackSummaries({ since: at(0), moving: true }).length, 1);
+  assert.equal(s.trackSummaries({ since: at(0), label: 'person' }).length, 0);
+  const fw = s.frameWithBurst(head)!; assert.equal(fw.burst.length, 1); assert.equal(fw.burst[0]!.detections.length, 1);
+  assert.equal(s.frameWithBurst(999999), undefined);
+  s.close();
+});

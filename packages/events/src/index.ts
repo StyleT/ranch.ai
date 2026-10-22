@@ -22,7 +22,7 @@ export interface NewDetection {
   model: string; label: string; confidence: number; x: number; y: number; w: number; h: number; latency_ms?: number; raw_label?: string;
 }
 export type Verdict = 'true_positive' | 'false_positive';
-export interface RanchEvent {
+export type RanchEvent = {
   id: string; ts: string; camera: string; type: string; confidence: number; tier_decided: 1 | 2 | 3;
   evidence_frames: string[]; crop_paths: string[]; vlm_text: string | null; claude_text: string | null;
   cost_usd: number; latency_ms: number | null; trace_id: string | null; verdict: Verdict | null;
@@ -165,7 +165,7 @@ export class EventStore {
     if (q.reason) { where.push('f.reason = ?'); args.push(q.reason); }
     if (q.before) { where.push('f.id < ?'); args.push(q.before); }
     where.push('(f.seq IS NULL OR f.seq = 0)'); // burst members ride with their head
-    if (q.moving) where.push('EXISTS (SELECT 1 FROM detections d JOIN frames m ON m.id = d.frame_id WHERE (m.id = f.id OR m.burst_id = f.id) AND d.dx IS NOT NULL AND (d.dx*d.dx + d.dy*d.dy) >= 0.0004)'); // anywhere in the burst
+    if (q.moving) { where.push('EXISTS (SELECT 1 FROM detections d JOIN frames m ON m.id = d.frame_id WHERE (m.id = f.id OR m.burst_id = f.id) AND d.dx IS NOT NULL AND (d.dx*d.dx + d.dy*d.dy) >= ?)'); args.push(MOVING_DISP2); } // anywhere in the burst
     const detCond: string[] = []; const detArgs: SQLInputValue[] = [];
     if (q.label) { detCond.push('d.label = ?'); detArgs.push(q.label); }
     if (q.minConf !== undefined) { detCond.push('d.confidence >= ?'); detArgs.push(q.minConf); }
@@ -286,6 +286,56 @@ export class EventStore {
       ON CONFLICT (ts, camera, label) DO UPDATE SET count = excluded.count, model = excluded.model`).run(c.ts, c.camera, c.label, c.count, c.model);
   }
 
+  /** One burst head with its members and detections, for deep links. */
+  frameWithBurst(id: number): (Frame & { detections: Detection[]; burst: (Frame & { detections: Detection[] })[] }) | undefined {
+    const f = this.frameById(id); if (!f) return undefined;
+    const dets = this.db.prepare('SELECT * FROM detections WHERE frame_id = ? ORDER BY confidence DESC');
+    const members = f.burst_id ? (this.db.prepare('SELECT * FROM frames WHERE burst_id = ? AND seq > 0 ORDER BY seq').all(f.burst_id) as unknown as Frame[]) : [];
+    return { ...f, detections: dets.all(f.id) as unknown as Detection[], burst: members.map((m) => ({ ...m, detections: dets.all(m.id) as unknown as Detection[] })) };
+  }
+
+  /** camera_counts bucketed in time (bucketS seconds): per camera and label, max/mean count and row count per bucket. */
+  cameraCountSeries(q: { since: string; until?: string; camera?: string; label?: string; bucketS: number }): { camera: string; label: string; bucket_s: number; points: { ts: string; max: number; mean: number; n: number }[] }[] {
+    const where = ['ts >= ?']; const args: SQLInputValue[] = [q.bucketS, q.bucketS, q.since];
+    if (q.until) { where.push('ts < ?'); args.push(q.until); }
+    if (q.camera) { where.push('camera = ?'); args.push(q.camera); }
+    if (q.label) { where.push('label = ?'); args.push(q.label); }
+    const rows = this.db.prepare(`SELECT camera, label, (CAST(strftime('%s', ts) AS INTEGER) / CAST(? AS INTEGER)) * CAST(? AS INTEGER) AS b, MAX(count) mx, ROUND(AVG(count), 2) av, COUNT(*) n
+      FROM camera_counts WHERE ${where.join(' AND ')} GROUP BY camera, label, b ORDER BY camera, label, b`).all(...args) as unknown as { camera: string; label: string; b: number; mx: number; av: number; n: number }[];
+    const out = new Map<string, { camera: string; label: string; bucket_s: number; points: { ts: string; max: number; mean: number; n: number }[] }>();
+    for (const r of rows) { const k = `${r.camera}|${r.label}`; const o = out.get(k) ?? { camera: r.camera, label: r.label, bucket_s: q.bucketS, points: [] }; o.points.push({ ts: new Date(r.b * 1000).toISOString(), max: r.mx, mean: r.av, n: r.n }); out.set(k, o); }
+    return [...out.values()];
+  }
+
+  /** Burst heads per time bucket (liveness history): frames and the last timestamp per bucket. */
+  frameSeries(q: { since: string; until?: string; camera?: string; bucketS: number }): { camera: string; bucket_s: number; points: { ts: string; frames: number; last: string }[] }[] {
+    const where = ['ts >= ?', '(seq IS NULL OR seq = 0)']; const args: SQLInputValue[] = [q.bucketS, q.bucketS, q.since];
+    if (q.until) { where.push('ts < ?'); args.push(q.until); }
+    if (q.camera) { where.push('camera = ?'); args.push(q.camera); }
+    const rows = this.db.prepare(`SELECT camera, (CAST(strftime('%s', ts) AS INTEGER) / CAST(? AS INTEGER)) * CAST(? AS INTEGER) AS b, COUNT(*) n, MAX(ts) last
+      FROM frames WHERE ${where.join(' AND ')} GROUP BY camera, b ORDER BY camera, b`).all(...args) as unknown as { camera: string; b: number; n: number; last: string }[];
+    const out = new Map<string, { camera: string; bucket_s: number; points: { ts: string; frames: number; last: string }[] }>();
+    for (const r of rows) { const o = out.get(r.camera) ?? { camera: r.camera, bucket_s: q.bucketS, points: [] }; o.points.push({ ts: new Date(r.b * 1000).toISOString(), frames: r.n, last: r.last }); out.set(r.camera, o); }
+    return [...out.values()];
+  }
+
+  /** One row per (burst head, label): the activity feed's raw material. */
+  trackSummaries(q: { since: string; camera?: string; label?: string; moving?: boolean; limit?: number }): { frame_id: number; camera: string; ts: string; burst_id: number | null; label: string; tracks: number; boxes: number; seen: number; disp2: number; conf: number; members: number; moving: boolean }[] {
+    const where = ['(f.seq IS NULL OR f.seq = 0)', 'f.ts >= ?']; const args: SQLInputValue[] = [q.since];
+    if (q.camera) { where.push('f.camera = ?'); args.push(q.camera); }
+    if (q.label) { where.push('d.label = ?'); args.push(q.label); }
+    const having = q.moving ? 'HAVING MAX(COALESCE(d.dx*d.dx + d.dy*d.dy, 0)) >= ?' : '';
+    if (q.moving) args.push(MOVING_DISP2);
+    args.push(Math.min(q.limit ?? 50, 500));
+    const rows = this.db.prepare(`SELECT f.id AS frame_id, f.camera, f.ts, f.burst_id, d.label,
+        COUNT(DISTINCT COALESCE(d.track, -d.id)) tracks, COUNT(*) boxes, MAX(COALESCE(d.seen, 1)) seen,
+        MAX(COALESCE(d.dx*d.dx + d.dy*d.dy, 0)) disp2, MAX(d.confidence) conf,
+        (SELECT COUNT(*) FROM frames m2 WHERE m2.burst_id = f.id AND m2.seq > 0) + 1 AS members
+      FROM frames f JOIN frames m ON (m.id = f.id OR (m.burst_id = f.id AND m.seq > 0)) JOIN detections d ON d.frame_id = m.id
+      WHERE ${where.join(' AND ')} GROUP BY f.id, d.label ${having} ORDER BY f.ts DESC LIMIT ?`).all(...args) as unknown as { frame_id: number; camera: string; ts: string; burst_id: number | null; label: string; tracks: number; boxes: number; seen: number; disp2: number; conf: number; members: number }[];
+    return rows.map((r) => ({ ...r, moving: r.disp2 >= MOVING_DISP2 }));
+  }
+
   cameraCounts(q: { since?: string; camera?: string; label?: string; limit?: number } = {}): { ts: string; camera: string; label: string; count: number; model: string }[] {
     const where: string[] = []; const args: SQLInputValue[] = [];
     if (q.since) { where.push('ts >= ?'); args.push(q.since); }
@@ -297,6 +347,9 @@ export class EventStore {
 }
 
 export interface TaxonomyVersionRow { id: number; created: string; author: string; note: string | null; json: string; parent_id: number | null; score_json: string | null; gate: string | null; active: number }
+
+/** Normalized displacement² across a burst that counts as movement (0.02 of the frame). Shared with the detector. */
+export const MOVING_DISP2 = 0.0004;
 
 interface Box { label: string; x: number; y: number; w: number; h: number }
 function iou(a: Box, b: Box): number {

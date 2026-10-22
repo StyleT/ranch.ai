@@ -5,6 +5,7 @@
 //   GET /frames, /api/frames  the frame browser (docs/FRAMES-AND-BASELINE.md §2)
 //   GET /api/baseline, /api/baseline/<date>?model=, /api/baseline-frame/<date>/<camera>/<file>  zero-shot baseline sets (§3)
 //   GET /api/events        server-sent events: every MQTT message on ranch/# plus a status document every 15 s
+//   GET /api/ping, /api/counts/series, /api/frames/series, /api/tracks, /api/frames/<id>   series and bursts for the web app (docs/WEB-DASHBOARD.md); contract in packages/contracts
 //   GET /taxonomy, /api/taxonomy[/versions[/<id>]]; POST /api/taxonomy/{validate,score,apply,revert}  the taxonomy editor (docs/TAXONOMY-UI.md)
 import { createServer, type ServerResponse } from 'node:http';
 import { createReadStream, existsSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -14,6 +15,7 @@ import { promisify } from 'node:util';
 import { join, normalize } from 'node:path';
 import { config } from '@ranch/config';
 import { EventStore, parseSince, type FrameReason } from '@ranch/events';
+import type { Ping, CountSeries, FrameSeries, TrackSummary } from '@ranch/contracts';
 import { connectBus } from '@ranch/bus';
 import { collect, type Status } from './collect.ts';
 import { page } from './page.ts';
@@ -47,7 +49,7 @@ const send = (res: ServerResponse, event: string, data: unknown) => res.write(`e
 
 await bus.subscribe('ranch/#', (topic, payload) => {
   if (topic.startsWith('ranch/status/') && payload && typeof payload === 'object') mqttStatus.set(topic.slice('ranch/status/'.length), payload as Record<string, unknown>);
-  if (topic === TAXONOMY_TOPIC) { const m = payload as TaxonomyMessage; if (m && typeof m.version_id === 'number' && m.version_id !== getTaxonomyVersionId()) { const row = store.taxonomyVersion(m.version_id); if (row) applyRow(row, log); } }
+  if (topic === TAXONOMY_TOPIC) { const m = payload as TaxonomyMessage; if (m && typeof m.version_id === 'number' && m.version_id !== getTaxonomyVersionId()) { const row = store.taxonomyVersion(m.version_id); if (row) { applyRow(row, log); cache = undefined; } } }
   for (const res of sse) send(res, 'mqtt', { topic, payload });
 });
 
@@ -65,6 +67,10 @@ setInterval(() => { for (const res of sse) res.write(': keep-alive\n\n'); }, 20_
 
 // ---- taxonomy editor support ------------------------------------------------------------------------------------
 const readBody = (req: import('node:http').IncomingMessage): Promise<unknown> => new Promise((resolve, reject) => { const chunks: Buffer[] = []; req.on('data', (c: Buffer) => { chunks.push(c); if (chunks.reduce((n, b) => n + b.length, 0) > 2e6) reject(new Error('body too large')); }); req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch (e) { reject(e); } }); req.on('error', reject); });
+/** Bucket spec for the series endpoints: 1m, 5m, 15m, 1h (seconds, min 60). */
+const parseBucket = (spec: string): number => { const m = /^(\d+)(m|h)$/.exec(spec); if (!m) throw new Error(`bad bucket ${spec}`); const s = Number(m[1]) * (m[2] === 'h' ? 3600 : 60); if (s < 60 || s > 86400) throw new Error(`bad bucket ${spec}`); return s; };
+/** Series never reach back more than 7 days (bounded row counts). */
+const clampSince = (iso: string): string => { const min = Date.now() - 7 * 86400e3; return Date.parse(iso) < min ? new Date(min).toISOString() : iso; };
 const json = (res: ServerResponse, code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const authorized = (req: import('node:http').IncomingMessage): string | null => !writeToken ? 'no write token configured on the mini (~/.config/ranch/status.env)' : req.headers['x-ranch-token'] !== writeToken ? 'bad or missing x-ranch-token' : null;
 
@@ -159,6 +165,25 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(await status()));
     } else if (url.pathname === '/frames') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(framesPage);
+    } else if (url.pathname === '/api/ping') {
+      json(res, 200, { ok: true, ts: new Date().toISOString(), pid: process.pid, rss_mb: Math.round(process.memoryUsage().rss / 1048576), taxonomy_version: getTaxonomyVersionId(), api: 1 } satisfies Ping); return;
+    } else if (url.pathname === '/api/counts/series' || url.pathname === '/api/frames/series') {
+      const p = url.searchParams; const bucketS = parseBucket(p.get('bucket') ?? '5m');
+      const since = clampSince(parseSince(p.get('since') ?? '1h'));
+      const base = { since, bucketS, ...(p.get('until') ? { until: p.get('until')! } : {}), ...(p.get('camera') ? { camera: p.get('camera')! } : {}) };
+      const out = url.pathname === '/api/counts/series'
+        ? store.cameraCountSeries({ ...base, ...(p.get('label') ? { label: p.get('label')! } : {}) }) satisfies CountSeries
+        : store.frameSeries(base) satisfies FrameSeries;
+      json(res, 200, out); return;
+    } else if (url.pathname === '/api/tracks') {
+      const p = url.searchParams;
+      const rows = store.trackSummaries({ since: clampSince(parseSince(p.get('since') ?? '1h')), ...(p.get('camera') ? { camera: p.get('camera')! } : {}), ...(p.get('label') ? { label: p.get('label')! } : {}), moving: p.get('moving') === '1', ...(p.get('limit') ? { limit: Number(p.get('limit')) } : {}) })
+        .map((r) => ({ ...r, img: `/api/frame/${r.frame_id}` })) satisfies TrackSummary[];
+      json(res, 200, rows); return;
+    } else if (/^\/api\/frames\/\d+$/.test(url.pathname)) {
+      const f = store.frameWithBurst(Number(url.pathname.split('/').pop()));
+      if (!f) { json(res, 404, { error: 'no such frame' }); return; }
+      json(res, 200, f); return;
     } else if (url.pathname === '/api/frames') {
       const p = url.searchParams;
       const num = (k: string) => (p.get(k) ? Number(p.get(k)) : undefined);
@@ -215,7 +240,7 @@ const server = createServer(async (req, res) => {
     } else { res.writeHead(404); res.end('not found'); }
   } catch (e) {
     log('request failed', { path: url.pathname, error: String(e) });
-    if (!res.headersSent) json(res, url.pathname.startsWith('/api/taxonomy/') ? 400 : 500, { error: e instanceof Error ? e.message : String(e) }); else res.end();
+    if (!res.headersSent) json(res, url.pathname.startsWith('/api/taxonomy/') || /^\/api\/(counts|frames|tracks)/.test(url.pathname) ? 400 : 500, { error: e instanceof Error ? e.message : String(e) }); else res.end();
   }
 });
 server.listen(PORT, HOST, () => log('listening', { host: HOST, port: PORT, db: config.dbPath }));

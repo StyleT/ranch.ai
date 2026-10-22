@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2026-10-20",
+    "n": 300,
+    "models": [
+      "labels:labels-ranch-claude-revised-vlad-v1",
+      "labels:labels-ranch-claude-v1",
+      "rfdetr-nano-float16",
+      "rfdetr-nano-float32",
+      "yolo11n",
+      "yolo11s",
+      "yolo26n",
+      "yolo26s"
+    ]
+  }
+]

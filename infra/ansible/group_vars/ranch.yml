@@ -149,6 +149,7 @@ ranch_app_daemons:                           # restarted by roles/app when the t
   - com.ranch.detector
   - com.ranch.netprobe
   - com.ranch.status
+  - com.ranch.web
 
 # Tier-1 detector (com.ranch.detector). Model file lives in ranch_models_dir (synced from apps/detector/export).
 # yolo26s since 22 Oct (evals/LEADERBOARD.md): horse recall 0.60, FPPF(all) 0.14 under the taxonomy, 22.6 ms p50 on the ANE.
@@ -160,6 +161,12 @@ detector_family: coco            # key into MODEL_MAPPINGS; a fine-tuned model g
 
 # Status page (com.ranch.status, apps/status, docs/STATUS-DASHBOARD.md). No auth; LAN + tailnet only.
 status_port: 5090
+# Next.js dashboard (com.ranch.web, apps/web, docs/WEB-DASHBOARD.md). On the temporary loopback port until the cut-over
+# (milestone 4) moves it to 5090 and the status daemon to 5091.
+web_port: 5092
+web_host: 127.0.0.1
+web_max_streams: 2
+web_heap_mb: 256
 # Taxonomy editor (docs/TAXONOMY-UI.md): reference datasets the "Score draft" button uses; write token is generated on the mini.
 status_reference_frames: evals/baseline/2026-10-20
 status_reference_labels: labels-ranch-claude-revised-vlad-v1

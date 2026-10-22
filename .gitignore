@@ -11,3 +11,11 @@ node_modules/
 evals/golden/frames/
 evals/golden/batches/
 evals/baseline/*/frames/
+.claude/
+apps/web/.next/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/coverage/
+apps/web/e2e/ai/runs/
+apps/web/next-env.d.ts
+apps/web/tsconfig.tsbuildinfo

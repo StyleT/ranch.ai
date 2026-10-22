@@ -1,7 +1,7 @@
 ANSIBLE_PLAYBOOK ?= $(HOME)/.local/bin/ansible-playbook
 HOST ?= ranch@ranch-ai.tail6d04cd.ts.net
 
-.PHONY: bootstrap provision check verify snapshot logs logs-last dataset-push taxonomy-pull
+.PHONY: bootstrap provision check verify snapshot logs logs-last dataset-push taxonomy-pull web-dev web-build web-health fixtures-record contract-test e2e e2e-ai
 
 bootstrap:        ## One-time: Xcode CLT + Homebrew on a freshly erased mini
 	ssh $(HOST) 'bash -s' < infra/bootstrap.sh
@@ -40,3 +40,29 @@ taxonomy-pull:    ## Bring the mini's active taxonomy version into the repo (pac
 	@ssh $(HOST) 'cd /usr/local/ranch/app && /usr/local/ranch/bin/node --no-warnings=ExperimentalWarning packages/taxonomy/src/cli.ts export' > .scratch/taxonomy-export.json
 	@node -e 'const fs=require("fs");const e=JSON.parse(fs.readFileSync(".scratch/taxonomy-export.json","utf8"));fs.writeFileSync("packages/taxonomy/taxonomy.json",JSON.stringify(e.taxonomy,null,2)+"\n");if(e.version.score){const f="evals/results/taxonomy-v"+e.version.id+".json";fs.writeFileSync(f,JSON.stringify({version:e.version,taxonomy:e.taxonomy},null,2)+"\n");console.log("wrote",f)}console.log("packages/taxonomy/taxonomy.json <- v"+e.version.id+" ("+e.version.author+(e.version.note?": "+e.version.note:"")+")")'
 	@git status --short packages/taxonomy/taxonomy.json evals/results/
+
+# ---- web app (apps/web, docs/WEB-DASHBOARD.md) ---------------------------------------------------------------------
+STATUS_PORT ?= 5091
+tunnel:
+	@ssh -f -N -o ExitOnForwardFailure=yes -L $(STATUS_PORT):127.0.0.1:$(STATUS_PORT) -L 1984:127.0.0.1:1984 $(HOST) 2>/dev/null || true
+
+web-dev: tunnel        ## Next dev on the laptop against the mini's daemon and go2rtc over an ssh tunnel
+	RANCH_DAEMON_URL=http://127.0.0.1:$(STATUS_PORT) RANCH_GO2RTC_URL=http://127.0.0.1:1984 RANCH_APP_DIR=$(CURDIR) npm -w apps/web run dev
+
+web-build:        ## Build apps/web locally (the same command Ansible runs on the mini)
+	npm -w apps/web run build
+
+web-health:       ## RSS and daemon reachability of com.ranch.web on the mini
+	ssh $(HOST) 'curl -s 127.0.0.1:5090/api/ui/health' | python3 -m json.tool
+
+fixtures-record: tunnel  ## Re-record daemon fixtures into apps/web/test/fixtures (review the diff, commit)
+	node --experimental-strip-types --no-warnings apps/web/scripts/record-fixtures.ts --daemon http://127.0.0.1:$(STATUS_PORT)
+
+contract-test: tunnel    ## Validate the live daemon against packages/contracts
+	RANCH_DAEMON_URL=http://127.0.0.1:$(STATUS_PORT) node --experimental-strip-types --no-warnings apps/web/test/contract/daemon.contract.ts
+
+e2e:              ## Deterministic Playwright against a local build + the fixture daemon
+	npm -w apps/web run e2e
+
+e2e-ai:           ## Agentic e2e: Claude Code (subscription) drives the browser on the ranch LAN. make e2e-ai [MODEL=haiku] [TASK=name] [TARGET=live|fixtures]
+	RANCH_E2E_MODEL=$(or $(MODEL),haiku) RANCH_E2E_TARGET=$(or $(TARGET),live) RANCH_E2E_TASK=$(TASK) npm -w apps/web run e2e:ai

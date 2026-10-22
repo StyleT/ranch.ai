@@ -1,0 +1,16 @@
+{
+  "id": 171022,
+  "ts": "2026-10-22T14:54:53.981Z",
+  "camera": "tractor_cam",
+  "path": "/usr/local/ranch/media/frames/tractor_cam/2026-10-22/2026-10-22T14-54-53-981Z.jpg",
+  "width": 2560,
+  "height": 1440,
+  "bytes": 401061,
+  "change": 0.006075963371459696,
+  "reason": "floor",
+  "kept": null,
+  "burst_id": null,
+  "seq": null,
+  "detections": [],
+  "burst": []
+}

@@ -1,0 +1,200 @@
+{
+  "id": 3,
+  "created": "2026-10-22T03:13:25.670Z",
+  "author": "ui:127.0.0.1",
+  "note": "revert to v1: back to the reviewed thresholds after the step-5 test",
+  "parent_id": 2,
+  "gate": null,
+  "active": 1,
+  "taxonomy": {
+    "classes": {
+      "animal": {
+        "attribute": {
+          "name": "posture",
+          "values": [
+            "standing",
+            "grazing",
+            "drinking",
+            "walking",
+            "lying_sternal",
+            "lying_flat",
+            "unknown"
+          ]
+        },
+        "subclasses": [
+          "horse",
+          "donkey",
+          "dog",
+          "cat",
+          "deer",
+          "coyote",
+          "bird",
+          "other"
+        ]
+      },
+      "person": {
+        "attribute": {
+          "name": "look",
+          "values": null
+        },
+        "subclasses": [
+          "friendly",
+          "mailman",
+          "unknown"
+        ]
+      },
+      "vehicle": {
+        "attribute": null,
+        "subclasses": [
+          "car",
+          "truck",
+          "delivery_vehicle",
+          "tractor",
+          "atv",
+          "trailer",
+          "other"
+        ]
+      }
+    },
+    "ignored": [
+      "insect",
+      "spider"
+    ],
+    "label_order": [
+      "horse",
+      "donkey",
+      "person",
+      "dog",
+      "cat",
+      "deer",
+      "coyote",
+      "bird",
+      "car",
+      "truck",
+      "delivery_vehicle",
+      "tractor",
+      "atv",
+      "trailer",
+      "other"
+    ],
+    "mappings": {
+      "coco": {
+        "bear": {
+          "class": "animal",
+          "note": "large-animal confusion, worth seeing",
+          "subclass": "other",
+          "threshold": 0.5
+        },
+        "bird": {
+          "class": "animal",
+          "subclass": "bird",
+          "threshold": 0.5
+        },
+        "bus": {
+          "class": "vehicle",
+          "subclass": "truck",
+          "threshold": 0.25
+        },
+        "car": {
+          "class": "vehicle",
+          "note": "recall 1.00, precision 0.88",
+          "subclass": "car",
+          "threshold": 0.25
+        },
+        "cat": {
+          "class": "animal",
+          "note": "no verified cat yet",
+          "subclass": "cat",
+          "threshold": 0.6
+        },
+        "cow": {
+          "class": "animal",
+          "note": "how COCO models see donkeys and dark horses; +0.20 recall; also fires on blankets",
+          "subclass": "horse",
+          "threshold": 0.5
+        },
+        "dog": {
+          "class": "animal",
+          "note": "one gold dog; fired on a donkey at 0.74",
+          "subclass": "dog",
+          "threshold": 0.4
+        },
+        "elephant": {
+          "class": "animal",
+          "subclass": "other",
+          "threshold": 0.5
+        },
+        "giraffe": {
+          "class": "animal",
+          "subclass": "other",
+          "threshold": 0.5
+        },
+        "horse": {
+          "class": "animal",
+          "note": "precision 1.00 at 0.25; recall is the problem",
+          "subclass": "horse",
+          "threshold": 0.25
+        },
+        "motorcycle": {
+          "class": "vehicle",
+          "subclass": "atv",
+          "threshold": 0.4
+        },
+        "person": {
+          "class": "person",
+          "note": "recall 1.00 at 0.25 with precision 0.42 (night horses as people)",
+          "subclass": "unknown",
+          "threshold": 0.6
+        },
+        "sheep": {
+          "class": "animal",
+          "note": "same as cow",
+          "subclass": "horse",
+          "threshold": 0.5
+        },
+        "truck": {
+          "class": "vehicle",
+          "note": "tractors are never found as trucks (0/14)",
+          "subclass": "truck",
+          "threshold": 0.25
+        },
+        "zebra": {
+          "class": "animal",
+          "subclass": "other",
+          "threshold": 0.5
+        }
+      }
+    },
+    "scene": {
+      "gate": [
+        "open",
+        "closed",
+        "unknown"
+      ],
+      "lighting": [
+        "day",
+        "dusk",
+        "night_ir"
+      ],
+      "trough": [
+        "full",
+        "half",
+        "low",
+        "empty",
+        "unknown"
+      ]
+    },
+    "scoring_map": {
+      "coco": {
+        "atv": "truck",
+        "delivery_vehicle": "truck",
+        "donkey": "horse",
+        "tractor": "truck",
+        "trailer": "truck"
+      }
+    },
+    "version": 1
+  },
+  "score": null,
+  "score_json": null
+}

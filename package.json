@@ -11,8 +11,9 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --experimental-strip-types 'packages/*/test/*.test.ts' 'apps/*/test/*.test.ts'"
+    "typecheck": "tsc -p tsconfig.json --noEmit && npm -w apps/web run typecheck",
+    "test": "node --test --experimental-strip-types 'packages/*/test/*.test.ts' 'apps/*/test/*.test.ts' && npm -w apps/web test",
+    "lint": "npm -w apps/web run lint"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
