@@ -188,3 +188,15 @@ model is not usable on these scenes without the labeled benchmark and a class fi
 60 (back_yard 59, tractor 56, donkey 54, wash_stall 54, back_pasture 51, front_porch 46), zero `grab failing`
 episodes in the window, go2rtc at 6 % CPU / 53 MB, ~5 Mbit/s inbound. mops_cam still off. One day of data will
 tell whether this holds through daytime loss.
+
+## mops_cam disconnects, 22 Oct — the keepalive overloaded it
+
+`mops_cam` (the only V3 Pro, weakest signal) dropped off Wi-Fi every evening starting 19 Oct 20:23 ET, the hour
+the per-camera keepalive deployed. Root cause: the keepalive holds a continuous 2K-HD consumer per camera; a
+sustained HD encode+send is more than this camera's 2.4 GHz link can carry, so it drops its Wi-Fi association
+(ping to 192.168.1.233 → 0%, a layer-3 drop the app-layer harness cannot otherwise cause). It still streamed
+fine in the Wyze app, which connects briefly and adaptively. Same mechanism as the seed recorder on 16 Oct.
+Frame counts overstated it: retention deletes near-identical stall frames, so a day with ~15 h of flowing video
+showed only ~4 kept frames. Fix: `RANCH_KEEPALIVE_EXCLUDE=mops_cam` — periodic grabs only, no continuous hold.
+Readout: mops evening ping uptime over the next 1–2 days. If it still drops on the same evening clock with the
+pull gone, the cause is environmental (RF/power/placement) and the camera needs physical attention.
