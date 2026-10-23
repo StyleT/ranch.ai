@@ -164,6 +164,49 @@ go2rtc dials again. This is the supervisor plan's "rung 1", placed where the fac
 keeps the escalations (camera reboot via the Wyze cloud, go2rtc restart) for the cases the watchdog does not cure
 (e.g. mops_cam: `discovery timeout` while the camera does not answer ping).
 
+## 23 Oct, night: the camera supervisor (`com.ranch.camsup`, apps/camsup)
+
+Reads facts only (netprobe's retained snapshot, the recorder's playlist age); never opens a stream, never calls go2rtc's
+API. Every decision is a row in SQLite `remediation` with its outcome (`/api/remediation`; camera page and `/system`
+show the ledger; the home page alerts on actions in flight), so the post can show what each rung recovered.
+
+What "connected" means from here on: **frames are arriving** (the recorder's playlist for the camera was written in the
+last 15 s) or go2rtc holds a session. Frames are the ground truth because go2rtc's stream list can lie: when the bridge
+re-registers a stream (DELETE + PUT, at every bridge start) the recorder's ffmpeg keeps consuming the orphaned old
+stream object while the new one shows no producer and no consumers (23 Oct, back_yard and tractor: playlist age 1 s,
+`consumers: []`, netprobe "down"). That orphan also holds a camera session the new object will duplicate on the next
+attach, hence rung 1 below. netprobe records both (`connected`, `session_visible`, `frames_fresh`).
+
+| rung | where | condition | action | limits |
+|---|---|---|---|---|
+| 1 | recorder watchdog | no playlist write for 45 s while ffmpeg runs (hung dial, dead feed) | kill that ffmpeg, re-attach | every 45 s |
+| 1 | supervisor | frames flowing but go2rtc shows no consumer for two ticks (orphaned stream object) | re-attach that ffmpeg (`pkill` by camera); never dry-run gated, it only restarts our own process | 1 per camera per 2 min |
+| 2 | supervisor | down ≥ `camsup_reboot_after_s` (600) and the camera answers ping (≥ 50 % of the last 8 probes) | camera reboot through the Wyze cloud: MQTT `wyzebridge/<cam>/power/set` = `restart` (the bridge runs `RunAction(restart)`) | 1 per camera per 30 min, 2 per hour fleet-wide |
+| 3 | supervisor | ≥ 3 cameras down ≥ 900 s after a reboot each | `launchctl kickstart -k system/com.ranch.go2rtc` (every camera redials once) | 1 per hour |
+| 4 | supervisor | down ≥ 600 s and not answering ping | ledger row + alert only: the camera is off the network, nothing on the mini can help | once per outage |
+
+Rows other than the outage note are judged `not_recovered` after 10 min without recovery; recovery closes every open
+row for the camera with the seconds it took. `camsup_dry_run: true` (the default for the first day) records decisions
+without acting; the ladder itself is a pure module with tests (`apps/camsup/src/ladder.ts`).
+
+**Proof: `make e2e-chaos [CAM=back_yard_cam] [DURATION=90] [MODE=stop|udp]`** (`infra/bin/e2e-chaos.sh`, on the
+mini, software only). `stop` (default): SIGSTOP the camera's ffmpeg, so frames stop at once, the symptom the rest of
+the system sees for a hung dial or a dead feed. Asserts from logs and APIs: netprobe reports the camera not connected
+within 60 s; the recorder watchdog re-attaches within 90 s (a stopped process only dies from the watchdog's KILL); the
+supervisor writes the rung-0 row; after the fault is removed the camera is connected within 120 s and the playlist is
+fresh; `camera-owners.sh` still OK. `udp`: a pf rule in the child anchor `com.ranch/chaos` drops UDP from the camera's
+IP. Measured 23 Oct: the drop counter grows for ~40 s (6,812 packets) and then stops while frames keep flowing and
+go2rtc still shows the LAN address: the TUTK session relays around a LAN block, so `udp` does not reproduce a dead
+session and only reports timings. (First runs also found the chaos anchor was never evaluated: a child anchor must be
+named by its parent, hence `anchor "chaos"` in the managed ruleset.)
+
+Measured 23 Oct 19:35 UTC, `make e2e-chaos CAM=back_yard_cam DURATION=90 MODE=stop`: not-connected reported after
+21 s, recorder watchdog re-attached at 54 s, supervisor rung-0 row written, camera connected again 0 s after the fault
+window (the watchdog had already replaced the stopped ffmpeg), playlist fresh, owners OK: **PASS**. The supervisor's
+ledger row closed as `recovered` after 30 s. The `udp` experiment the same evening: 95 s to detection and no recorder
+reaction because frames never stopped (TUTK relayed around the LAN block after ~40 s); recovery 26 s after the rule
+was removed.
+
 ## Operating notes
 
 - A camera is "online" when its buffer has a frame newer than `RANCH_STALE_S` (30 s). Staleness means the

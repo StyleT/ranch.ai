@@ -144,4 +144,27 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       CREATE INDEX camera_probe_ts ON camera_probe (ts);
     `,
   },
+  {
+    version: 7,
+    name: 'remediation ledger',
+    sql: `
+      -- Every decision of the camera supervisor (apps/camsup, docs/CAMERA-ARCHITECTURE.md): rung 0 = outage noted,
+      -- 2 = camera reboot via the Wyze cloud, 3 = go2rtc restart, 4 = alert only. outcome is filled when the camera
+      -- comes back (recovered, with the seconds it took) or when the action is judged not to have helped.
+      CREATE TABLE remediation (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT NOT NULL,
+        camera TEXT NOT NULL,
+        rung INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        dry_run INTEGER NOT NULL DEFAULT 0,
+        outcome TEXT,
+        outcome_ts TEXT,
+        recovered_after_s REAL
+      );
+      CREATE INDEX remediation_ts ON remediation (ts);
+      CREATE INDEX remediation_camera ON remediation (camera, ts);
+    `,
+  },
 ];

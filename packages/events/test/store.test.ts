@@ -4,7 +4,7 @@ import { EventStore, parseSince, detectionsDiffer } from '../src/index.ts';
 
 test('migrates an empty database and round-trips frames, detections and events', () => {
   const s = new EventStore(':memory:');
-  assert.equal(s.schemaVersion, 6);
+  assert.equal(s.schemaVersion, 7);
   const fid = s.insertFrame({ ts: '2026-10-15T00:00:00.000Z', camera: 'front_porch_cam', path: '/x/a.jpg', reason: 'floor', change: 0.01 });
   s.insertDetections(fid, [{ model: 'yolo11n', label: 'horse', confidence: 0.9, x: 0.1, y: 0.2, w: 0.3, h: 0.4 }]);
   assert.equal(s.detectionsForFrame(fid)[0]?.label, 'horse');
@@ -114,5 +114,18 @@ test('availability from probe samples: percentage, outages with durations, ongoi
   assert.equal(wash?.availability, 1); assert.equal(wash?.outages, 0); assert.equal(wash?.down_since, null);
   assert.equal(s.availability({ since: at(0), until, camera: 'wash_stall' }).length, 1);
   assert.equal(s.pruneProbes(at(20)), 40); assert.equal(s.availability({ since: at(0), until })[0]?.samples, 20);
+  s.close();
+});
+
+test('remediation ledger: insert, open rows, resolve with recovery time, query newest first', () => {
+  const s = new EventStore(':memory:');
+  const id0 = s.insertRemediation({ ts: '2026-10-23T18:00:00.000Z', camera: 'tractor_cam', rung: 0, action: 'down', reason: 'no session; ping ok', dry_run: false });
+  const id2 = s.insertRemediation({ ts: '2026-10-23T18:10:00.000Z', camera: 'tractor_cam', rung: 2, action: 'camera_reboot', reason: 'down 600 s, ping ok', dry_run: true });
+  assert.equal(s.openRemediations('tractor_cam').length, 2);
+  s.resolveRemediation(id0, 'recovered', '2026-10-23T18:12:00.000Z', 720); s.resolveRemediation(id2, 'recovered', '2026-10-23T18:12:00.000Z', 120);
+  assert.equal(s.openRemediations().length, 0);
+  const rows = s.remediations({ since: '2026-10-23T00:00:00Z' });
+  assert.equal(rows[0]?.id, id2); assert.equal(rows[0]?.dry_run, true); assert.equal(rows[0]?.recovered_after_s, 120); assert.equal(rows[1]?.dry_run, false);
+  assert.equal(s.remediations({ since: '2026-10-23T00:00:00Z', camera: 'mops_cam' }).length, 0);
   s.close();
 });

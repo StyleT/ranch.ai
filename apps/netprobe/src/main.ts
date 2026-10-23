@@ -9,6 +9,8 @@ import { promisify } from 'node:util';
 import { config } from '@ranch/config';
 import { connectBus, topics } from '@ranch/bus';
 import { EventStore } from '@ranch/events';
+import { statSync } from 'node:fs';
+import { join } from 'node:path';
 
 const PROBE_S = Number(process.env.RANCH_PROBE_S ?? 15);
 const WIFI_EVERY = Number(process.env.RANCH_WIFI_EVERY ?? 4); // probes
@@ -38,9 +40,12 @@ async function streamState(name: string): Promise<StreamState | null> {
     if (res.status === 404) return { producer: false, connected: false, state: null, consumers: 0, rx_bytes: null, remote: null };
     if (!res.ok) return null;
     const d = (await res.json()) as { producers?: { remote_addr?: string; state?: string; receivers?: { bytes?: number }[] }[]; consumers?: unknown[] };
-    const p = d.producers?.[0];
+    // go2rtc can list more than one producer entry for a stream after the bridge re-registers it; the live one is the
+    // one with a remote address (23 Oct: producers[0] was a dead entry while [1] carried the session, so a connected
+    // camera read as down)
+    const live = d.producers?.find((x) => x.remote_addr); const p = live ?? d.producers?.[0];
     const bytes = p?.receivers?.reduce((s, r) => s + (r.bytes ?? 0), 0);
-    return { producer: !!p, connected: !!p?.remote_addr, state: p?.state ?? null, consumers: d.consumers?.length ?? 0, rx_bytes: bytes === undefined ? null : bytes, remote: p?.remote_addr ?? null };
+    return { producer: !!p, connected: !!live, state: p?.state ?? null, consumers: d.consumers?.length ?? 0, rx_bytes: bytes === undefined ? null : bytes, remote: live?.remote_addr ?? null };
   } catch { return null; }
 }
 
@@ -62,6 +67,11 @@ async function wifi(): Promise<Record<string, unknown> | null> {
 }
 
 const PROBE_KEEP_D = Number(process.env.RANCH_PROBE_KEEP_D ?? 7);
+const FRESH_S = Number(process.env.RANCH_FRESH_S ?? 15);
+/** Seconds since the recorder last wrote this camera's HLS playlist: frames flowing is the ground truth for "the camera
+ *  delivers video". go2rtc's stream list can lie: after the bridge re-registers a stream (DELETE+PUT), the recorder's
+ *  ffmpeg keeps consuming the orphaned old stream object while the new one shows no producer and no consumers (23 Oct). */
+function liveAgeS(cam: string): number | null { try { return (Date.now() - statSync(join(config.liveDir, cam, 'index.m3u8')).mtimeMs) / 1000; } catch { return null; } }
 
 async function main(): Promise<void> {
   const bus = await connectBus('netprobe');
@@ -81,13 +91,18 @@ async function main(): Promise<void> {
       const [st, rtt] = await Promise.all([streamState(c.name), ping(c.ip)]);
       const p = prev.get(c.name);
       const delta = st && p && st.rx_bytes !== null && p.rx_bytes !== null && st.remote === p.remote ? st.rx_bytes - p.rx_bytes : null;
-      const row = { camera: c.name, ip: c.ip, producer: st?.producer ?? null, connected: st?.connected ?? null, state: st?.state ?? null, consumers: st?.consumers ?? null, rx_bytes_delta: delta, remote: st?.remote ?? null, ping_ms: rtt };
+      const liveAge = liveAgeS(c.name); const framesFresh = liveAge !== null && liveAge < FRESH_S;
+      // connected = video is arriving (the recorder wrote this camera's playlist in the last FRESH_S). go2rtc's session
+      // view is kept as session_visible only: it stays "connected" for ~90 s after the packets stop (chaos run 23 Oct:
+      // detection took 95 s while the frames had stopped at 15 s) and it misses orphaned stream objects. When the recorder
+      // has never written a playlist for the camera (no live dir), the session view is the fallback.
+      const row = { camera: c.name, ip: c.ip, producer: st?.producer ?? null, connected: liveAge === null ? (st?.connected ?? null) : framesFresh, session_visible: st?.connected ?? null, frames_fresh: framesFresh, live_age_s: liveAge === null ? null : Math.round(liveAge), state: st?.state ?? null, consumers: st?.consumers ?? null, rx_bytes_delta: delta, remote: st?.remote ?? null, ping_ms: rtt };
       log('probe', row);
       snapshot[c.name] = row;
-      if (st) { try { store.insertProbe({ ts: row_ts, camera: c.name, connected: st.connected, ping_ms: rtt, consumers: st.consumers }); } catch (e) { log('probe insert failed', { error: String(e).slice(0, 120) }); } }
+      if (st || framesFresh) { try { store.insertProbe({ ts: row_ts, camera: c.name, connected: row.connected === true, ping_ms: rtt, consumers: st?.consumers ?? null }); } catch (e) { log('probe insert failed', { error: String(e).slice(0, 120) }); } }
       if (st) {
         if (p && p.producer !== st.producer) log('producer changed', { camera: c.name, producer: st.producer });
-        if (p && p.connected !== st.connected) log('connected changed', { camera: c.name, connected: st.connected, remote: st.remote, state: st.state });
+        if (p && p.connected !== st.connected) log('session changed', { camera: c.name, session_visible: st.connected, remote: st.remote, state: st.state, frames_fresh: framesFresh });
         const isFlowing = delta !== null ? delta > 0 : null;
         if (isFlowing !== null && flowing.get(c.name) !== undefined && flowing.get(c.name) !== isFlowing) log(isFlowing ? 'bytes flowing again' : 'bytes stopped', { camera: c.name, rx_bytes_delta: delta });
         if (isFlowing !== null) flowing.set(c.name, isFlowing);

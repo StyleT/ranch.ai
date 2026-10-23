@@ -50,6 +50,15 @@ export function CameraView({ name }: { name: string }) {
               </>) : <span className="text-dim">no probe history yet</span>}
             </Card>
           </Section>
+          <Section title="Remediation · 24 h"><Card className="p-0" data-testid={tid.remediation}>
+            {d.remediation.length === 0 ? <p className="px-3 py-2 text-sm text-dim">no outages or actions in the last 24 h</p> : (
+              <ul className="divide-y divide-line text-sm">{d.remediation.map((r) => (
+                <li key={r.id} data-testid={tid.remediationRow(r.id)} data-action={r.action} className="grid gap-0.5 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2"><time dateTime={r.ts} className="text-dim">{localTime(r.ts, tz, { second: undefined })}</time><Badge tone={r.action === 'down' ? 'bad' : r.action === 'alert' ? 'warn' : 'dim'}>{r.action === 'down' ? 'outage' : r.action === 'reattach' ? 're-attach' : r.action === 'camera_reboot' ? 'camera reboot' : r.action === 'go2rtc_restart' ? 'go2rtc restart' : 'alert'} · rung {r.rung}{r.dry_run ? ' · dry run' : ''}</Badge>
+                    <span className={`text-xs ${r.outcome === 'recovered' ? 'text-ok' : r.outcome ? 'text-warn' : 'text-dim'}`}>{r.outcome ? `${r.outcome}${r.recovered_after_s !== null ? ` after ${formatAge(r.recovered_after_s)}` : ''}` : 'open'}</span></div>
+                  <div className="text-xs text-dim">{r.reason}</div>
+                </li>))}</ul>)}
+          </Card></Section>
           <Section title="Signal"><Card className="grid gap-1 text-sm">
             <div><span className="text-dim">motion</span> {d.motion ? `p50 ${d.motion.p50} · p90 ${d.motion.p90} · max ${d.motion.max}` : '–'}</div>
             <div><span className="text-dim">net</span> {net ? `${net.producer ? '● producer' : '○ no producer'} · ${net.consumers ?? 0} consumer${net.consumers === 1 ? '' : 's'} · ${net.rx_bytes_delta ? (net.rx_bytes_delta / 15 / 1048576).toFixed(2) + ' MB/s' : '–'} · ping ${net.ping_ms === null || net.ping_ms === undefined ? '–' : Math.round(net.ping_ms) + ' ms'}` : '–'}</div>

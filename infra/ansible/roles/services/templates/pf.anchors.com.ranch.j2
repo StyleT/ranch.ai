@@ -24,3 +24,8 @@ block return in quick on ! lo0 inet6 proto tcp from any to any port {{ port }}
 block return in quick on ! lo0 inet proto tcp from any to any port {{ port }}
 block return in quick on ! lo0 inet6 proto tcp from any to any port {{ port }}
 {% endfor %}
+#
+# 3. Fault injection (make e2e-chaos, infra/bin/e2e-chaos.sh) loads temporary rules into the child anchor com.ranch/chaos.
+#    A child anchor is only evaluated when the parent names it, so this line is what makes a chaos rule take effect;
+#    the anchor is empty outside a test run.
+anchor "chaos"

@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 import { join, normalize, basename } from 'node:path';
 import { config } from '@ranch/config';
 import { EventStore, parseSince, type FrameReason } from '@ranch/events';
-import type { Ping, CountSeries, FrameSeries, TrackSummary, AvailabilityResponse } from '@ranch/contracts';
+import type { Ping, CountSeries, FrameSeries, TrackSummary, AvailabilityResponse, RemediationResponse } from '@ranch/contracts';
 import { connectBus } from '@ranch/bus';
 import { collect, bufferNewestPaths, bufferNameMs, bridgeMetrics, type Status } from './collect.ts';
 import { jpegFromFile, firstReadableJpeg } from './jpeg.ts';
@@ -168,6 +168,10 @@ const server = createServer(async (req, res) => {
       // per-camera availability from netprobe's samples (camera_probe): since=24h (default), until, camera, bucket=15m
       const p = url.searchParams; const bucketS = parseBucket(p.get('bucket') ?? '15m');
       json(res, 200, store.availability({ since: clampSince(parseSince(p.get('since') ?? '24h')), bucketS, ...(p.get('until') ? { until: p.get('until')! } : {}), ...(p.get('camera') ? { camera: p.get('camera')! } : {}) }) satisfies AvailabilityResponse); return;
+    } else if (url.pathname === '/api/remediation') {
+      // the camera supervisor's ledger (apps/camsup): since=24h (default), camera, limit
+      const p = url.searchParams;
+      json(res, 200, store.remediations({ since: clampSince(parseSince(p.get('since') ?? '24h')), ...(p.get('camera') ? { camera: p.get('camera')! } : {}), ...(p.get('limit') ? { limit: Number(p.get('limit')) } : {}) }) satisfies RemediationResponse); return;
     } else if (url.pathname === '/api/bridge') {
       try { json(res, 200, await bridgeMetrics()); } catch (e) { json(res, 503, { error: 'bridge_unreachable', detail: String(e) }); } return;
     } else if (url.pathname === '/api/counts/series' || url.pathname === '/api/frames/series') {

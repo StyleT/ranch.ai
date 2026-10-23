@@ -23,6 +23,14 @@ test('the camera page shows the probe-derived session state and the 24 h availab
   await expect(avail.locator('[data-testid=chart-timeline]')).toBeVisible();
 });
 
+test('a camera with an outage shows the supervisor ledger under the stream', async ({ page }) => {
+  await page.goto('/cameras/tractor_cam');
+  const row = page.getByTestId('remediation-row-2'); await row.scrollIntoViewIfNeeded();
+  await expect(row).toHaveAttribute('data-action', 'camera_reboot');
+  await expect(row).toContainText(/dry run/);
+  await expect(row).toContainText(/recovered after 3 min/);
+});
+
 test('unmute toggles the audio track', async ({ page }) => {
   await page.goto('/cameras/donkey_cam');
   const video = page.getByTestId('stream-player').locator('video');

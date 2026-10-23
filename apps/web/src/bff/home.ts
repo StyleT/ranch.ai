@@ -1,4 +1,4 @@
-import { Status, Tracks, CountSeries } from '@ranch/contracts';
+import { Status, Tracks, CountSeries, RemediationResponse } from '@ranch/contracts';
 import type { HomeData, CameraCard, DaemonView, ActivityItem } from '@/lib/types';
 import { deriveAlerts } from '@/lib/alerts/derive';
 import { daemonJson, cached } from './daemon.ts';
@@ -23,9 +23,10 @@ export function cameraCards(status: Status, spark: Map<string, (number | null)[]
 
 export async function getHome(): Promise<HomeData> {
   const status = await getStatus();
-  const [tracks, series] = await Promise.all([
+  const [tracks, series, remediation] = await Promise.all([
     cached('tracks:1h', 3000, () => daemonJson(Tracks, '/api/tracks?since=1h&limit=30')).catch(() => []),
     cached(`counts:1h:${status.horse_label === 'equine' ? 'horse' : status.horse_label}`, 10_000, () => daemonJson(CountSeries, `/api/counts/series?since=1h&bucket=5m&label=horse`)).catch(() => []),
+    cached('remediation:1h', 10_000, () => daemonJson(RemediationResponse, '/api/remediation?since=1h&limit=50')).catch(() => []),   // supervisor actions in flight -> alerts
   ]);
   const spark = new Map<string, (number | null)[]>();
   const now = Date.now(); const start = Math.floor((now - 3600e3) / 300e3) * 300e3;
@@ -40,7 +41,7 @@ export async function getHome(): Promise<HomeData> {
     taxonomy: { version: status.taxonomy_version, matches_repo: status.taxonomy_matches_repo }, detector: { model: det?.model ?? null, family: det?.family ?? null },
   };
   return {
-    ts: status.ts, health, alerts: deriveAlerts({ status, cameras, daemons, now: new Date(status.ts) }), cameras, activity, labels_1h: status.labels_1h, label_order: status.label_order,
+    ts: status.ts, health, alerts: deriveAlerts({ status, cameras, daemons, now: new Date(status.ts), remediation }), cameras, activity, labels_1h: status.labels_1h, label_order: status.label_order,
     horse_label: status.horse_label, totals: status.totals,
     events: status.events.map((e) => ({ id: e.id, ts: e.ts, camera: e.camera, type: e.type, confidence: e.confidence, tier_decided: e.tier_decided, verdict: e.verdict })),
   };

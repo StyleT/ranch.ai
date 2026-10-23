@@ -1,7 +1,9 @@
 // UI contracts: what the BFF returns to the pages (docs/WEB-DASHBOARD.md §3). Everything the client renders is one of these.
 import type { Detection, BridgeMetrics } from '@ranch/contracts';
 
-export type Alert = { kind: 'camera_offline' | 'daemon_down' | 'detector_stale' | 'taxonomy_drift' | 'disk_low' | 'burst_throttled' | 'no_frames'; text: string; href: string; severity: 'warn' | 'bad' };
+export type Alert = { kind: 'camera_offline' | 'camera_down' | 'remediating' | 'daemon_down' | 'detector_stale' | 'taxonomy_drift' | 'disk_low' | 'burst_throttled' | 'no_frames'; text: string; href: string; severity: 'warn' | 'bad' };
+/** One row of the camera supervisor's ledger (daemon /api/remediation, apps/camsup). */
+export type RemediationRow = { id: number; ts: string; camera: string; rung: number; action: 'down' | 'reattach' | 'camera_reboot' | 'go2rtc_restart' | 'alert'; reason: string; dry_run: boolean; outcome: string | null; outcome_ts: string | null; recovered_after_s: number | null };
 
 export type DaemonView = { name: string; label: string; up: boolean; pid: number | null; last_exit: number; rss_mb: number | null; log: string; status: Record<string, unknown> | null };
 
@@ -49,6 +51,7 @@ export type CameraDetail = {
   motion: { n: number; p50: number; p90: number; max: number } | null;
   stream: { kind: 'hls'; playlist: string; live_age_s: number | null };
   availability: Availability | null;   // last 24 h, 15-min buckets
+  remediation: RemediationRow[];       // last 24 h, newest first
 };
 
 export type Box = { label: string; raw_label: string | null; confidence: number; x: number; y: number; w: number; h: number; seen: number | null; dx: number | null; dy: number | null; gold: boolean };
@@ -62,6 +65,7 @@ export type SystemData = {
   wifi: Record<string, unknown> | null; web: { rss_mb: number; heap_mb: number; uptime_s: number; build: Record<string, unknown> | null }; daemon_ping: Record<string, unknown> | null;
   bridge: BridgeData | null;
   availability: { camera: string; availability: number | null; outages: number; outage_p50_s: number | null; outage_max_s: number | null; down_since: string | null }[];   // last 24 h per camera
+  remediation: RemediationRow[];   // fleet ledger, last 24 h, newest first
 };
 /** The Wyze bridge's metrics page, re-homed on /system (its UI on 5080 is loopback-only since 23 Oct): the daemon's
  *  /api/bridge contract with the Wyze API table always present. */

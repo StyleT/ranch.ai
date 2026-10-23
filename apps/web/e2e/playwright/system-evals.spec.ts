@@ -18,6 +18,13 @@ test('system shows 24 h camera availability from the probe history', async ({ pa
   await expect(row).toContainText('%');
   await expect(row).toContainText(/down since|\d{1,2}:\d{2}/);
 });
+test('system shows the supervisor ledger with the dry-run reboot and its recovery time', async ({ page }) => {
+  await page.goto('/system');
+  const row = page.getByTestId('remediation-row-2').or(page.getByTestId('remediation-row-2-card')).filter({ visible: true }).first();
+  await row.scrollIntoViewIfNeeded();
+  await expect(row).toContainText(/camera reboot/);
+  await expect(row).toContainText(/recovered · 3 min/);
+});
 test('system shows the Wyze bridge metrics moved from :5080', async ({ page }) => {
   await page.goto('/system');
   const summary = page.getByTestId('bridge-summary'); await summary.scrollIntoViewIfNeeded();

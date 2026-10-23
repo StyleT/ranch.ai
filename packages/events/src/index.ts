@@ -36,6 +36,11 @@ export interface NewEvent {
 export interface EventQuery { since?: string; until?: string; camera?: string; type?: string; limit?: number; verdict?: Verdict | 'none' }
 
 export interface NewProbe { ts: string; camera: string; connected: boolean; ping_ms: number | null; consumers: number | null }
+export type RemediationAction = 'down' | 'reattach' | 'camera_reboot' | 'go2rtc_restart' | 'alert';
+export type RemediationRow = {
+  id: number; ts: string; camera: string; rung: number; action: RemediationAction; reason: string; dry_run: boolean;
+  outcome: string | null; outcome_ts: string | null; recovered_after_s: number | null;
+};
 /** A camera's availability over a window, from netprobe samples (docs/CAMERA-ARCHITECTURE.md). An outage is a run of
  *  disconnected samples; its duration runs from the first disconnected sample to the first connected one after it
  *  (or to `until` while it is still going, in which case `down_since` is set). */
@@ -327,6 +332,20 @@ export class EventStore {
         down_since: downSince === null ? null : new Date(downSince).toISOString(), series,
       };
     });
+  }
+  insertRemediation(r: { ts: string; camera: string; rung: number; action: RemediationAction; reason: string; dry_run: boolean }): number {
+    return Number(this.db.prepare('INSERT INTO remediation (ts, camera, rung, action, reason, dry_run) VALUES (?, ?, ?, ?, ?, ?)').run(r.ts, r.camera, r.rung, r.action, r.reason, r.dry_run ? 1 : 0).lastInsertRowid);
+  }
+  resolveRemediation(id: number, outcome: string, outcomeTs: string, recoveredAfterS: number | null): void {
+    this.db.prepare('UPDATE remediation SET outcome = ?, outcome_ts = ?, recovered_after_s = ? WHERE id = ? AND outcome IS NULL').run(outcome, outcomeTs, recoveredAfterS, id);
+  }
+  openRemediations(camera?: string): RemediationRow[] {
+    return (this.db.prepare(`SELECT * FROM remediation WHERE outcome IS NULL ${camera ? 'AND camera = ?' : ''} ORDER BY ts`).all(...((camera ? [camera] : []) as SQLInputValue[])) as (Omit<RemediationRow, 'dry_run'> & { dry_run: number })[]).map((r) => ({ ...r, dry_run: r.dry_run === 1 }));
+  }
+  remediations(q: { since: string; camera?: string; limit?: number }): RemediationRow[] {
+    const rows = this.db.prepare(`SELECT * FROM remediation WHERE ts >= ? ${q.camera ? 'AND camera = ?' : ''} ORDER BY ts DESC LIMIT ?`)
+      .all(...([q.since, ...(q.camera ? [q.camera] : []), Math.min(500, q.limit ?? 100)] as SQLInputValue[])) as (Omit<RemediationRow, 'dry_run'> & { dry_run: number })[];
+    return rows.map((r) => ({ ...r, dry_run: r.dry_run === 1 }));
   }
   upsertCameraCount(c: { ts: string; camera: string; label: string; count: number; model: string }): void {
     this.db.prepare(`INSERT INTO camera_counts (ts, camera, label, count, model) VALUES (?, ?, ?, ?, ?)

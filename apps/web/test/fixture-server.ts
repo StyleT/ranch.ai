@@ -7,6 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeAvailability } from './fixtures/availability.ts';
+import { makeRemediation } from './fixtures/remediation.ts';
 
 const FX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const fx = <T = unknown>(name: string): T => JSON.parse(readFileSync(join(FX, 'daemon', `${name}.json`), 'utf8')) as T;
@@ -29,6 +30,7 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://x'); const p = url.pathname;
   if (p === '/api/ping') return json(res, 200, fx('ping'));
   if (p === '/api/bridge') return json(res, 200, fx('bridge'));
+  if (p === '/api/remediation') return json(res, 200, makeRemediation(Date.now(), url.searchParams.get('camera')));
   if (p === '/api/availability') return json(res, 200, makeAvailability((status.cameras as { name: string }[]).map((c) => c.name), Date.now(), url.searchParams.get('bucket') === '1h' ? 3600 : 900, url.searchParams.get('camera')));
   if (p === '/api/status') return json(res, 200, { ...status, ts: new Date().toISOString() });
   if (p === '/api/frames') return json(res, 200, fx(url.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames'));

@@ -26,6 +26,13 @@ export const CameraAvailability = z.looseObject({
   series: z.array(z.looseObject({ ts: Iso, connected: z.number(), total: z.number() })),
 });
 export const AvailabilityResponse = z.array(CameraAvailability);
+/** The camera supervisor's ledger (`/api/remediation`, apps/camsup): rung 0 outage noted, 2 camera reboot via the Wyze
+ *  cloud, 3 go2rtc restart, 4 alert only; outcome filled on recovery or when judged not to have helped. */
+export const RemediationRow = z.looseObject({
+  id: z.number(), ts: Iso, camera: z.string(), rung: z.number(), action: z.enum(['down', 'reattach', 'camera_reboot', 'go2rtc_restart', 'alert']), reason: z.string(), dry_run: z.boolean(),
+  outcome: z.string().nullable(), outcome_ts: Iso.nullable(), recovered_after_s: NullableNum,
+});
+export const RemediationResponse = z.array(RemediationRow);
 export const RanchEvent = z.looseObject({
   id: z.string(), ts: Iso, camera: z.string(), type: z.string(), confidence: z.number(), tier_decided: z.number(),
   verdict: z.string().nullable(), created_at: Iso,
@@ -127,6 +134,7 @@ export type TaxonomyVersionItem = z.infer<typeof TaxonomyVersionItem>; export ty
 export type DetectorStatus = z.infer<typeof DetectorStatus>; export type IngestStatus = z.infer<typeof IngestStatus>; export type NetprobeCamera = z.infer<typeof NetprobeCamera>; export type Wifi = z.infer<typeof Wifi>;
 export type BridgeMetrics = z.infer<typeof BridgeMetrics>;
 export type CameraAvailability = z.infer<typeof CameraAvailability>; export type AvailabilityResponse = z.infer<typeof AvailabilityResponse>;
+export type RemediationRow = z.infer<typeof RemediationRow>; export type RemediationResponse = z.infer<typeof RemediationResponse>;
 
 /** Parse or throw with a readable issue list (used at the BFF boundary and by the contract test). */
 export function parseContract<T extends z.ZodType>(schema: T, data: unknown, what: string): z.infer<T> {

@@ -1,4 +1,4 @@
-import { CountSeries, FrameSeries, Tracks, AvailabilityResponse } from '@ranch/contracts';
+import { CountSeries, FrameSeries, Tracks, AvailabilityResponse, RemediationResponse } from '@ranch/contracts';
 import type { CameraDetail, SeriesPoint, OnlinePoint, BurstCard } from '@/lib/types';
 import { daemonJson, cached, UpstreamError } from './daemon.ts';
 import { getStatus, cameraCards } from './home.ts';
@@ -22,12 +22,13 @@ export async function getCamera(name: string, window: Window): Promise<CameraDet
   if (!card) throw new UpstreamError(404, 'not_found', `no camera ${name}`);
   const w = WINDOWS[window]; const until = Date.now(); const since = until - w.ms; const sinceIso = new Date(since).toISOString();
   const q = `camera=${encodeURIComponent(name)}&since=${encodeURIComponent(sinceIso)}&bucket=${w.bucket}`;
-  const [counts, frames, tracks, avail] = await Promise.all([
+  const [counts, frames, tracks, avail, remediation] = await Promise.all([
     cached(`counts:${name}:${window}`, 5000, () => daemonJson(CountSeries, `/api/counts/series?${q}&label=horse`)).catch(() => []),
     cached(`frames-series:${name}:${window}`, 5000, () => daemonJson(FrameSeries, `/api/frames/series?${q}`)).catch(() => []),
     cached(`tracks:${name}:${window}`, 5000, () => daemonJson(Tracks, `/api/tracks?camera=${encodeURIComponent(name)}&since=${encodeURIComponent(sinceIso)}&limit=50`)).catch(() => []),
     // 24 h availability from netprobe samples (docs/CAMERA-ARCHITECTURE.md); the page renders without it when the daemon lacks it
     cached(`availability:${name}`, 30_000, () => daemonJson(AvailabilityResponse, `/api/availability?since=24h&bucket=15m&camera=${encodeURIComponent(name)}`)).catch(() => []),
+    cached(`remediation:${name}`, 10_000, () => daemonJson(RemediationResponse, `/api/remediation?since=24h&limit=20&camera=${encodeURIComponent(name)}`)).catch(() => []),
   ]);
   const equine_series = gapFill((counts[0]?.points ?? []).map((p) => ({ ts: p.ts, value: p.max })), since, until, w.bucketS);
   const online_series: OnlinePoint[] = gapFill((frames[0]?.points ?? []).map((p) => ({ ts: p.ts, value: p.frames })), since, until, w.bucketS).map((p) => ({ t: p.t, frames: p.value ?? 0 }));
@@ -42,6 +43,7 @@ export async function getCamera(name: string, window: Window): Promise<CameraDet
     net: (probe?.[name] as Record<string, unknown> | undefined) ?? null, motion: ingest?.motion?.[name] ?? null,
     // the recorder's HLS files via the daemon (docs/WEB-DASHBOARD.md); live_age_s = seconds since the playlist last grew
     availability: avail[0] ? { since: avail[0].since, until: avail[0].until, samples: avail[0].samples, connected_samples: avail[0].connected_samples, availability: avail[0].availability, outages: avail[0].outages, outage_p50_s: avail[0].outage_p50_s, outage_p90_s: avail[0].outage_p90_s, outage_max_s: avail[0].outage_max_s, down_since: avail[0].down_since, series: avail[0].series.map((p) => ({ ts: p.ts, connected: p.connected, total: p.total })) } : null,
+    remediation: remediation.map((r) => ({ id: r.id, ts: r.ts, camera: r.camera, rung: r.rung, action: r.action, reason: r.reason, dry_run: r.dry_run, outcome: r.outcome, outcome_ts: r.outcome_ts, recovered_after_s: r.recovered_after_s })),
     stream: { kind: 'hls', playlist: `/api/ui/hls/${encodeURIComponent(name)}/index.m3u8`, live_age_s: (status.cameras.find((c) => c.name === name) as { live_age_s?: number | null } | undefined)?.live_age_s ?? null },
   };
 }

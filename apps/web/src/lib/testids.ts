@@ -29,6 +29,8 @@ export const tid = {
   availability: 'availability',
   availabilityRow: (cam: string) => `availability-row-${cam}`,
   cameraState: 'camera-state',
+  remediation: 'remediation',
+  remediationRow: (id: number) => `remediation-row-${id}`,
   evalsRow: (file: string, model: string) => `evals-row-${file}-${model}`,
   healthStrip: 'health-strip',
 } as const;

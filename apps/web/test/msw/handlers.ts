@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeAvailability } from '../fixtures/availability.ts';
+import { makeRemediation } from '../fixtures/remediation.ts';
 
 const FX = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 export const fixture = <T = unknown>(name: string): T => JSON.parse(readFileSync(join(FX, 'daemon', `${name}.json`), 'utf8')) as T;
@@ -13,6 +14,7 @@ export const handlers = [
   http.get(`${DAEMON}/api/status`, () => HttpResponse.json(fixture('status'))),
   http.get(`${DAEMON}/api/ping`, () => HttpResponse.json(fixture('ping'))),
   http.get(`${DAEMON}/api/bridge`, () => HttpResponse.json(fixture('bridge'))),
+  http.get(`${DAEMON}/api/remediation`, ({ request }) => HttpResponse.json(makeRemediation(Date.now(), new URL(request.url).searchParams.get('camera')))),
   http.get(`${DAEMON}/api/availability`, ({ request }) => { const u = new URL(request.url); return HttpResponse.json(makeAvailability(fixture<{ cameras: { name: string }[] }>('status').cameras.map((c) => c.name), Date.now(), u.searchParams.get('bucket') === '1h' ? 3600 : 900, u.searchParams.get('camera'))); }),
   http.get(`${DAEMON}/api/frames`, ({ request }) => { const u = new URL(request.url); return HttpResponse.json(fixture(u.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames')); }),
   http.get(`${DAEMON}/api/frames/:id`, ({ params }) => (params.id === '999999' ? HttpResponse.json({ error: 'no such frame' }, { status: 404 }) : HttpResponse.json(fixture('frame-head')))),

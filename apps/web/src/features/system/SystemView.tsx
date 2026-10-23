@@ -60,6 +60,16 @@ export function SystemView() {
             ]} />
             {d.availability.length === 0 && <p className="px-3 py-2 text-xs text-dim">no probe history yet</p>}
           </Card></Section>
+          <Section title="Camera supervisor · ledger · 24 h"><Card className="p-0" data-testid={tid.remediation}>
+            <DataTable caption="Supervisor decisions, newest first" rows={d.remediation} rowKey={(r) => String(r.id)} rowTestId={(r) => tid.remediationRow(r.id)} rowProps={(r) => ({ 'data-action': r.action })} columns={[
+              { key: 'ts', header: 'when', cell: (r) => <time dateTime={r.ts}>{localTime(r.ts, tz, { second: undefined })}</time> },
+              { key: 'camera', header: 'camera', cell: (r) => <b>{r.camera.replace('_cam', '')}</b> },
+              { key: 'action', header: 'action', cell: (r) => <Badge tone={r.action === 'down' ? 'bad' : r.action === 'alert' ? 'warn' : 'dim'}>{r.action === 'down' ? 'outage' : r.action.replace('_', ' ')} · r{r.rung}{r.dry_run ? ' · dry' : ''}</Badge> },
+              { key: 'outcome', header: 'outcome', cell: (r) => (r.outcome ? `${r.outcome}${r.recovered_after_s !== null ? ` · ${formatAge(r.recovered_after_s)}` : ''}` : <span className="text-dim">open</span>) },
+              { key: 'reason', header: 'reason', cell: (r) => <span className="text-xs text-dim">{r.reason}</span>, priority: 2 },
+            ]} />
+            {d.remediation.length === 0 && <p className="px-3 py-2 text-xs text-dim">no outages or actions in the last 24 h</p>}
+          </Card></Section>
           {d.bridge ? <BridgeSection b={d.bridge} tz={tz} /> : <Section title="Wyze bridge"><Card className="text-sm text-dim">bridge metrics unavailable</Card></Section>}
           <Section title="Live MQTT"><Ticker tz={tz} /></Section>
         </div>

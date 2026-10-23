@@ -173,8 +173,17 @@ ranch_app_daemons:                           # restarted by roles/app when the t
   - com.ranch.ingest
   - com.ranch.detector
   - com.ranch.netprobe
+  - com.ranch.camsup
   - com.ranch.status
   - com.ranch.web
+# Camera supervisor (com.ranch.camsup, apps/camsup, docs/CAMERA-ARCHITECTURE.md): the remediation ladder. Starts in
+# dry-run (decisions recorded, nothing acted on) for a day of evidence; then camsup_dry_run: false arms rungs 2-3.
+camsup_dry_run: true
+camsup_reboot_after_s: 600                   # rung 2: camera down this long while answering ping -> reboot via the Wyze cloud
+camsup_reboot_cooldown_s: 1800               # per camera
+camsup_fleet_reboots_per_h: 2
+camsup_go2rtc_restart_after_s: 900           # rung 3: this many cameras down this long after a reboot each -> go2rtc restart
+camsup_go2rtc_min_cameras: 3
 
 # Tier-1 detector (com.ranch.detector). Model file lives in ranch_models_dir (synced from apps/detector/export).
 # yolo26s since 22 Oct (evals/LEADERBOARD.md): horse recall 0.60, FPPF(all) 0.14 under the taxonomy, 22.6 ms p50 on the ANE.
