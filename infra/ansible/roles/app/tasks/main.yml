@@ -33,16 +33,30 @@
     state: link
   become: true
 
+# --checksum: two checkouts of the same commit differ only in mtimes, so content decides what changed (otherwise
+# provisioning from another checkout restarts every daemon). Lines starting with "." are attribute-only (mtime) and
+# never count as a change. --prune-empty-dirs: git does not track empty dirs, so leftovers in one checkout don't sync.
+# .claude: session tooling, and the main checkout contains whole nested worktrees under .claude/worktrees.
 - name: Sync working tree to the mini
   ansible.builtin.command: >-
-    rsync -ai --delete {{ '--dry-run' if ansible_check_mode else '' }}
-    --exclude .git --exclude node_modules --exclude .scratch --exclude .venv --exclude infra/snapshots
+    rsync -ai --delete --checksum --prune-empty-dirs {{ '--dry-run' if ansible_check_mode else '' }}
+    --exclude .git --exclude .claude --exclude node_modules --exclude .scratch --exclude .venv --exclude infra/snapshots
     --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store --exclude 'evals/baseline/*/frames' --exclude 'apps/web/.next' --exclude 'apps/web/test-results' --exclude 'apps/web/playwright-report' --exclude 'apps/web/e2e/ai/runs' --exclude 'apps/web/coverage' --exclude 'apps/web/tsconfig.tsbuildinfo'
     -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_app_dir }}/
   delegate_to: localhost
   register: app_sync
-  changed_when: app_sync.stdout_lines | select('match', '^[<>ch.*]') | reject('match', '^\.d') | list | length > 0
+  changed_when: app_sync.stdout_lines | select('match', '^[<>ch*]') | list | length > 0
   check_mode: false
+
+# Models are git-ignored and exist only in the checkout that exported them (the main checkout); a fresh worktree has
+# none, and syncing its empty export dir with --delete would remove every model package from the mini. Skip instead.
+- name: Exported models in this checkout
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/../../apps/detector/export"
+    patterns: "*.mlpackage"
+    file_type: directory
+  delegate_to: localhost
+  register: models_src
 
 - name: Sync CoreML models
   ansible.builtin.command: >-
@@ -51,8 +65,14 @@
     -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../apps/detector/export/ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_models_dir }}/
   delegate_to: localhost
   register: models_sync
-  changed_when: models_sync.stdout_lines | select('match', '^[<>ch.*]') | reject('match', '^\.d') | list | length > 0
+  changed_when: models_sync.stdout_lines | select('match', '^[<>ch*]') | list | length > 0
   check_mode: false
+  when: models_src.matched > 0
+
+- name: Models left as they are on the mini (this checkout has no exported models)
+  ansible.builtin.debug:
+    msg: "skipped the model sync: apps/detector/export has no *.mlpackage here (fresh worktree?); provision from the checkout that exported them to update models"
+  when: models_src.matched == 0
 
 - name: node_modules present?
   ansible.builtin.stat:
@@ -122,7 +142,7 @@
 - name: App daemons restart when their code changed
   ansible.builtin.debug:
     msg: "app code changed; app daemons will restart"
-  when: app_sync.stdout is search('(^|\s)[<>ch.*][^\s]*\s+(apps/(?!web/(test|e2e)/)|packages/|package(-lock)?\.json)')
+  when: app_sync.stdout is search('(^|\s)[<>ch*][^\s]*\s+(apps/(?!web/(test|e2e)/)|packages/|package(-lock)?\.json)')
   changed_when: true
   notify: restart app daemons
 

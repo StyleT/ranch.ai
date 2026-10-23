@@ -6,6 +6,35 @@
 - name: Provision ranch-ai
   hosts: ranch
   gather_facts: true
+  pre_tasks:
+    # Provisioning rsyncs THIS checkout over the mini, so a checkout that lacks published commits silently rolls the
+    # mini back: 22 Oct a worktree branched before apps/web landed nearly deleted the dashboard; 23 Oct a stale main
+    # checkout (4 behind) reverted the live view to the pre-HLS player and the pf/go2rtc WebRTC config. Refuse that.
+    # Uncommitted changes are allowed (dev iteration) but listed. Deliberate rollback: RANCH_ALLOW_ROLLBACK=1.
+    - name: The checkout being deployed contains every commit of origin/main
+      ansible.builtin.shell: |
+        cd "{{ playbook_dir }}/../.."
+        git fetch --quiet origin main || echo "warn: fetch failed, comparing with the last fetched origin/main"
+        head=$(git rev-parse --short HEAD); branch=$(git rev-parse --abbrev-ref HEAD); main=$(git rev-parse --short origin/main)
+        if git merge-base --is-ancestor origin/main HEAD; then
+          echo "ok: deploying $branch@$head, contains origin/main@$main"
+        else
+          echo "REFUSED: $branch@$head is missing $(git rev-list --count HEAD..origin/main) commit(s) of origin/main@$main; deploying it would roll the mini back. Update this checkout (git merge --ff-only origin/main) or provision from one that has them."
+          exit 3
+        fi
+        git status --porcelain --untracked-files=no | sed 's/^/uncommitted: /'
+      args: { executable: /bin/bash }
+      delegate_to: localhost
+      run_once: true
+      register: checkout_guard
+      changed_when: false
+      check_mode: false
+      failed_when: checkout_guard.rc != 0 and lookup('env', 'RANCH_ALLOW_ROLLBACK') != '1'
+
+    - name: Checkout being deployed
+      ansible.builtin.debug:
+        msg: "{{ checkout_guard.stdout_lines }}"
+      run_once: true
   roles:
     - base
     - access
