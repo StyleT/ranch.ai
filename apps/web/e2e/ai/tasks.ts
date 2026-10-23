@@ -35,7 +35,7 @@ export const tasks: Task[] = [
   },
   {
     name: 'live-video',
-    goal: 'Open the camera page for back_yard_cam. Look at the live video area at the top: a badge in its corner says either "LIVE · N s" (with a latency), "connecting…", "buffering · N s" or "camera reconnecting · N". Wait up to 20 seconds for it to settle, then report the badge text you see, as shown.',
+    goal: 'Open the camera page for back_yard_cam. Look at the live video area at the top: a badge in its corner says one of "LIVE" (WebRTC, the usual case), "connecting…"/"reconnecting…", or — if it fell back to HLS — "LIVE · N s" (with a latency), "buffering · N s" or "camera reconnecting · N". Wait up to 20 seconds for it to settle, then report the badge text you see, as shown.',
     // the oracle reads the recorder's facts: frames flowing within 10 s => the player must say LIVE (or still be connecting); otherwise it must not say LIVE
     oracle: async (api) => { const s = await api.get(C.Status, '/api/status'); const c = s.cameras.find((x) => x.name === 'back_yard_cam'); const flowing = c?.connected === true && (c.live_age_s ?? 999) < 10; return { kind: 'predicate', describe: flowing ? 'frames are flowing: the badge must say LIVE (connecting… is acceptable only if the page was just opened)' : `frames are not flowing (connected=${c?.connected}, live_age=${c?.live_age_s}): the badge must not say LIVE`, check: (a) => { const t = (a.value ?? a.answer).toLowerCase(); return flowing ? /live|connecting/.test(t) : !/^live|live ·/.test(t); } }; },
   },
