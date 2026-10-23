@@ -14,16 +14,20 @@ camera --(1 persistent LOCAL TUTK/LAN stream)--> go2rtc --(1 persistent RTSP con
                         sampler / detector / status  <-------- read frames from <media>/buffer/<cam>/ ------+   (never touch go2rtc or a camera)
 ```
 
-- **go2rtc** is the Wyze client (native `wyze://` TUTK source, or the bridge's WebRTC fallback). It holds one
-  session per camera.
-- **`com.ranch.recorder`** (`infra/bin/recorder.sh`) is the single live-stream consumer: one keyframe-only ffmpeg
-  per camera pulling go2rtc's **local** RTSP into a rolling few-minute JPEG buffer at `<media>/buffer/<cam>/`.
-  Because this consumer never drops, go2rtc never tears the producer down.
+- **go2rtc** is the Wyze client (native `wyze://` TUTK source, or the bridge's WebRTC fallback). It holds exactly one
+  session (one producer) per camera and multiplexes it to every consumer.
+- **`com.ranch.recorder`** (`infra/bin/recorder.sh`) runs two ffmpeg roles per camera, both reading go2rtc's **local**
+  RTSP (so both share the one producer): an always-on keyframe-only `pull_jpeg` into a rolling few-minute JPEG buffer
+  at `<media>/buffer/<cam>/`, and an on-demand `pull_hls` that transcodes to fMP4 HLS at `<media>/live/<cam>/` only
+  while a viewer is watching (a fresh `.demand` marker). Because the JPEG pull never drops, go2rtc never tears the
+  producer down, so the HLS encoder and browser WebRTC viewers attach to a producer that is already held.
 - **The sampler** (`apps/ingest`) reads the newest buffered JPEG per camera, does change detection, and writes
   kept frames. It never calls go2rtc or a camera. **The detector and status daemon** read frames from disk.
-- **The web dashboard** (`apps/web`, 22 Oct) is a buffer reader too: camera thumbnails are the newest buffered
-  frame (`/api/buffer/<cam>`) and the "live" view on a camera page is an MJPEG the status daemon assembles from
-  the buffer as it fills (`/api/buffer/<cam>/stream`, ~1 frame / 2 s). The dashboard has no go2rtc URL at all.
+- **The web dashboard** (`apps/web`) live view is the one browser-facing go2rtc consumer: **WebRTC/WHEP** is the
+  primary transport (sub-second, native H.264, no transcode — the web app proxies the SDP to go2rtc on loopback and
+  the media flows browser↔go2rtc on the tailnet), with the recorder's on-demand HLS as the fallback. Both share the
+  producer the JPEG pull holds, so a viewer attaching or detaching never makes go2rtc dial the camera. Camera
+  thumbnails remain the newest buffered frame (`/api/buffer/<cam>`).
 
 ## Why (the evidence)
 
@@ -91,21 +95,26 @@ for a camera that had been off for ten hours; it now logs `connected` (producer 
 - Status daemon: every JPEG is read into memory before sharp (`apps/status/src/jpeg.ts`); a half-written file is a
   caught error (stream tick skips it, single frame falls back to the previous file or answers 503 `frame_not_ready`).
 - Player: retry 10 → 20 → 40 → 60 s, reset on a successful load.
-- go2rtc binds API and RTSP to 127.0.0.1; pf refuses 5080, 1984, 8554 and 8889 on every interface but lo0
-  (`loopback_only_ports`). The bridge's metrics page moved to the dashboard's `/system`; its UI is reachable through
+- go2rtc binds API and RTSP to 127.0.0.1; pf refuses 5080, 1984 and 8554 on every interface but lo0
+  (`loopback_only_ports`). The WebRTC media port **8889 is the exception: tailnet-only** (its own pf section accepts
+  TCP+UDP from Tailscale clients, refuses it elsewhere), because the browser consumes the camera over WebRTC directly;
+  go2rtc advertises the mini's tailnet address as its only ICE candidate and the signalling is proxied through the web
+  app on loopback. The bridge's metrics page moved to the dashboard's `/system`; its UI is reachable through
   `make tunnel`. `log.api: trace` for a day (go2rtc logs `[api] METHOD URL remote` only at trace; `debug` logged nothing
   in 3 min of netprobe polling) to derive `api.allow_paths` (follow-up):
   `make logs-last H=24 | grep -oE '\[api\] [A-Z]+ /api[^ ]*' | sort | uniq -c`.
 - The rule is measured: `infra/bin/camera-owners.sh` (`make camera-owners`, and a task in `roles/services` that is
-  fatal under `make verify`) asserts go2rtc listens on loopback only, every `:8554` client is an ffmpeg in the
-  recorder's process group, no stream has more than one consumer, no go2rtc port has a non-loopback peer, and only the
-  recorder writes under the buffer.
+  fatal under `make verify`) asserts go2rtc's API and RTSP listen on loopback only, every `:8554` client is an ffmpeg
+  in the recorder's process group, each stream has at most two recorder consumers (jpeg + hls — browser WebRTC viewers
+  share the producer and are listed, not capped), no connection to a loopback-only port (8554, 1984) has a non-loopback
+  peer (8889 is tailnet-reachable by design), and only the recorder writes under the buffer.
 - Measured after the provision (23 Oct, 10:45–11:05 EDT): a 10-minute live view through the web app delivered 398
   frames, 300 thumbnail requests at 5/s all answered 200, node crash reports stayed at 25 and `com.ranch.status`
   runs at 38 (before the fix: 9 crashes in the 60 min a camera page was open), zero `UND_ERR_SOCKET` in the web log,
   daemon RSS 175 → 205 MB with one viewer. `camera-owners.sh`: go2rtc listens on 127.0.0.1 only, one consumer per
-  stream, all of them recorder ffmpeg. From the laptop, 5080/1984/8554/8889 refused over the tailnet (curl exit 7)
-  and unreachable over the LAN (exit 28), 5090 still 200. go2rtc `[api]` trace lines appear (49 `GET
+  stream, all of them recorder ffmpeg. From the laptop, 5080/1984/8554 refused over the tailnet (curl exit 7)
+  and unreachable over the LAN (exit 28), 5090 still 200 (this measurement predates WebRTC; 8889 was refused then and
+  is now tailnet-only by design — see above). go2rtc `[api]` trace lines appear (49 `GET
   /api/streams?src=…` + 4 `GET /api/streams` in 2 min: netprobe, status and the owners check).
 - Still open, by design: go2rtc, the bridge and the recorder's redials are the only things that reach a camera; a
   go2rtc or recorder restart re-dials all seven cameras once. Step 2 (not done): run the recorder under its own uid and
@@ -227,11 +236,19 @@ so this is still one camera connection and `camera-owners.sh` allows up to two r
   the recorder runs the encoder while that marker is fresh and stops it otherwise.
 
 Normally zero or one encoder runs, so the pipeline is real-time: measured 0 s at the recorder output, **~4 s
-glass-to-glass** in the browser. "connected" is now the JPEG buffer's freshness (always written), not the on-demand
-playlist. The ~4 s is the standard-HLS floor: the protocol's hold-back is 3x the target duration (>= 3 s) plus a
-segment, independent of hls.js tuning. Sub-3 s needs LL-HLS (ffmpeg's hls muxer does not emit it well) or WebRTC from
-go2rtc (which would share the recorder's producer, so no extra camera connection, but the web app must proxy the
-WebRTC signalling) -- a separate piece of work, not done here.
+glass-to-glass** in the browser over HLS. "connected" is now the JPEG buffer's freshness (always written), not the
+on-demand playlist. The ~4 s is the standard-HLS floor: the protocol's hold-back is 3x the target duration (>= 3 s)
+plus a segment, independent of hls.js tuning.
+
+**WebRTC is the primary transport now (23 Oct), HLS the fallback.** The browser consumes the camera over go2rtc's
+WHEP: native H.264, no transcode, measured sub-second end-to-end through the dashboard (`transport=webrtc`,
+`mode=live`, 2560×1440, picture advancing). The web app proxies the SDP offer to go2rtc on loopback
+(`/api/ui/webrtc/<cam>` → `bff/webrtc.ts`) and returns the answer; go2rtc advertises the mini's tailnet address as its
+only ICE candidate (`filters.candidates: []`, no STUN) so the media flows browser↔go2rtc directly on the tailnet
+(8889, tailnet-only via pf). A WebRTC consumer shares the producer the recorder's JPEG pull already holds, so it adds
+no camera connection — verified by `camera-owners.sh` with a live viewer (`recorder_consumers=1 +webrtc=N`, no
+violation). The StreamPlayer tries WebRTC first and falls back to the on-demand HLS if it does not connect within 6 s,
+so the ~4 s HLS path above is still the safety net.
 
 ## Operating notes
 

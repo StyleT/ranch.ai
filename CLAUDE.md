@@ -29,14 +29,17 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   old definition).
 - Ports listed in `tailscale_only_ports` (group_vars) are accepted by the pf anchor only from Tailscale clients on the
   node's tailnet addresses and refused on the ranch LAN (today: 5090, the dashboard: `http://ranch-ai.tail6d04cd.ts.net:5090`;
-  `ranch-ai.local:5090` is refused). Ports in `loopback_only_ports` (5080 bridge, 1984/8554/8889 go2rtc) are refused
-  on every interface but lo0: only processes on the mini may talk to go2rtc or the bridge, because a go2rtc consumer
-  makes it dial a camera. Verify with `ssh ranch curl 127.0.0.1:<port>` and `make camera-owners`; `make tunnel` forwards
-  5091 and 5080 to the laptop.
+  `ranch-ai.local:5090` is refused). Ports in `loopback_only_ports` (5080 bridge, 1984 go2rtc API, 8554 go2rtc RTSP)
+  are refused on every interface but lo0. The go2rtc **WebRTC media port 8889 is the exception: tailnet-only** (its own
+  pf section, TCP+UDP from Tailscale clients only), because the browser consumes the camera over WebRTC directly; the
+  signalling is still proxied through the web app to go2rtc on loopback. Verify loopback ports with
+  `ssh ranch curl 127.0.0.1:<port>` and `make camera-owners`; `make tunnel` forwards 5091 and 5080 to the laptop.
 - The dashboard is `apps/web` (Next.js, `docs/WEB-DASHBOARD.md`) on 5090; `apps/status` is its JSON/SSE API on
   `127.0.0.1:5091` and serves no HTML. `make web-dev` runs the app on the laptop against the mini's API. The live view
-  is the recorder's HLS output (`<media>/live/<cam>/`), served as files by the daemon and played by `<video>`; never a
-  second camera consumer, never an MJPEG re-encode.
+  is **WebRTC from go2rtc** (sub-second, native H.264, no transcode): the browser gets the camera's own stream, with the
+  recorder's on-demand HLS (`<media>/live/<cam>/`, served as files by the daemon) as the fallback when WebRTC does not
+  connect. Both are go2rtc consumers that share the one producer the recorder already holds (below), never a second
+  camera dial and never an MJPEG re-encode.
 - Classes, subclasses and detector thresholds live in `packages/taxonomy/taxonomy.json` and nowhere else; the mini
   holds versions of it (editable on `:5090/taxonomy`). After a UI edit: `make taxonomy-pull`, commit. The repo file
   wins on provision.
@@ -56,11 +59,15 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   for escalation/labeling, `claude-haiku-5-5` as judge. Frigate is a benchmark, never the runtime.
 - Memory budget is the constraint: one ~3 GB VLM resident, nothing else large. Measure before adding.
 - Local by default, cloud by exception; events not streams; one MCP tool surface; OTel on every stage.
-- **Cameras: one owner, consumers read disk (docs/CAMERA-ARCHITECTURE.md).** Exactly one service holds a
-  connection to each camera; `com.ranch.recorder` is the single live-stream consumer and writes a rolling disk
-  buffer at `<media>/buffer/<cam>/`. Every other process (sampler, detector, status) reads that buffer and NEVER
-  calls go2rtc or a camera. Prefer the local TUTK/LAN path; keep the bridge's WebRTC fallback. Never `DELETE`/
-  recreate a go2rtc stream from our code. This exists because go2rtc dials a camera on consumer-attach and drops
-  it at zero consumers, so dynamic/multiple consumers churn camera handshakes and overload the cameras (22 Oct).
+- **Cameras: one producer, consumers share it (docs/CAMERA-ARCHITECTURE.md).** go2rtc holds exactly one connection
+  (one producer) to each camera and multiplexes it to every consumer. `com.ranch.recorder` runs an always-on
+  keyframe-JPEG ffmpeg per camera that keeps that producer up and writes the rolling disk buffer at
+  `<media>/buffer/<cam>/`; the sampler, detector and status read that buffer and NEVER call go2rtc or a camera. The
+  browser live view is the one place that consumes go2rtc directly — WebRTC/WHEP, or on-demand HLS as fallback — but
+  because the recorder's pull already holds the producer, a viewer attaching or detaching shares that producer and
+  never makes go2rtc dial the camera. Prefer the local TUTK/LAN path; keep the bridge's WebRTC fallback. Never
+  `DELETE`/recreate a go2rtc stream from our code. This matters because go2rtc dials a camera when a producer is first
+  needed and drops it at zero consumers, so a producer that is NOT held open churns camera handshakes and overloads
+  the weak cameras (22 Oct); the always-on recorder pull is what keeps it held.
   Readers never memory-map a buffer file (`apps/status/src/jpeg.ts`: read into a Buffer, then sharp); the recorder
   writes atomically. The rule is measured, not assumed: `make camera-owners` / `make verify` fail on any other consumer.

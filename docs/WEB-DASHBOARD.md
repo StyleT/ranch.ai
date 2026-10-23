@@ -11,10 +11,11 @@ backend-for-frontend: route handlers under `/api/ui/*` compose UI-shaped documen
 server-to-server over loopback, validated at the boundary against `packages/contracts` (zod schemas of every
 daemon response; the daemon's `Status` `satisfies` them). The Next process holds no SQLite, no MQTT and no native
 modules: one shared upstream SSE connection is fanned out to browsers (`/api/ui/live`), and every image is proxied
-from the daemon (which resizes with sharp). **The dashboard never touches go2rtc or a camera**
-(`docs/CAMERA-ARCHITECTURE.md`): thumbnails are the newest frame of the recorder's rolling buffer, and the "live"
-view on a camera page is an MJPEG the daemon assembles from that buffer as the recorder fills it (~1 frame / 2 s),
-capped at four concurrent viewers, closed when the page is hidden or left.
+from the daemon (which resizes with sharp). **The dashboard never dials a camera**
+(`docs/CAMERA-ARCHITECTURE.md`): thumbnails are the newest frame of the recorder's rolling buffer, and the live view
+on a camera page is **WebRTC from go2rtc** (sub-second, native H.264) with the recorder's on-demand HLS as the
+fallback — both are go2rtc consumers that share the one producer the recorder's always-on JPEG pull holds, so opening
+a page never makes go2rtc dial the camera. The player tears down when the page is hidden or left.
 
 ```
 browser (tailnet) ──:5090──> com.ranch.web   Next standalone (pf accepts 5090 only from Tailscale clients; the LAN is refused, 23 Oct)
@@ -33,7 +34,7 @@ consumer per camera. Reach that UI with `make tunnel` → `http://127.0.0.1:5080
 | Route | Content |
 |---|---|
 | `/` | health strip, derived alerts (camera offline, daemon down, detector stale, taxonomy drift, disk, burst throttling, no frames), camera cards with live thumbnails and the equine count, activity feed (bursts/tracks, live over SSE), detections per camera × label with raw-label tooltips, events placeholder |
-| `/cameras/[name]` | live view from the recorder buffer (MJPEG, ~0.5 fps, always on while visible, paused when hidden), online timeline and equine count chart over 1h/6h/24h/7d, motion, network and buffer signal, recent bursts, and the detections browser locked to the camera |
+| `/cameras/[name]` | live view (WebRTC primary, sub-second; on-demand HLS fallback; muted autoplay with an unmute button; paused when hidden), 24 h availability strip and supervisor remediation history, online timeline and equine count chart over 1h/6h/24h/7d, motion, network and buffer signal, recent bursts, and the detections browser locked to the camera |
 | `/detections` | the frames browser: live frames or a baseline set with any model's or labels' overlay, filters in the URL (canonical), infinite paging, box overlays with raw-label captions and motion arrows, burst cards with hover playback, full-screen viewer with ←/→ ↑/↓ Space Esc, swipe and long-press on touch |
 | `/taxonomy` | the editor: draft in session storage, validate, score with the gate table (active vs draft, per-class deltas), apply with the write token, history with load-as-draft and revert, drift banner |
 | `/system` | daemons with RSS, exit, parsed retained status (nested motion and netprobe tables), last log line; load, disk, totals; network probe per camera; wifi; pausable MQTT ticker |
@@ -77,7 +78,12 @@ re-encoding all seven cameras saturated the media engine and the picture froze m
 runs and the recorder output is real-time (0 s). Measured glass-to-glass in Chrome over the tailnet (burned-in camera
 clock vs screenshot wall time): **~4 s**, moving, reliable. That is the standard-HLS floor (hold-back = 3x target
 duration, >= 3 s, plus a segment). The badge reports latency from the playhead's distance to the buffered edge plus the
-newest segment's age (capped at one segment so a stale poll does not inflate it). True sub-3 s needs LL-HLS or WebRTC.
+newest segment's age (capped at one segment so a stale poll does not inflate it).
+
+**WebRTC is now the primary transport (23 Oct), so the common path is sub-second**, not ~4 s: the StreamPlayer opens a
+go2rtc WHEP session first (native H.264, no transcode; `transport=webrtc`, measured 2560×1440 with the picture
+advancing) and only falls back to the ~4 s on-demand HLS above if WebRTC does not connect within 6 s. The HLS badge
+math still governs the fallback. See `docs/CAMERA-ARCHITECTURE.md` for the transport details.
 
 ## Live data
 
