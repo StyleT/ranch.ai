@@ -25,7 +25,21 @@ block return in quick on ! lo0 inet proto tcp from any to any port {{ port }}
 block return in quick on ! lo0 inet6 proto tcp from any to any port {{ port }}
 {% endfor %}
 #
-# 3. Fault injection (make e2e-chaos, infra/bin/e2e-chaos.sh) loads temporary rules into the child anchor com.ranch/chaos.
+# 3. go2rtc WebRTC media (go2rtc_webrtc_port): TCP and UDP, accepted from Tailscale clients only (the browser consumes
+#    the camera over WebRTC directly; go2rtc advertises the tailnet address as its ICE candidate), refused elsewhere.
+{% for addr in tailscale_addrs %}
+{% if ':' in addr %}
+pass in quick inet6 proto { tcp udp } from fd7a:115c:a1e0::/48 to {{ addr }} port {{ go2rtc_webrtc_port }}
+{% else %}
+pass in quick inet proto { tcp udp } from 100.64.0.0/10 to {{ addr }} port {{ go2rtc_webrtc_port }}
+{% endif %}
+{% endfor %}
+block return in quick on ! lo0 inet proto tcp from any to any port {{ go2rtc_webrtc_port }}
+block drop in quick on ! lo0 inet proto udp from any to any port {{ go2rtc_webrtc_port }}
+block return in quick on ! lo0 inet6 proto tcp from any to any port {{ go2rtc_webrtc_port }}
+block drop in quick on ! lo0 inet6 proto udp from any to any port {{ go2rtc_webrtc_port }}
+#
+# 4. Fault injection (make e2e-chaos, infra/bin/e2e-chaos.sh) loads temporary rules into the child anchor com.ranch/chaos.
 #    A child anchor is only evaluated when the parent names it, so this line is what makes a chaos rule take effect;
 #    the anchor is empty outside a test run.
 anchor "chaos"

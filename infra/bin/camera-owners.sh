@@ -7,8 +7,10 @@
 # Facts asserted:
 #   1. go2rtc's API (1984) and RTSP (8554) listen on 127.0.0.1 only.
 #   2. Every established client of :8554 is an ffmpeg in com.ranch.recorder's process group.
-#   3. go2rtc reports at most one consumer per stream.
-#   4. No established connection to 1984/8554/8889 has a non-loopback peer.
+#   3. go2rtc reports at most two recorder consumers per stream (jpeg + hls); browser WebRTC viewers share the
+#      one producer and are not camera dials, so they are listed but not capped.
+#   4. No established connection to the loopback-only ports (1984, 8554) has a non-loopback peer. 8889 (WebRTC media)
+#      is tailnet-reachable by design (pf allows it from the tailnet only), so its peers are expected to be remote.
 #   5. Only the recorder's process group has files open under the buffer directory for writing.
 set -u
 GO2RTC=${GO2RTC_URL:-http://127.0.0.1:1984}
@@ -31,8 +33,14 @@ bad=$(echo "$listen" | awk '$3 ~ /:(1984|8554)$/ && $3 !~ /^127\.0\.0\.1:/')
 est=$($SUDO lsof -nP -iTCP:8554 -iTCP:1984 -iTCP:8889 -sTCP:ESTABLISHED 2>/dev/null | awk 'NR>1 {print $1, $2, $9}')
 while read -r cmd pid name; do
   [ -z "${name:-}" ] && continue
-  peer=${name#*->}; local=${name%%->*}
-  case "$peer" in 127.0.0.1:*|\[::1\]:*) ;; *) fail "non-loopback peer on a go2rtc port: $cmd[$pid] $name" ;; esac
+  peer=${name#*->}; local=${name%%->*}; lport=${local##*:}
+  # 8554 (RTSP) and 1984 (API) are loopback-only by OS rule; a remote peer there is a violation. 8889 is the WebRTC
+  # media port, tailnet-reachable by design, so remote peers there are expected and merely listed.
+  case "$lport" in
+    8554|1984) case "$peer" in 127.0.0.1:*|\[::1\]:*) ;; *) fail "non-loopback peer on loopback-only port $lport: $cmd[$pid] $name" ;; esac ;;
+    8889) echo "webrtc media peer: $cmd[$pid] $name" ;;
+  esac
+  # the process whose peer is :8554 is the one that dialed go2rtc's RTSP; it must be a recorder ffmpeg
   case "$peer" in
     127.0.0.1:8554) if in_recorder_group "$pid"; then echo "rtsp consumer ok: $cmd[$pid] $local"; else fail "rtsp consumer outside the recorder: $cmd[$pid] $name"; fi ;;
   esac
@@ -44,14 +52,18 @@ import json,sys
 d=json.load(sys.stdin); bad=0
 for name,s in sorted(d.items()):
     allc=s.get("consumers") or []
-    preload=[c for c in allc if c.get("format_name")=="preload"]   # go2rtc holding the session itself (go2rtc_preload_cameras): not an external consumer
-    ext=len(allc)-len(preload); prod=[p for p in (s.get("producers") or []) if p.get("remote_addr")]
-    tag=" +preload" if preload else ""   # python 3.9 on the mini: no nested quotes inside f-strings
-    # 1-2 external consumers are expected per camera: the always-on JPEG recorder plus, while watched, the HLS encoder.
-    # go2rtc shares one producer (one camera connection) to both, so this is not multiple camera dials. What matters is
-    # that every consumer is a recorder ffmpeg, which the :8554 socket-ownership check below proves.
-    print(f"stream {name}: consumers={ext}{tag} connected_producer={len(prod)>0}")
-    if ext>2: print(f"VIOLATION: {name} has {ext} external consumers (expected <= 2: jpeg + hls)"); bad+=1
+    def fmt(c): return (c.get("format_name") or "")
+    preload=[c for c in allc if fmt(c)=="preload"]           # go2rtc holding the session itself: not an external consumer
+    webrtc=[c for c in allc if fmt(c).startswith("webrtc")]  # a browser viewer; shares the one producer, never dials the camera
+    rec=[c for c in allc if c not in preload and c not in webrtc]   # the recorder rtsp consumers (jpeg + hls)
+    prod=[p for p in (s.get("producers") or []) if p.get("remote_addr")]
+    tag=(" +preload" if preload else "")+((" +webrtc=%d"%len(webrtc)) if webrtc else "")   # python 3.9 on the mini: no nested quotes inside f-strings
+    # The recorder opens 1-2 rtsp consumers per camera: the always-on JPEG reader plus, while a viewer uses HLS, the
+    # encoder. go2rtc shares one producer (one camera connection) to all of them, so this is never multiple camera
+    # dials. Browser WebRTC viewers also share that producer and are unbounded, so they are listed, not capped. What
+    # matters is one connected producer and that every :8554 socket is a recorder ffmpeg (the socket-ownership check).
+    print(f"stream {name}: recorder_consumers={len(rec)}{tag} connected_producer={len(prod)>0}")
+    if len(rec)>2: print(f"VIOLATION: {name} has {len(rec)} recorder consumers (expected <= 2: jpeg + hls)"); bad+=1
 sys.exit(1 if bad else 0)' || violations=$((violations + 1))
 
 # 5. writers under the buffer directory (shallow per camera dir; -F gives pid/command/access mode)

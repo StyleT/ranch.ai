@@ -163,7 +163,14 @@ loopback_only_ports:
   - 5080                                     # Wyze bridge UI + API (its metrics are on the dashboard's /system page)
   - 1984                                     # go2rtc API (also bound to 127.0.0.1 in go2rtc.yaml)
   - 8554                                     # go2rtc RTSP (also bound to 127.0.0.1)
-  - 8889                                     # go2rtc WebRTC TCP (consumer entry; the source-side fallback is outbound)
+# 8889 (go2rtc WebRTC media) is tailnet-reachable, not loopback: the browser consumes the camera over WebRTC directly
+# (sub-second, native H.264, no transcode). A WebRTC consumer shares the producer the recorder already holds, so it does
+# not re-dial the camera; signalling is still proxied through the web app to go2rtc on loopback.
+go2rtc_webrtc_port: 8889
+# The mini's stable Tailscale IPv4 (MagicDNS ranch-ai.tail6d04cd.ts.net, see CLAUDE.md). go2rtc advertises this as its
+# only WebRTC ICE candidate, so a browser on the tailnet connects straight to it for media. Stable per node; update here
+# if the tailnet address ever changes.
+go2rtc_webrtc_candidate: "100.72.239.2:8889"
 ranch_daemons_retired:                       # unloaded and deleted by roles/services
   - com.ranch.logrotate                      # 16 Oct: custom rotation replaced by the unified log
   - com.ranch.seed-recorder                  # 22 Oct: superseded by the always-on recorder (disk buffer)

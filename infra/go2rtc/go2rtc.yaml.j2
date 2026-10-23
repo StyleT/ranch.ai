@@ -16,9 +16,16 @@ api:
 rtsp:
   listen: 127.0.0.1:8554
 webrtc:
+  # The browser consumes the camera over WebRTC (sub-second, native H.264, no transcode). Signalling is proxied by the
+  # web app to go2rtc on loopback; the media port is reachable on the tailnet only (tailscale_only_ports) and go2rtc
+  # advertises the mini's tailnet addresses as host candidates so the browser connects directly. A WebRTC consumer
+  # shares the producer the recorder already holds, so it never re-dials the camera.
   listen: :8889
-  ice_servers:
-    - urls: [ stun:stun.l.google.com:19302 ]
+  candidates:
+    - "{{ go2rtc_webrtc_candidate }}"
+  ice_servers: []
+  filters:
+    candidates: []   # advertise ONLY the explicit tailnet candidate above, not the LAN/auto-discovered interface IPs
 ffmpeg:
   bin: {{ brew_prefix }}/bin/ffmpeg
 {% if go2rtc_preload_cameras %}

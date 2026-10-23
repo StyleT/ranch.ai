@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from
 import { server } from './setup-server';
 import { invalidate } from '@/bff/daemon';
 import { GET as hlsGET } from '@/app/api/ui/hls/[camera]/[file]/route';
+import { POST as webrtcPOST } from '@/app/api/ui/webrtc/[camera]/route';
 import { parseLeaderboard, parseDatasets } from '@/bff/evals';
 import { translate } from '@/bff/live';
 import { gapFill } from '@/bff/camera';
@@ -31,6 +32,18 @@ describe('/api/ui/hls/[camera]/[file]', () => {
     expect((await call('donkey_cam', 'init-1761240000.mp4')).status).toBe(404);
     expect((await call('Donkey', 'index.m3u8')).status).toBe(404);
     expect((await call('mops_cam', 'index.m3u8')).status).toBe(404);
+  });
+});
+
+describe('/api/ui/webrtc/[camera]', () => {
+  const call = (camera: string, body: string) => webrtcPOST(new Request(`http://x/api/ui/webrtc/${camera}`, { method: 'POST', body }), { params: Promise.resolve({ camera }) });
+  it('proxies the SDP offer to go2rtc and returns the answer', async () => {
+    const r = await call('donkey_cam', 'v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\n'); expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('application/sdp'); expect(await r.text()).toContain('v=0');
+  });
+  it('rejects a non-SDP body and a bad camera name', async () => {
+    expect((await call('donkey_cam', 'not sdp')).status).toBe(400);
+    expect((await call('Donkey', 'v=0\r\n')).status).toBe(404);
   });
 });
 

@@ -9,8 +9,10 @@ import { makeRemediation } from '../fixtures/remediation.ts';
 const FX = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 export const fixture = <T = unknown>(name: string): T => JSON.parse(readFileSync(join(FX, 'daemon', `${name}.json`), 'utf8')) as T;
 export const DAEMON = 'http://127.0.0.1:5091';
+export const GO2RTC = 'http://127.0.0.1:1984';
 
 export const handlers = [
+  http.post(`${GO2RTC}/api/webrtc`, async ({ request }) => { const body = await request.text(); return body.startsWith('v=') ? new HttpResponse('v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\n', { headers: { 'content-type': 'application/sdp' } }) : HttpResponse.text('bad', { status: 400 }); }),
   http.get(`${DAEMON}/api/status`, () => HttpResponse.json(fixture('status'))),
   http.get(`${DAEMON}/api/ping`, () => HttpResponse.json(fixture('ping'))),
   http.get(`${DAEMON}/api/bridge`, () => HttpResponse.json(fixture('bridge'))),

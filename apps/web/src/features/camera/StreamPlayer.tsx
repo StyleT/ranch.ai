@@ -1,28 +1,36 @@
 'use client';
-// The live view: the recorder's HLS output (video copied from the camera, AAC audio) served by the daemon through
-// /api/ui/hls (docs/WEB-DASHBOARD.md). Safari and iOS play HLS natively; everything else gets hls.js. Nothing here
-// touches go2rtc or a camera: any number of viewers reads the same files. The badge is derived from facts
-// (liveState.ts): the playlist's age says whether the recorder is receiving frames, the video element says whether
-// they are being played; a frozen picture is never labelled LIVE. Autoplay is muted (browser policy); one tap unmutes.
+// The live view. Primary transport is WebRTC: go2rtc sends the camera's native H.264, the browser decodes it,
+// sub-second latency, no transcode (the signalling is proxied by the web app to go2rtc on loopback; the media flows
+// browser <-> go2rtc directly on the tailnet). If WebRTC does not connect, it falls back to the recorder's on-demand
+// HLS (docs/CAMERA-ARCHITECTURE.md). A WebRTC consumer shares the producer the recorder already holds, so it never
+// re-dials the camera. The badge is derived from facts (the picture must advance to read LIVE), never asserted.
 import { useEffect, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import { tid } from '@/lib/testids';
 import { deriveLiveState, parsePlaylist, retryDelayMs, badgeText, type LiveFacts } from './liveState';
 
-const POLL_MS = 2_000;   // poll the tiny playlist often so x-live-age-s stays fresh and the latency badge is honest
+const POLL_MS = 2_000;
+const WEBRTC_CONNECT_TIMEOUT_MS = 6_000;
+const PROGRESS_STALL_MS = 6_000;
 const nativeHls = (v: HTMLVideoElement) => v.canPlayType('application/vnd.apple.mpegurl') !== '';
+
+type Transport = 'webrtc' | 'hls';
 
 export function StreamPlayer({ camera, poster, playlist }: { camera: string; poster: string; playlist: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const lastTime = useRef(0);   // last currentTime seen advancing (reset on every attach)
+  const lastTime = useRef(0);
   const [visible, setVisible] = useState(true);
   const [muted, setMuted] = useState(true);
-  const [attach, setAttach] = useState(0);          // bumps to re-attach after a fatal error
+  const [transport, setTransport] = useState<Transport>('webrtc');
+  const [attach, setAttach] = useState(0);
   const [failures, setFailures] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [facts, setFacts] = useState<Omit<LiveFacts, 'nowMs' | 'visible'>>(() => ({ startedMs: Date.now(), playlistAgeS: null, playlistPolledMs: null, edgeGapS: null, lastProgressMs: null, error: false }));
+  const [lastProgressMs, setLastProgressMs] = useState<number | null>(null);
+  const [startedMs, setStartedMs] = useState(() => Date.now());
+  const [error, setError] = useState(false);
+  // HLS-only facts (playlist age / buffered edge), for the HLS fallback badge
+  const [hlsFacts, setHlsFacts] = useState<Pick<LiveFacts, 'playlistAgeS' | 'playlistPolledMs' | 'edgeGapS'>>(() => ({ playlistAgeS: null, playlistPolledMs: null, edgeGapS: null }));
 
-  // page visibility: tear the player down when hidden so nothing is fetched for a page nobody sees
   useEffect(() => {
     const onVis = () => setVisible(document.visibilityState === 'visible'); const onHide = () => setVisible(false);
     document.addEventListener('visibilitychange', onVis); window.addEventListener('pagehide', onHide);
@@ -30,73 +38,92 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
   }, []);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
-  // attach the source (native or hls.js); re-run on visibility and on explicit re-attach
+  // attach the current transport; WebRTC first, HLS on fallback or on re-attach after a webrtc failure
   useEffect(() => {
     const video = videoRef.current; if (!video || !visible) return;
-    let hls: Hls | null = null; let cancelled = false;
-    lastTime.current = 0;
-    setFacts((f) => ({ ...f, startedMs: Date.now(), lastProgressMs: null, error: false }));
-    const fail = () => { if (cancelled) return; setFacts((f) => ({ ...f, error: true })); setFailures((n) => n + 1); };
-    // Muted autoplay must be decided by the browser with the element already muted: React's `muted` prop is a property
-    // set after hydration, not a server-rendered attribute, so set it imperatively before any play() (23 Oct: Chrome
-    // loaded the stream to readyState 4 and never started it).
+    let cancelled = false; let hls: Hls | null = null; let pc: RTCPeerConnection | null = null; let timer: ReturnType<typeof setTimeout> | null = null;
+    lastTime.current = 0; setLastProgressMs(null); setStartedMs(Date.now()); setError(false);
     video.muted = true; video.defaultMuted = true;
     const play = () => { if (!cancelled) video.play().catch(() => undefined); };
-    if (nativeHls(video)) { video.src = playlist; video.addEventListener('loadedmetadata', play, { once: true }); play(); }
-    else {
-      void import('hls.js').then(({ default: HlsCtor }) => {
-        if (cancelled || !HlsCtor.isSupported()) { if (!cancelled) fail(); return; }
-        // 1 s segments, on-demand encoder is real-time at the recorder (0 s), so the latency is all hls.js hold-back.
-        // Sit ~1.5 s behind the edge, speed up to 1.5x to catch up, cap at 4 s. lowLatencyMode makes hls.js target the
-        // edge aggressively even without LL-HLS parts. Measured glass-to-glass after this: see docs/WEB-DASHBOARD.md.
-        hls = new HlsCtor({ liveSyncDuration: 1, liveMaxLatencyDuration: 3, maxLiveSyncPlaybackRate: 2, liveDurationInfinity: true, lowLatencyMode: true, enableWorker: true, backBufferLength: 4 });
-        hls.on(HlsCtor.Events.ERROR, (_e, data) => { if (data.fatal) fail(); });
-        hls.on(HlsCtor.Events.MANIFEST_PARSED, play);
-        hls.on(HlsCtor.Events.FRAG_BUFFERED, () => { if (video.paused) play(); });
-        hls.loadSource(playlist); hls.attachMedia(video);
-      });
+    const fallbackToHls = () => { if (cancelled) return; setTransport('hls'); };
+
+    if (transport === 'webrtc') {
+      pc = new RTCPeerConnection({ iceServers: [] });
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+      pc.ontrack = (e) => { if (!cancelled && e.streams[0]) { video.srcObject = e.streams[0]; play(); } };
+      pc.addEventListener('connectionstatechange', () => { if (!pc) return; if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') fallbackToHls(); });
+      timer = setTimeout(() => { if (!cancelled && pc && pc.connectionState !== 'connected') fallbackToHls(); }, WEBRTC_CONNECT_TIMEOUT_MS);
+      void (async () => {
+        try {
+          const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+          await new Promise<void>((r) => { if (pc!.iceGatheringState === 'complete') return r(); const h = () => { if (pc!.iceGatheringState === 'complete') { pc!.removeEventListener('icegatheringstatechange', h); r(); } }; pc!.addEventListener('icegatheringstatechange', h); setTimeout(r, 2500); });
+          if (cancelled) return;
+          const resp = await fetch(`/api/ui/webrtc/${encodeURIComponent(camera)}`, { method: 'POST', headers: { 'content-type': 'application/sdp' }, body: pc.localDescription!.sdp });
+          if (!resp.ok) return fallbackToHls();
+          await pc.setRemoteDescription({ type: 'answer', sdp: await resp.text() });
+        } catch { fallbackToHls(); }
+      })();
+    } else {
+      video.srcObject = null;
+      const fail = () => { if (cancelled) return; setError(true); setFailures((n) => n + 1); };
+      if (nativeHls(video)) { video.src = playlist; video.addEventListener('loadedmetadata', play, { once: true }); play(); }
+      else {
+        void import('hls.js').then(({ default: HlsCtor }) => {
+          if (cancelled || !HlsCtor.isSupported()) { if (!cancelled) fail(); return; }
+          hls = new HlsCtor({ liveSyncDuration: 1, liveMaxLatencyDuration: 3, maxLiveSyncPlaybackRate: 2, liveDurationInfinity: true, lowLatencyMode: true, enableWorker: true, backBufferLength: 4 });
+          hls.on(HlsCtor.Events.ERROR, (_e, d) => { if (d.fatal) fail(); });
+          hls.on(HlsCtor.Events.MANIFEST_PARSED, play); hls.on(HlsCtor.Events.FRAG_BUFFERED, () => { if (video.paused) play(); });
+          hls.loadSource(playlist); hls.attachMedia(video);
+        });
+      }
     }
-    return () => { cancelled = true; hls?.destroy(); video.removeAttribute('src'); video.load(); };
-  }, [playlist, visible, attach]);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); hls?.destroy(); if (pc) { pc.getReceivers().forEach((r) => r.track?.stop()); pc.close(); } video.removeAttribute('src'); video.srcObject = null; video.load(); };
+  }, [camera, playlist, visible, attach, transport]);
 
-  // re-attach after a fatal error with backoff
-  useEffect(() => { if (!facts.error) return; const t = setTimeout(() => setAttach((n) => n + 1), retryDelayMs(failures)); return () => clearTimeout(t); }, [facts.error, failures]);
+  // re-attach after a fatal HLS error with backoff
+  useEffect(() => { if (!error) return; const t = setTimeout(() => setAttach((n) => n + 1), retryDelayMs(failures)); return () => clearTimeout(t); }, [error, failures]);
 
-  // the recorder's view: poll the playlist (tiny) for its write age, native and hls.js alike
+  // HLS fallback: poll the playlist for its write age (WebRTC needs no polling)
   useEffect(() => {
-    if (!visible) return; let stop = false;
+    if (!visible || transport !== 'hls') return; let stop = false;
     const poll = async () => {
-      try {
-        const r = await fetch(playlist, { cache: 'no-store' }); if (stop) return;
-        const age = Number(r.headers.get('x-live-age-s')); if (r.ok) parsePlaylist(await r.text());
-        setFacts((f) => ({ ...f, playlistAgeS: r.ok && Number.isFinite(age) ? age : (r.status === 404 ? 999 : f.playlistAgeS), playlistPolledMs: Date.now() }));
-      } catch { /* next poll */ }
+      try { const r = await fetch(playlist, { cache: 'no-store' }); if (stop) return; const age = Number(r.headers.get('x-live-age-s')); if (r.ok) parsePlaylist(await r.text());
+        setHlsFacts((f) => ({ ...f, playlistAgeS: r.ok && Number.isFinite(age) ? age : (r.status === 404 ? 999 : f.playlistAgeS), playlistPolledMs: Date.now() })); } catch { /* next poll */ }
     };
-    void poll(); const t = setInterval(() => void poll(), POLL_MS);
-    return () => { stop = true; clearInterval(t); };
-  }, [playlist, visible]);
+    void poll(); const t = setInterval(() => void poll(), POLL_MS); return () => { stop = true; clearInterval(t); };
+  }, [playlist, visible, transport]);
 
-  // the viewer's view: is currentTime advancing, and how far behind the buffered edge is the playhead?
-  // progress = currentTime moved forward by more than 50 ms (a first timeupdate at 0 is not progress: 23 Oct a frozen
-  // player was reported LIVE for 8 s because the initial sentinel made 0 count as an advance)
   const onTimeUpdate = () => {
     const v = videoRef.current; if (!v) return;
     if (v.currentTime > lastTime.current + 0.05) {
-      lastTime.current = v.currentTime;
+      lastTime.current = v.currentTime; setLastProgressMs(Date.now()); setError(false);
       const end = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : null;
-      setFacts((f) => ({ ...f, lastProgressMs: Date.now(), error: false, edgeGapS: end === null ? f.edgeGapS : Math.max(0, end - v.currentTime) }));
+      if (end !== null) setHlsFacts((f) => ({ ...f, edgeGapS: Math.max(0, end - v.currentTime) }));
     }
   };
   const onPlaying = () => setFailures(0);
 
-  const state = deriveLiveState({ ...facts, nowMs: now, visible });
+  // badge + mode: WebRTC is sub-second, so LIVE while the picture advances; otherwise reuse the HLS state machine
+  let mode: string; let badge: string;
+  if (!visible) { mode = 'paused'; badge = 'PAUSED'; }
+  else if (transport === 'webrtc') {
+    const progressing = lastProgressMs !== null && now - lastProgressMs < PROGRESS_STALL_MS;
+    if (progressing) { mode = 'live'; badge = 'LIVE'; }
+    else if (lastProgressMs === null && now - startedMs < WEBRTC_CONNECT_TIMEOUT_MS) { mode = 'starting'; badge = 'connecting…'; }
+    else { mode = 'stalled'; badge = 'reconnecting…'; }
+  } else {
+    const s = deriveLiveState({ ...hlsFacts, nowMs: now, visible, startedMs, lastProgressMs, error });
+    mode = s.kind; badge = badgeText(s, now);
+  }
+  const live = mode === 'live' || mode === 'stalled';
+
   const toggleMute = () => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); if (!v.muted) v.play().catch(() => undefined); };
-  const showPoster = state.kind !== 'live' && state.kind !== 'stalled';
   return (
-    <div data-testid={tid.streamPlayer} data-mode={state.kind} data-latency-s={state.kind === 'live' && state.latencyS !== null ? state.latencyS : undefined} className="relative aspect-video overflow-hidden rounded-card bg-black">
-      <video ref={videoRef} muted={muted} playsInline autoPlay preload="none" poster={poster} aria-label={`${camera} live video`} onTimeUpdate={onTimeUpdate} onPlaying={onPlaying} onError={() => setFacts((f) => ({ ...f, error: true }))} className={`h-full w-full object-contain ${showPoster && state.kind !== 'starting' ? 'opacity-0' : ''}`} />
-      {showPoster && state.kind !== 'starting' && <img src={poster} alt={`${camera} latest frame`} className="absolute inset-0 h-full w-full object-cover opacity-70" />}
-      <span className="absolute top-1.5 left-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] text-white" aria-live="polite">{badgeText(state, now)}</span>
+    <div data-testid={tid.streamPlayer} data-mode={mode} data-transport={transport} className="relative aspect-video overflow-hidden rounded-card bg-black">
+      <video ref={videoRef} muted={muted} playsInline autoPlay preload="none" poster={poster} aria-label={`${camera} live video`} onTimeUpdate={onTimeUpdate} onPlaying={onPlaying} onError={() => transport === 'hls' && setError(true)} className={`h-full w-full object-contain ${!live && mode !== 'starting' ? 'opacity-0' : ''}`} />
+      {!live && mode !== 'starting' && <img src={poster} alt={`${camera} latest frame`} className="absolute inset-0 h-full w-full object-cover opacity-70" />}
+      <span className="absolute top-1.5 left-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] text-white" aria-live="polite">{badge}</span>
       <button type="button" data-testid={tid.streamMute} onClick={toggleMute} aria-pressed={!muted} aria-label={muted ? 'Unmute' : 'Mute'} className="absolute right-1.5 bottom-1.5 min-h-touch min-w-touch rounded-full bg-black/70 px-3 text-sm text-white">{muted ? '🔇' : '🔊'}</button>
     </div>
   );
