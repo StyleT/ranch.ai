@@ -3,13 +3,15 @@
 // test-token` (apply appends a version). `?scenario=sse-stall` on /api/events sends nothing after the first status.
 //   node --experimental-strip-types test/fixture-server.ts [port]
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const FX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const fx = <T = unknown>(name: string): T => JSON.parse(readFileSync(join(FX, 'daemon', `${name}.json`), 'utf8')) as T;
 const img320 = readFileSync(join(FX, 'images', 'frame-320.jpg')); const img640 = readFileSync(join(FX, 'images', 'frame-640.jpg'));
+const HLS = join(FX, 'hls'); const HLS_SEG_S = 2; const hlsStarted = Date.now();
+const hlsSegs = readdirSync(HLS).filter((f) => /^seg\d{6}\.m4s$/.test(f)).sort(); const hlsInit = readFileSync(join(HLS, 'init.mp4'));
 const PORT = Number(process.argv[2] ?? process.env.FIXTURE_PORT ?? 5095);
 const TOKEN = 'test-token';
 
@@ -50,7 +52,22 @@ createServer(async (req, res) => {
     }
     return json(res, 404, { error: 'unknown action' });
   }
-  if (/^\/api\/buffer\/[a-z0-9_]+\/stream$/.test(p)) { res.writeHead(200, { 'content-type': 'multipart/x-mixed-replace; boundary=frame' }); const t = setInterval(() => { res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${img640.length}\r\n\r\n`); res.write(img640); res.write('\r\n'); }, 500); req.on('close', () => clearInterval(t)); return; }
+  // The recorder's HLS output, simulated: a 40 s H.264+AAC fixture served as a sliding live window (3 segments, 2 s each),
+  // looping with a DISCONTINUITY tag. `?scenario=live-stall` freezes the playlist 125 s in the past (a dropped camera).
+  if (/^\/api\/live\/[a-z0-9_]+\/(index\.m3u8|init(-\d+)?\.mp4|seg(\d+-)?\d{6}\.m4s)$/.test(p)) {
+    const file = p.split('/').pop()!; const stall = url.searchParams.get('scenario') === 'live-stall' || process.env.FIXTURE_SCENARIO === 'live-stall';
+    if (file === 'init.mp4') { res.writeHead(200, { 'content-type': 'video/mp4', 'cache-control': 'no-store' }); return res.end(hlsInit); }
+    if (file === 'index.m3u8') {
+      const n = hlsSegs.length; const produced = stall ? 3 : Math.floor((Date.now() - hlsStarted) / 1000 / HLS_SEG_S) + 3;   // segments written so far
+      const first = Math.max(0, produced - 3); const lines = ['#EXTM3U', '#EXT-X-VERSION:7', `#EXT-X-TARGETDURATION:${HLS_SEG_S}`, `#EXT-X-MEDIA-SEQUENCE:${first}`, '#EXT-X-MAP:URI="init.mp4"'];
+      for (let i = first; i < produced; i++) { if (i > 0 && i % n === 0) lines.push('#EXT-X-DISCONTINUITY'); lines.push(`#EXTINF:${HLS_SEG_S}.000000,`, `#EXT-X-PROGRAM-DATE-TIME:${new Date(hlsStarted + i * HLS_SEG_S * 1000 - (stall ? 125_000 : 0)).toISOString()}`, `${hlsSegs[i % n]}?c=${Math.floor(i / n)}`); }
+      const age = stall ? 125 : Math.floor(((Date.now() - hlsStarted) % (HLS_SEG_S * 1000)) / 1000);
+      res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl', 'cache-control': 'no-store', 'x-live-age-s': String(age) }); return res.end(lines.join('\n') + '\n');
+    }
+    const seg = hlsSegs.includes(file) ? readFileSync(join(HLS, file)) : null;
+    if (!seg) return json(res, 404, { error: 'no such segment' });
+    res.writeHead(200, { 'content-type': 'video/mp4', 'cache-control': 'max-age=60' }); return res.end(seg);
+  }
   if (/^\/api\/buffer\/[a-z0-9_]+$/.test(p) || p.startsWith('/api/frame/') || p.startsWith('/api/baseline-frame/')) { const w = Number(url.searchParams.get('w') ?? 640); res.writeHead(200, { 'content-type': 'image/jpeg', 'x-frame-id': '1', 'x-frame-ts': new Date().toISOString() }); return res.end(w <= 320 ? img320 : img640); }
   if (p === '/api/events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' }); res.write(': connected\n\n');

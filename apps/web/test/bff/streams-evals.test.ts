@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
 import { server } from './setup-server';
 import { invalidate } from '@/bff/daemon';
-import { GET as streamGET } from '@/app/api/ui/stream/[camera]/route';
+import { GET as hlsGET } from '@/app/api/ui/hls/[camera]/[file]/route';
 import { parseLeaderboard, parseDatasets } from '@/bff/evals';
 import { translate } from '@/bff/live';
 import { gapFill } from '@/bff/camera';
@@ -13,22 +13,24 @@ beforeEach(() => invalidate());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-describe('/api/ui/stream/[camera]', () => {
-  const call = (camera: string, q = '') => { const ac = new AbortController(); return { res: streamGET(new Request(`http://x/api/ui/stream/${camera}${q}`, { signal: ac.signal }), { params: Promise.resolve({ camera }) }), ac }; };
-  it('404s unknown cameras and streams the daemon buffer mjpeg for known ones', async () => {
-    expect((await call('nope').res).status).toBe(404);
-    const { res, ac } = call('donkey_cam'); const r = await res; expect(r.status).toBe(200); expect(r.headers.get('content-type')).toContain('multipart'); ac.abort();
+describe('/api/ui/hls/[camera]/[file]', () => {
+  const call = (camera: string, file: string, q = '') => hlsGET(new Request(`http://x/api/ui/hls/${camera}/${file}${q}`), { params: Promise.resolve({ camera, file }) });
+  it('proxies the playlist with its MIME type, no-store and the recorder age header', async () => {
+    const r = await call('donkey_cam', 'index.m3u8'); expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('application/vnd.apple.mpegurl'); expect(r.headers.get('cache-control')).toBe('no-store'); expect(r.headers.get('x-live-age-s')).toBe('1');
+    expect(await r.text()).toContain('#EXT-X-MAP:URI="init.mp4"');
   });
-  it('serves one jpeg with fmt=jpeg, falling back to the kept frame when the buffer is empty', async () => {
-    const a = await call('donkey_cam', '?fmt=jpeg').res; expect(a.status).toBe(200); expect(a.headers.get('content-type')).toBe('image/jpeg');
-    const b = await call('mops_cam', '?fmt=jpeg').res; expect(b.status).toBe(200);
+  it('proxies init and segments as video/mp4 with their cache policy', async () => {
+    const i = await call('donkey_cam', 'init.mp4'); expect(i.status).toBe(200); expect(i.headers.get('content-type')).toBe('video/mp4'); expect(i.headers.get('cache-control')).toBe('no-store');
+    const s = await call('donkey_cam', 'seg000007.m4s'); expect(s.status).toBe(200); expect(s.headers.get('cache-control')).toBe('max-age=60'); expect((await s.arrayBuffer()).byteLength).toBeGreaterThan(100);
   });
-  it('caps concurrent streams at the configured maximum', async () => {
-    const opened = ['donkey_cam', 'wash_stall', 'tractor_cam', 'back_yard_cam'].map((c) => call(c));
-    for (const o of opened) expect((await o.res).status).toBe(200);
-    expect((await call('front_porch_cam').res).status).toBe(429);
-    for (const o of opened) o.ac.abort(); await new Promise((r) => setTimeout(r, 20));
-    expect((await call('front_porch_cam', '?fmt=jpeg').res).status).toBe(200);
+  it('refuses anything but the three file shapes and 404s a camera without HLS', async () => {
+    expect((await call('donkey_cam', 'evil.txt')).status).toBe(404);
+    expect((await call('donkey_cam', 'seg1.m4s')).status).toBe(404);
+    expect((await call('donkey_cam', 'seg1761240000-000007.m4s')).status).toBe(404);   // valid per-run shape, not served by the mock daemon
+    expect((await call('donkey_cam', 'init-1761240000.mp4')).status).toBe(404);
+    expect((await call('Donkey', 'index.m3u8')).status).toBe(404);
+    expect((await call('mops_cam', 'index.m3u8')).status).toBe(404);
   });
 });
 

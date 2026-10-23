@@ -15,6 +15,7 @@ export const CameraRow = z.looseObject({
   name: z.string(), online: z.boolean(), last_frame_ts: Iso.nullable(), last_frame_age_s: NullableNum, frames_10m: z.number(),
   horse_last_min: NullableNum, model: z.string().nullable(), fw: z.string().nullable(), ip: z.string().nullable(), buffer_frames: z.number(), buffer_age_s: NullableNum.optional(),
   width: NullableNum.optional(), height: NullableNum.optional(),
+  live_age_s: NullableNum.optional(),   // seconds since the recorder's HLS playlist for this camera last grew (23 Oct)
 });
 export const RanchEvent = z.looseObject({
   id: z.string(), ts: Iso, camera: z.string(), type: z.string(), confidence: z.number(), tier_decided: z.number(),

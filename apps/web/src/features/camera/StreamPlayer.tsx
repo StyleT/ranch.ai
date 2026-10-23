@@ -1,28 +1,102 @@
 'use client';
-// Live view = the recorder's rolling buffer streamed as MJPEG by the status daemon (~1 frame / 2 s), always on while
-// the page is visible (user decision 22 Oct). Nothing here touches go2rtc or a camera (docs/CAMERA-ARCHITECTURE.md).
-// Stops on hide, pagehide and unmount so the daemon drops the stream. After an error the retry waits 10, 20, 40, then
-// 60 s between attempts (reset by a successful load): on 23 Oct a fixed 10 s retry re-crashed a broken daemon every
-// 10 s for as long as the page stayed open.
-import { useEffect, useState } from 'react';
+// The live view: the recorder's HLS output (video copied from the camera, AAC audio) served by the daemon through
+// /api/ui/hls (docs/WEB-DASHBOARD.md). Safari and iOS play HLS natively; everything else gets hls.js. Nothing here
+// touches go2rtc or a camera: any number of viewers reads the same files. The badge is derived from facts
+// (liveState.ts): the playlist's age says whether the recorder is receiving frames, the video element says whether
+// they are being played; a frozen picture is never labelled LIVE. Autoplay is muted (browser policy); one tap unmutes.
+import { useEffect, useRef, useState } from 'react';
+import type Hls from 'hls.js';
 import { tid } from '@/lib/testids';
+import { deriveLiveState, parsePlaylist, retryDelayMs, badgeText, type LiveFacts } from './liveState';
 
-export const retryDelayMs = (failures: number): number => Math.min(60_000, 10_000 * 2 ** Math.max(0, failures - 1));
+const POLL_MS = 5_000;
+const nativeHls = (v: HTMLVideoElement) => v.canPlayType('application/vnd.apple.mpegurl') !== '';
 
-export function StreamPlayer({ camera, poster, fps }: { camera: string; poster: string; fps: number }) {
-  const [visible, setVisible] = useState(true); const [failed, setFailed] = useState(false); const [failures, setFailures] = useState(0); const [nonce, setNonce] = useState(0);
+export function StreamPlayer({ camera, poster, playlist }: { camera: string; poster: string; playlist: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const lastTime = useRef(0);   // last currentTime seen advancing (reset on every attach)
+  const [visible, setVisible] = useState(true);
+  const [muted, setMuted] = useState(true);
+  const [attach, setAttach] = useState(0);          // bumps to re-attach after a fatal error
+  const [failures, setFailures] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [facts, setFacts] = useState<Omit<LiveFacts, 'nowMs' | 'visible'>>(() => ({ startedMs: Date.now(), playlistAgeS: null, playlistPolledMs: null, edgeGapS: null, lastProgressMs: null, error: false }));
+
+  // page visibility: tear the player down when hidden so nothing is fetched for a page nobody sees
   useEffect(() => {
     const onVis = () => setVisible(document.visibilityState === 'visible'); const onHide = () => setVisible(false);
     document.addEventListener('visibilitychange', onVis); window.addEventListener('pagehide', onHide);
     return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', onHide); };
   }, []);
-  useEffect(() => { if (!failed) return; const t = setTimeout(() => { setFailed(false); setNonce((n) => n + 1); }, retryDelayMs(failures)); return () => clearTimeout(t); }, [failed, failures]);
-  const live = visible && !failed; const waitS = Math.round(retryDelayMs(failures) / 1000);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+
+  // attach the source (native or hls.js); re-run on visibility and on explicit re-attach
+  useEffect(() => {
+    const video = videoRef.current; if (!video || !visible) return;
+    let hls: Hls | null = null; let cancelled = false;
+    lastTime.current = 0;
+    setFacts((f) => ({ ...f, startedMs: Date.now(), lastProgressMs: null, error: false }));
+    const fail = () => { if (cancelled) return; setFacts((f) => ({ ...f, error: true })); setFailures((n) => n + 1); };
+    // Muted autoplay must be decided by the browser with the element already muted: React's `muted` prop is a property
+    // set after hydration, not a server-rendered attribute, so set it imperatively before any play() (23 Oct: Chrome
+    // loaded the stream to readyState 4 and never started it).
+    video.muted = true; video.defaultMuted = true;
+    const play = () => { if (!cancelled) video.play().catch(() => undefined); };
+    if (nativeHls(video)) { video.src = playlist; video.addEventListener('loadedmetadata', play, { once: true }); play(); }
+    else {
+      void import('hls.js').then(({ default: HlsCtor }) => {
+        if (cancelled || !HlsCtor.isSupported()) { if (!cancelled) fail(); return; }
+        // 1 s segments: aim 2 s behind the edge, never more than 5 s (hls.js speeds playback up to 1.2× to catch up).
+        // Measured 23 Oct with the count-based defaults: 5.7–8.3 s; with these: see docs/WEB-DASHBOARD.md.
+        hls = new HlsCtor({ liveSyncDuration: 2, liveMaxLatencyDuration: 5, maxLiveSyncPlaybackRate: 1.2, enableWorker: true, lowLatencyMode: false });
+        hls.on(HlsCtor.Events.ERROR, (_e, data) => { if (data.fatal) fail(); });
+        hls.on(HlsCtor.Events.MANIFEST_PARSED, play);
+        hls.on(HlsCtor.Events.FRAG_BUFFERED, () => { if (video.paused) play(); });
+        hls.loadSource(playlist); hls.attachMedia(video);
+      });
+    }
+    return () => { cancelled = true; hls?.destroy(); video.removeAttribute('src'); video.load(); };
+  }, [playlist, visible, attach]);
+
+  // re-attach after a fatal error with backoff
+  useEffect(() => { if (!facts.error) return; const t = setTimeout(() => setAttach((n) => n + 1), retryDelayMs(failures)); return () => clearTimeout(t); }, [facts.error, failures]);
+
+  // the recorder's view: poll the playlist (tiny) for its write age, native and hls.js alike
+  useEffect(() => {
+    if (!visible) return; let stop = false;
+    const poll = async () => {
+      try {
+        const r = await fetch(playlist, { cache: 'no-store' }); if (stop) return;
+        const age = Number(r.headers.get('x-live-age-s')); if (r.ok) parsePlaylist(await r.text());
+        setFacts((f) => ({ ...f, playlistAgeS: r.ok && Number.isFinite(age) ? age : (r.status === 404 ? 999 : f.playlistAgeS), playlistPolledMs: Date.now() }));
+      } catch { /* next poll */ }
+    };
+    void poll(); const t = setInterval(() => void poll(), POLL_MS);
+    return () => { stop = true; clearInterval(t); };
+  }, [playlist, visible]);
+
+  // the viewer's view: is currentTime advancing, and how far behind the buffered edge is the playhead?
+  // progress = currentTime moved forward by more than 50 ms (a first timeupdate at 0 is not progress: 23 Oct a frozen
+  // player was reported LIVE for 8 s because the initial sentinel made 0 count as an advance)
+  const onTimeUpdate = () => {
+    const v = videoRef.current; if (!v) return;
+    if (v.currentTime > lastTime.current + 0.05) {
+      lastTime.current = v.currentTime;
+      const end = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : null;
+      setFacts((f) => ({ ...f, lastProgressMs: Date.now(), error: false, edgeGapS: end === null ? f.edgeGapS : Math.max(0, end - v.currentTime) }));
+    }
+  };
+  const onPlaying = () => setFailures(0);
+
+  const state = deriveLiveState({ ...facts, nowMs: now, visible });
+  const toggleMute = () => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); if (!v.muted) v.play().catch(() => undefined); };
+  const showPoster = state.kind !== 'live' && state.kind !== 'stalled';
   return (
-    <div data-testid={tid.streamPlayer} data-mode={live ? 'buffer-mjpeg' : failed ? 'error' : 'paused'} data-retry-s={failed ? waitS : undefined} className="relative aspect-video overflow-hidden rounded-card bg-black">
-      {live ? <img key={nonce} src={`/api/ui/stream/${encodeURIComponent(camera)}?w=1280&n=${nonce}`} alt={`${camera} live, from the recorder buffer`} className="h-full w-full object-cover" onLoad={() => setFailures(0)} onError={() => { setFailures((f) => f + 1); setFailed(true); }} />
-        : <img src={poster} alt={`${camera} latest frame`} className={`h-full w-full object-cover ${failed ? '' : 'opacity-60'}`} />}
-      <span className="absolute top-1.5 left-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] text-white">{live ? `LIVE · buffer ${fps} fps` : failed ? `stream unavailable, retry in ${waitS} s` : 'PAUSED'}</span>
+    <div data-testid={tid.streamPlayer} data-mode={state.kind} data-latency-s={state.kind === 'live' && state.latencyS !== null ? state.latencyS : undefined} className="relative aspect-video overflow-hidden rounded-card bg-black">
+      <video ref={videoRef} muted={muted} playsInline autoPlay preload="none" poster={poster} aria-label={`${camera} live video`} onTimeUpdate={onTimeUpdate} onPlaying={onPlaying} onError={() => setFacts((f) => ({ ...f, error: true }))} className={`h-full w-full object-contain ${showPoster && state.kind !== 'starting' ? 'opacity-0' : ''}`} />
+      {showPoster && state.kind !== 'starting' && <img src={poster} alt={`${camera} latest frame`} className="absolute inset-0 h-full w-full object-cover opacity-70" />}
+      <span className="absolute top-1.5 left-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] text-white" aria-live="polite">{badgeText(state, now)}</span>
+      <button type="button" data-testid={tid.streamMute} onClick={toggleMute} aria-pressed={!muted} aria-label={muted ? 'Unmute' : 'Mute'} className="absolute right-1.5 bottom-1.5 min-h-touch min-w-touch rounded-full bg-black/70 px-3 text-sm text-white">{muted ? '🔇' : '🔊'}</button>
     </div>
   );
 }

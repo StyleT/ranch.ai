@@ -25,6 +25,7 @@ export const tid = {
   bridgeCamera: (cam: string) => `bridge-camera-${cam}`,
   bridgeApiRow: (path: string) => `bridge-api-row-${path.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`,
   streamPlayer: 'stream-player',
+  streamMute: 'stream-mute',
   evalsRow: (file: string, model: string) => `evals-row-${file}-${model}`,
   healthStrip: 'health-strip',
 } as const;

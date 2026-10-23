@@ -2,7 +2,7 @@
 // produces: SQLite, launchd, the daemon logs, the recorder buffer, df, the bridge API and retained MQTT status.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readdirSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { hostname, loadavg, uptime } from 'node:os';
 import { config } from '@ranch/config';
@@ -18,6 +18,7 @@ export type DaemonRow = { label: string; pid: number | null; last_exit: number; 
 export type CameraRow = {
   name: string; online: boolean; last_frame_ts: string | null; last_frame_age_s: number | null; frames_10m: number; width: number | null; height: number | null;
   horse_last_min: number | null; model: string | null; fw: string | null; ip: string | null; buffer_frames: number; buffer_age_s: number | null;
+  live_age_s: number | null;   // seconds since the recorder last rewrote this camera's HLS playlist (null = no HLS output yet)
 }
 export type Status = {
   ts: string; host: string; uptime_s: number; load: number[]; disk_free_gb: number | null; disk_total_gb: number | null;
@@ -116,6 +117,17 @@ export function bufferState(): Record<string, { frames: number; newest: string |
   } catch { /* no buffer dir */ }
   return out;
 }
+/** The recorder's HLS output per camera: seconds since `index.m3u8` was last rewritten (ffmpeg rewrites it on every
+ *  new segment, so a fresh playlist means frames are flowing; docs/WEB-DASHBOARD.md). */
+export function liveState(): Record<string, { ageS: number | null }> {
+  const out: Record<string, { ageS: number | null }> = {};
+  try {
+    for (const c of readdirSync(config.liveDir)) {
+      try { out[c] = { ageS: Math.max(0, (Date.now() - statSync(join(config.liveDir, c, 'index.m3u8')).mtimeMs) / 1000) }; } catch { out[c] = { ageS: null }; }
+    }
+  } catch { /* no live dir */ }
+  return out;
+}
 /** Buffer file names are UTC `YYYY-MM-DDTHH-MM-SSZ.jpg`. */
 export const bufferNameMs = (name: string): number => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z/.exec(name); return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : NaN; };
 export const bufferNewestPath = (camera: string): string | null => { const b = bufferState()[camera]; return b?.newest ? join(config.bufferDir, camera, b.newest) : null; };
@@ -133,7 +145,7 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
   const now = new Date();
   const iso = (msAgo: number) => new Date(now.getTime() - msAgo).toISOString();
   const [daemons, df, bridge, logLines] = await Promise.all([launchd(), disk(), bridgeCameras(), lastLogLines()]);
-  const buffer = bufferState();
+  const buffer = bufferState(); const live = liveState();
   const db = store.db;
   const camNames = new Set<string>([
     ...Object.keys(bridge).filter((n) => !config.camerasExclude.includes(n)),
@@ -150,7 +162,7 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
     // online = the recorder has a fresh buffered frame; a kept frame in the last minute is the fallback when no buffer exists
     const online = bufAge !== null ? bufAge < STALE_S : age !== null && age < 60;
     return { name, online, last_frame_ts: last?.ts ?? null, last_frame_age_s: age === null ? null : Math.round(age), width: last?.width ?? null, height: last?.height ?? null,
-      frames_10m: per10m.get(name) ?? 0, horse_last_min: horse.get(name) ?? null, model: b?.model ?? null, fw: b?.fw ?? null, ip: b?.ip ?? null, buffer_frames: buf?.frames ?? 0, buffer_age_s: bufAge === null ? null : Math.round(bufAge) };
+      frames_10m: per10m.get(name) ?? 0, horse_last_min: horse.get(name) ?? null, model: b?.model ?? null, fw: b?.fw ?? null, ip: b?.ip ?? null, buffer_frames: buf?.frames ?? 0, buffer_age_s: bufAge === null ? null : Math.round(bufAge), live_age_s: live[name]?.ageS === null || live[name]?.ageS === undefined ? null : Math.round(live[name]!.ageS!) };
   });
   const labels = db.prepare(`SELECT d.label, COUNT(*) n, ROUND(AVG(d.confidence), 2) conf FROM detections d JOIN frames f ON f.id = d.frame_id
     WHERE f.ts >= ? GROUP BY d.label ORDER BY n DESC LIMIT 12`).all(iso(3600e3)) as { label: string; n: number; conf: number }[];

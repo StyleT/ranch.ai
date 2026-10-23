@@ -7,12 +7,13 @@
 //   GET /api/events        server-sent events: every MQTT message on ranch/# plus a status document every 15 s
 //   GET /api/ping, /api/counts/series, /api/frames/series, /api/tracks, /api/frames/<id>   series and bursts for the web app (docs/WEB-DASHBOARD.md); contract in packages/contracts
 //   GET /api/taxonomy[/versions[/<id>]]; POST /api/taxonomy/{validate,score,apply,revert}  the taxonomy editor (docs/TAXONOMY-UI.md)
-//   GET /api/buffer/<cam>?w=   newest frame of the recorder's buffer; /api/buffer/<cam>/stream?w=  MJPEG of that buffer as it fills (docs/CAMERA-ARCHITECTURE.md): the only live view, no camera is touched
+//   GET /api/buffer/<cam>?w=   newest frame of the recorder's buffer (thumbnails, posters)
+//   GET /api/live/<cam>/{index.m3u8,init.mp4,segNNNNNN.m4s}   the recorder's HLS output: the live view (docs/WEB-DASHBOARD.md); files only, no camera is touched
 //   GET /api/bridge            the Wyze bridge's own metrics (:5080/api/metrics), proxied because 5080 is loopback-only since 23 Oct
 // Every JPEG goes through jpeg.ts (read into memory, then sharp): sharp(path) memory-maps and a file still being written
 // killed this process with SIGBUS 16 times on 22-23 Oct.
 import { createServer, type ServerResponse } from 'node:http';
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, statSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -21,7 +22,7 @@ import { config } from '@ranch/config';
 import { EventStore, parseSince, type FrameReason } from '@ranch/events';
 import type { Ping, CountSeries, FrameSeries, TrackSummary } from '@ranch/contracts';
 import { connectBus } from '@ranch/bus';
-import { collect, bufferNewestPath, bufferNewestPaths, bufferNameMs, bridgeMetrics, type Status } from './collect.ts';
+import { collect, bufferNewestPaths, bufferNameMs, bridgeMetrics, type Status } from './collect.ts';
 import { jpegFromFile, firstReadableJpeg } from './jpeg.ts';
 import { getTaxonomy, getTaxonomyVersionId, validateTaxonomy, canonical, loadTaxonomyFile, REPO_TAXONOMY_FILE, type Taxonomy } from '@ranch/taxonomy';
 import { activateFromStore, applyRow, differsFromRepo, TAXONOMY_TOPIC, type TaxonomyMessage } from '@ranch/taxonomy/store';
@@ -35,7 +36,6 @@ const REF_FRAMES = process.env.RANCH_REFERENCE_FRAMES ?? 'evals/baseline/2026-10
 const REF_LABELS = process.env.RANCH_REFERENCE_LABELS ?? 'labels-ranch-claude-revised-vlad-v1';
 const STATUS_ENV = process.env.RANCH_STATUS_ENV ?? `${process.env.HOME ?? '/Users/ranch'}/.config/ranch/status.env`;
 const exec = promisify(execFile);
-let bufferStreams = 0; const BUFFER_STREAM_MAX = Number(process.env.RANCH_BUFFER_STREAM_MAX ?? 4);
 /** Write token for the editor (docs/TAXONOMY-UI.md §6): KEY=VALUE file on the mini, never in the repo. */
 const writeToken = (() => { try { const m = /^RANCH_STATUS_WRITE_TOKEN=(\S+)/m.exec(readFileSync(STATUS_ENV, 'utf8')); return m?.[1] ?? null; } catch { return null; } })();
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
@@ -226,29 +226,17 @@ const server = createServer(async (req, res) => {
       const r = await firstReadableJpeg(paths, Number(url.searchParams.get('w') ?? 0));
       if (!r) { json(res, 503, { error: 'frame_not_ready' }); return; }
       sendJpeg(res, r.buf, { 'cache-control': 'no-store', 'x-frame-ts': new Date(bufferNameMs(basename(r.path))).toISOString() });
-    } else if (/^\/api\/buffer\/[a-z0-9_]+\/stream$/.test(url.pathname)) {
-      // MJPEG assembled from the buffer as the recorder fills it (~1 frame / 2 s). Reads disk only: no camera, no go2rtc.
-      const cam = url.pathname.split('/')[3]!; const w = Number(url.searchParams.get('w') ?? 0);
-      if (bufferStreams >= BUFFER_STREAM_MAX) { res.writeHead(429, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'too_many_streams' })); return; }
-      bufferStreams++; log('buffer stream open', { camera: cam, open: bufferStreams });
-      res.writeHead(200, { 'content-type': 'multipart/x-mixed-replace; boundary=frame', 'cache-control': 'no-store', connection: 'keep-alive' });
-      let last = ''; let closed = false;
-      const stop = () => { if (closed) return; closed = true; clearInterval(timer); clearTimeout(hardStop); bufferStreams--; log('buffer stream closed', { camera: cam, open: bufferStreams }); };
-      let busy = false;
-      const tick = async () => {
-        if (closed || busy) return;
-        const path = bufferNewestPath(cam); if (!path || path === last) return;
-        busy = true;
-        try {
-          const buf = await jpegFromFile(path, w, 80);   // in memory, never mmapped: a half-written file is skipped, not fatal
-          if (closed) return;
-          last = path;
-          res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${buf.length}\r\nX-Frame-Ts: ${new Date(bufferNameMs(basename(path))).toISOString()}\r\n\r\n`); res.write(buf); res.write('\r\n');
-        } catch { /* not decodable yet or rotated away; the next tick retries the newest file */ } finally { busy = false; }
-      };
-      const timer = setInterval(() => void tick(), 500); void tick();
-      const hardStop = setTimeout(() => { stop(); res.end(); }, 30 * 60_000);
-      req.on('close', stop); res.on('close', stop);
+    } else if (/^\/api\/live\/[a-z0-9_]+\/(index\.m3u8|init(-\d+)?\.mp4|seg(\d+-)?\d{6}\.m4s)$/.test(url.pathname)) {
+      // The recorder's HLS files (docs/WEB-DASHBOARD.md): plain file reads, complete files only (ffmpeg writes them to a
+      // temp name and renames). The playlist carries x-live-age-s so the player and tests can read staleness.
+      const [, , , cam, file] = url.pathname.split('/');
+      const path = join(config.liveDir, cam!, file!);
+      let st; try { st = statSync(path); } catch { res.writeHead(404); res.end('no live file'); return; }
+      const headers: Record<string, string> = { 'content-length': String(st.size) };
+      if (file === 'index.m3u8') { headers['content-type'] = 'application/vnd.apple.mpegurl'; headers['cache-control'] = 'no-store'; headers['x-live-age-s'] = String(Math.max(0, Math.round((Date.now() - st.mtimeMs) / 1000))); }
+      else { headers['content-type'] = 'video/mp4'; headers['cache-control'] = file!.startsWith('init') ? 'no-store' : 'max-age=60'; }
+      res.writeHead(200, headers);
+      createReadStream(path).on('error', () => res.destroy()).pipe(res);
     } else if (url.pathname.startsWith('/api/frame/')) {
       const key = decodeURIComponent(url.pathname.slice('/api/frame/'.length));
       const f = /^\d+$/.test(key) ? store.frameById(Number(key)) : store.lastFrame(key);

@@ -26,7 +26,12 @@ export const handlers = [
   http.post(`${DAEMON}/api/taxonomy/revert`, ({ request }) => (request.headers.get('x-ranch-token') === 'test-token' ? HttpResponse.json({ ok: true, id: 100 }) : HttpResponse.json({ error: 'bad or missing x-ranch-token' }, { status: 403 }))),
   http.get(`${DAEMON}/api/baseline`, () => HttpResponse.json(fixture('baseline'))),
   http.get(`${DAEMON}/api/baseline/:date`, () => HttpResponse.json(fixture('baseline-set'))),
-  http.get(`${DAEMON}/api/buffer/:cam/stream`, () => new HttpResponse('--frame\r\nContent-Type: image/jpeg\r\n\r\n', { headers: { 'content-type': 'multipart/x-mixed-replace; boundary=frame' } })),
+  http.get(`${DAEMON}/api/live/:cam/:file`, ({ params }) => {
+    if (params.cam === 'mops_cam') return HttpResponse.text('no live file', { status: 404 });
+    if (params.file === 'index.m3u8') return new HttpResponse('#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:7\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:2.000000,\n#EXT-X-PROGRAM-DATE-TIME:2026-10-23T12:00:00.000Z\nseg000007.m4s\n', { headers: { 'content-type': 'application/vnd.apple.mpegurl', 'cache-control': 'no-store', 'x-live-age-s': '1' } });
+    if (params.file === 'init.mp4' || params.file === 'seg000007.m4s') return new HttpResponse(readFileSync(join(FX, 'hls', params.file === 'init.mp4' ? 'init.mp4' : 'seg000000.m4s')), { headers: { 'content-type': 'video/mp4', 'cache-control': params.file === 'init.mp4' ? 'no-store' : 'max-age=60' } });
+    return HttpResponse.text('no live file', { status: 404 });
+  }),
   http.get(`${DAEMON}/api/buffer/:cam`, ({ params }) => (params.cam === 'mops_cam' ? HttpResponse.text('no buffered frame', { status: 404 }) : new HttpResponse(readFileSync(join(FX, 'images', 'frame-320.jpg')), { headers: { 'content-type': 'image/jpeg', 'x-frame-ts': '2026-10-22T12:00:00.000Z' } }))),
   http.get(`${DAEMON}/api/frame/:key`, () => new HttpResponse(readFileSync(join(FX, 'images', 'frame-320.jpg')), { headers: { 'content-type': 'image/jpeg', 'x-frame-id': '1', 'x-frame-ts': '2026-10-22T12:00:00.000Z' } })),
 ];

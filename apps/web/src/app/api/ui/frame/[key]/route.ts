@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-import { proxyFrame, proxyLatest } from '@/bff/streams';
+import { proxyFrame, proxyLatest } from '@/bff/frames';
 import { errorResponse } from '@/bff/daemon';
 export async function GET(req: Request, ctx: { params: Promise<{ key: string }> }) {
   try { const { key } = await ctx.params; const w = new URL(req.url).searchParams.get('w'); const isId = /^\d+$/.test(key);

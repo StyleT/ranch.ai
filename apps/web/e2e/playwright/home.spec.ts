@@ -26,6 +26,6 @@ test.describe('home', () => {
     await page.getByTestId(`camera-card-${first}`).click();
     await expect(page).toHaveURL(new RegExp(`/cameras/${first}$`));
     await expect(page.getByRole('heading', { level: 1, name: first })).toBeVisible();
-    await expect(page.getByTestId('stream-player')).toHaveAttribute('data-mode', 'buffer-mjpeg');
+    await expect(page.getByTestId('stream-player')).toHaveAttribute('data-mode', /^(starting|live|stalled|offline)$/);
   });
 });

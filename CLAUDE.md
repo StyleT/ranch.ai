@@ -34,7 +34,9 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   makes it dial a camera. Verify with `ssh ranch curl 127.0.0.1:<port>` and `make camera-owners`; `make tunnel` forwards
   5091 and 5080 to the laptop.
 - The dashboard is `apps/web` (Next.js, `docs/WEB-DASHBOARD.md`) on 5090; `apps/status` is its JSON/SSE API on
-  `127.0.0.1:5091` and serves no HTML. `make web-dev` runs the app on the laptop against the mini's API.
+  `127.0.0.1:5091` and serves no HTML. `make web-dev` runs the app on the laptop against the mini's API. The live view
+  is the recorder's HLS output (`<media>/live/<cam>/`), served as files by the daemon and played by `<video>`; never a
+  second camera consumer, never an MJPEG re-encode.
 - Classes, subclasses and detector thresholds live in `packages/taxonomy/taxonomy.json` and nowhere else; the mini
   holds versions of it (editable on `:5090/taxonomy`). After a UI edit: `make taxonomy-pull`, commit. The repo file
   wins on provision.

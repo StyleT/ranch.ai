@@ -26,7 +26,7 @@ export function CameraView({ name }: { name: string }) {
       <div className="mb-2 flex flex-wrap items-center gap-2"><Link href="/#cameras" aria-label="Back to home" className="min-h-touch min-w-touch text-xl">‹</Link><h1 className="text-lg font-semibold">{name}</h1><Badge tone={c.online ? 'ok' : 'bad'}>{c.online ? 'online' : 'offline'}</Badge><span className="text-sm text-dim">{c.last_frame_age_s !== null ? `${formatAge(c.last_frame_age_s)} ago` : ''} · {c.model ?? '–'} · {c.fw ?? ''} · {c.ip ?? ''}</span></div>
       <div className="md:grid md:grid-cols-[3fr_2fr] md:gap-4">
         <div>
-          <StreamPlayer camera={name} poster={poster} fps={d.stream.fps} />
+          <StreamPlayer camera={name} poster={poster} playlist={d.stream.playlist} />
           <p className="mt-1 text-xs text-dim">{c.frames_per_min}/min · {horse}s now <b className="text-fg">{c.equine_now ?? '–'}</b></p>
           <Section title="Recent bursts"><div className="flex gap-2 overflow-x-auto pb-1">{d.bursts.length === 0 && <span className="text-sm text-dim">none in this window</span>}{d.bursts.map((b) => <Link key={b.frame_id} href={`/cameras/${name}?frame=${b.frame_id}&since=${win}`} className="shrink-0"><img src={`${b.img}?w=320`} alt={`burst at ${localTime(b.t, tz)}: ${b.labels.join(', ')}`} className="h-16 w-28 rounded-sm bg-black object-cover" /><span className="block text-[11px] text-dim">{localTime(b.t, tz, { second: undefined })} ×{b.members}{b.moving ? ' ➜' : ''}</span></Link>)}</div></Section>
         </div>

@@ -16,6 +16,9 @@ export const config = {
   /** The recorder's rolling per-camera JPEG buffer (<bufferDir>/<camera>/<UTC ts>.jpg). The single source of
    *  frames for the sampler and everything downstream. Nothing reads a camera directly. */
   bufferDir: env('RANCH_BUFFER', '/usr/local/ranch/media/buffer'),
+  /** The recorder's rolling HLS output per camera (<liveDir>/<camera>/index.m3u8 + init.mp4 + seg*.m4s), written from
+   *  the same single connection as the JPEG buffer. The dashboard's live view (docs/WEB-DASHBOARD.md). */
+  liveDir: env('RANCH_LIVE', '/usr/local/ranch/media/live'),
   /** Space-separated stream names; empty = discover from the buffer directory's per-camera subdirs. */
   cameras: env('RANCH_CAMERAS', '').split(/\s+/).filter(Boolean),
   camerasExclude: env('RANCH_CAMERAS_EXCLUDE', 'living_room_cam').split(/\s+/).filter(Boolean),

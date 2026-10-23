@@ -40,7 +40,7 @@ export type CameraDetail = {
   bursts: BurstCard[];
   net: Record<string, unknown> | null;
   motion: { n: number; p50: number; p90: number; max: number } | null;
-  stream: { kind: 'buffer-mjpeg'; fps: number };
+  stream: { kind: 'hls'; playlist: string; live_age_s: number | null };
 };
 
 export type Box = { label: string; raw_label: string | null; confidence: number; x: number; y: number; w: number; h: number; seen: number | null; dx: number | null; dy: number | null; gold: boolean };

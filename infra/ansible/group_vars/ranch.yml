@@ -132,6 +132,15 @@ ranch_cameras:
 recorder_jpeg_q: 4
 recorder_buffer_min: 5
 recorder_min_free_gb: 20
+# HLS live output (23 Oct, docs/WEB-DASHBOARD.md): the same ffmpeg also writes <media>/live/<cam>/ (fMP4 segments, audio
+# AAC 8 kHz). list x seg_s seconds are kept; the player's latency is ~2-3 segments. The cameras' own keyframes come
+# 2-18 s apart, so the video is re-encoded on the Apple media engine with a keyframe every segment (recorder_transcode;
+# false = copy the camera's H.264 and accept 2-18 s segments).
+recorder_hls_seg_s: 1
+recorder_hls_list: 8
+recorder_audio: true
+recorder_transcode: true
+recorder_hls_bitrate: 2000k
 
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)
@@ -177,7 +186,6 @@ status_host: 127.0.0.1
 # Next.js dashboard (com.ranch.web, apps/web, docs/WEB-DASHBOARD.md): the page on 5090, tailnet-only via tailscale_only_ports.
 web_port: 5090
 web_host: 0.0.0.0
-web_max_streams: 4        # concurrent buffer MJPEG viewers (disk reads only; no camera is involved)
 web_heap_mb: 256
 # Taxonomy editor (docs/TAXONOMY-UI.md): reference datasets the "Score draft" button uses; write token is generated on the mini.
 status_reference_frames: evals/baseline/2026-10-20

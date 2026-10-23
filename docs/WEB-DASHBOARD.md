@@ -43,6 +43,33 @@ Phone: bottom tab bar, cards and accordions. Tablet: icon rail. Desktop: sidebar
 light theme with validated contrast. `data-testid` vocabulary in `src/lib/testids.ts` with ids from data; state as
 `data-state`, `data-connection`, `data-dirty`, `data-gate`, `data-loaded`; every timestamp a `<time dateTime>`.
 
+## Live view (23 Oct: real video)
+
+The camera page plays **the recorder's HLS output**: the same single ffmpeg that writes the JPEG buffer also writes
+`<media>/live/<cam>/index.m3u8` + `init-<run>.mp4` + `seg<run>-NNNNNN.m4s`, `recorder_hls_list × recorder_hls_seg_s`
+seconds kept (8 × 1 s). Every ffmpeg run empties the directory and uses its own names: a restart means a new init
+segment, and a playlist mixing old segments with a new init made Chrome's demuxer fail (23 Oct).
+The daemon serves the files (`/api/live/<cam>/<file>`, playlist `no-store` with `x-live-age-s`), the BFF proxies them
+(`/api/ui/hls/<cam>/<file>`, allowlisted names), the browser plays them: Safari/iOS natively, everything else with
+hls.js (pinned). Any number of viewers reads the same files; the camera and go2rtc see nothing (docs/CAMERA-ARCHITECTURE.md).
+
+**Why the video is re-encoded.** The plan was `-c:v copy`. Measured on 23 Oct the cameras' keyframes come 2–18 s apart
+(segment durations 2, 6, 10.8, 18 s), an HLS segment can only start at a keyframe, and hls.js syncs 2–3 target
+durations behind the edge: 20–50 s of latency. So the recorder decodes on the Apple media engine
+(`-hwaccel videotoolbox`, frames stay on the GPU), re-encodes with `h264_videotoolbox` at a forced keyframe every
+second (`recorder_hls_bitrate`, 2 Mbit/s), transcodes the 8 kHz PCM audio to AAC, and takes the 1 fps JPEG for the
+sampler from the same decoded frames (`hwdownload` of one frame per second). `recorder_transcode: false` restores the
+copy. Cost, measured: see "Status". No `EXT-X-PROGRAM-DATE-TIME`: ffmpeg anchors it at muxer start and lets it drift
+(15–70 s off per camera, even negative), which would mislead hls.js's latency controller.
+
+The badge is derived from facts, never asserted (`features/camera/liveState.ts`, unit-tested): `LIVE · 3.8 s` while
+`currentTime` advances (latency = seconds since the recorder wrote the playlist, extrapolated from the last 5 s poll
+of `x-live-age-s`, plus the playhead's distance to the buffered edge), `connecting…` for the first 15 s,
+`buffering · N s` when playback stops but the recorder keeps writing, `camera reconnecting · N` when the playlist has
+not grown for 30 s (the camera dropped), `PAUSED` when the page is hidden (the player is torn down). Autoplay is muted
+(browser policy; the element is muted imperatively before `play()`, because React's `muted` prop is not a server-rendered
+attribute and Chrome decided "blocked" before hydration); the speaker button unmutes. The MJPEG-of-keyframes view is gone.
+
 ## Live data
 
 One `EventSource('/api/ui/live')` per app (`features/live/LiveProvider`). `status` events invalidate the home
@@ -86,6 +113,14 @@ Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/we
 - M6 (22 Oct): agentic e2e, below.
 - 23 Oct: live-view crash fixed (Incidents, below); the Wyze bridge's metrics page moved to `/system`; bridge UI and
   go2rtc ports loopback-only; player retry backoff.
+- 23 Oct, evening: **real video.** The recorder writes HLS (hardware re-encode, 1 s segments, AAC audio), the camera
+  page plays it with `<video>` + hls.js / native HLS, the MJPEG view is deleted. Measured over the tailnet in Chrome,
+  six cameras up (mops_cam was down): time to first frame 1.1–2.8 s, player latency 5.8–8.4 s (recorder write age +
+  playhead distance to the buffered edge, read 8 s after the first frame; hls.js set to a 2 s live-sync target and a 5 s
+  maximum, so part of that is start-up buffer it is still catching up on; LL-HLS is the follow-up if ≤ 3 s matters),
+  1440p + audio on every V4, 1080p on the V3, segment fetch 17–140 ms over the tailnet.
+  Recorder cost for seven cameras: software keyframe decode before 194–215 % CPU / load average 42–65; hardware pipeline
+  15–22 % CPU / load average 2.3; RSS 2.1 → 2.4–3.0 GB. Daemon crash reports unchanged (25). `camera-owners.sh` OK.
 - 23 Oct, later: 5090 is **tailnet-only** (Vlad: the dashboard is for the phone and laptop over Tailscale, never for the
   shared Wi-Fi). pf passes 5090 only from `100.64.0.0/10` / `fd7a:115c:a1e0::/48` to the node's tailnet addresses and
   refuses it on every other interface; loopback stays open for `ssh -L`. The agentic e2e `live` target uses the MagicDNS name.

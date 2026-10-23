@@ -111,6 +111,24 @@ for a camera that had been off for ten hours; it now logs `connected` (producer 
   go2rtc or recorder restart re-dials all seven cameras once. Step 2 (not done): run the recorder under its own uid and
   let pf accept RTSP on loopback only from that uid, after a spike confirms pf's `user` match on macOS 27.
 
+## 23 Oct, later: the recorder's second output is the live view
+
+The dashboard's live view used to be the daemon re-encoding buffer JPEGs into MJPEG (≤ 1 frame/s, no audio, frozen
+picture under a LIVE badge when the camera dropped). Now the recorder's single ffmpeg per camera writes, from the same
+connection, a rolling HLS stream next to the JPEGs: `<media>/live/<cam>/` (fMP4, 1 s segments, audio AAC 8 kHz,
+`temp_file` + rename, a fresh playlist with per-run file names on every restart). The video is decoded and re-encoded on the Apple media engine
+with a keyframe every second (the cameras' own keyframes are 2–18 s apart, which made copied segments 2–18 s long and
+the player 20–50 s late); the 1 fps JPEG for the sampler comes from the same decoded frames. Measured on the mini,
+7 cameras: the old software keyframe-only decode cost 194–215 % CPU and a load average of 42–65; the hardware pipeline
+costs 15–22 % CPU, load average 2–3, RSS ~430 MB per ffmpeg (3.0 GB for seven, up from 2.1 GB; the media-engine
+buffers; encoding the live view at 720p instead of 1440p is the lever if the VLM needs the memory). The daemon serves the files, the web app plays
+them. Nothing new consumes a camera stream; `camera-owners.sh` still expects exactly one RTSP client per camera.
+Reconnect after a drop: 2, 5, 10 s, then 30 s, then 60 s after ten short-lived attempts (a camera that is unreachable
+gets fewer dials, not more). Stopping the recorder kills its whole process group twice (TERM, then KILL after 3 s),
+and a starting recorder kills any ffmpeg still pulling go2rtc's RTSP: on 23 Oct ffmpeg of a previous instance survived
+three restarts in a row (launchd does not always deliver TERM before the leader is gone) and kept consuming RTSP until
+`camera-owners.sh` flagged them.
+
 ## Operating notes
 
 - A camera is "online" when its buffer has a frame newer than `RANCH_STALE_S` (30 s). Staleness means the

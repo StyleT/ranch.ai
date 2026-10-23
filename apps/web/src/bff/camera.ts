@@ -38,6 +38,7 @@ export async function getCamera(name: string, window: Window): Promise<CameraDet
     window: { since: sinceIso, until: new Date(until).toISOString(), bucket_s: w.bucketS, label: window },
     equine_series, online_series, bursts: [...byHead.values()].slice(0, 20),
     net: (probe?.[name] as Record<string, unknown> | undefined) ?? null, motion: ingest?.motion?.[name] ?? null,
-    stream: { kind: 'buffer-mjpeg', fps: 0.5 },
+    // the recorder's HLS files via the daemon (docs/WEB-DASHBOARD.md); live_age_s = seconds since the playlist last grew
+    stream: { kind: 'hls', playlist: `/api/ui/hls/${encodeURIComponent(name)}/index.m3u8`, live_age_s: (status.cameras.find((c) => c.name === name) as { live_age_s?: number | null } | undefined)?.live_age_s ?? null },
   };
 }
