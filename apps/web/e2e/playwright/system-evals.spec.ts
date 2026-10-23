@@ -11,6 +11,15 @@ test('system shows every daemon with parsed status and the probe table', async (
   await probe.scrollIntoViewIfNeeded();
   await expect(probe).toBeVisible({ timeout: 20_000 });
 });
+test('system shows the Wyze bridge metrics moved from :5080', async ({ page }) => {
+  await page.goto('/system');
+  const summary = page.getByTestId('bridge-summary'); await summary.scrollIntoViewIfNeeded();
+  await expect(summary).toContainText('streaming');
+  const mops = page.getByTestId('bridge-camera-mops_cam').or(page.getByTestId('bridge-camera-mops_cam-card')).filter({ visible: true }).first();
+  await expect(mops).toContainText('error');
+  const api = page.getByTestId('bridge-api-row-app-user-refresh-token').or(page.getByTestId('bridge-api-row-app-user-refresh-token-card')).filter({ visible: true }).first();
+  await expect(api).toBeVisible();
+});
 test('evals leaderboard marks prod and opens a result file', async ({ page }) => {
   await page.goto('/evals');
   await expect(page.locator('[data-prod="true"]').filter({ visible: true }).first()).toBeVisible();

@@ -23,6 +23,7 @@ const write = (name: string, data: unknown) => { writeFileSync(join(OUT, name), 
 
 const status = C.parseContract(C.Status, await get('/api/status'), 'status'); write('status.json', status);
 write('ping.json', C.parseContract(C.Ping, await get('/api/ping'), 'ping'));
+write('bridge.json', C.parseContract(C.BridgeMetrics, await get('/api/bridge'), 'bridge'));
 const frames = C.parseContract(C.FramesResponse, await get('/api/frames?since=24h&limit=20'), 'frames'); write('frames.json', frames);
 write('frames-moving.json', C.parseContract(C.FramesResponse, await get('/api/frames?since=24h&moving=1&limit=10'), 'frames moving'));
 const burstHead = frames.find((f) => f.burst.length > 0) ?? frames[0];

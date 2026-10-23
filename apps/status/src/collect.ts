@@ -87,6 +87,22 @@ async function bridgeCameras(): Promise<typeof bridgeCache.cams> {
   return bridgeCache.cams;
 }
 
+/** The bridge's own metrics (`/api/metrics`: bridge state, per-camera state, Wyze API call counters), proxied for the
+ *  dashboard's /system page because 5080 is loopback-only since 23 Oct. Shared in-flight promise, 10 s cache. */
+let bridgeMetricsCache: { at: number; value: Promise<unknown> } | undefined;
+export function bridgeMetrics(): Promise<unknown> {
+  if (!bridgeMetricsCache || Date.now() - bridgeMetricsCache.at > 10_000) {
+    const value = (async () => {
+      const res = await fetch(`${config.bridgeUrl}/api/metrics`, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) throw new Error(`bridge /api/metrics ${res.status}`);
+      return (await res.json()) as unknown;
+    })();
+    value.catch(() => { bridgeMetricsCache = undefined; });
+    bridgeMetricsCache = { at: Date.now(), value };
+  }
+  return bridgeMetricsCache.value;
+}
+
 /** The recorder's rolling buffer per camera: file count and the age of the newest frame. A camera is online when
  *  that age is under STALE_S (docs/CAMERA-ARCHITECTURE.md); the buffer, not a camera, is what everything reads. */
 export const STALE_S = Number(process.env.RANCH_STALE_S ?? 30);
@@ -103,6 +119,11 @@ export function bufferState(): Record<string, { frames: number; newest: string |
 /** Buffer file names are UTC `YYYY-MM-DDTHH-MM-SSZ.jpg`. */
 export const bufferNameMs = (name: string): number => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z/.exec(name); return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : NaN; };
 export const bufferNewestPath = (camera: string): string | null => { const b = bufferState()[camera]; return b?.newest ? join(config.bufferDir, camera, b.newest) : null; };
+/** The newest `n` complete-looking buffer files of a camera, newest first (readers fall back to the previous frame when
+ *  the newest fails to decode). Only `<UTC ts>Z.jpg` names: ffmpeg's atomic temp files are `*.jpg.tmp`. */
+export function bufferNewestPaths(camera: string, n = 2): string[] {
+  try { return readdirSync(join(config.bufferDir, camera)).filter((f) => /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.jpg$/.test(f)).sort().slice(-n).reverse().map((f) => join(config.bufferDir, camera, f)); } catch { return []; }
+}
 
 export async function collect(store: EventStore, mqttStatus: Map<string, Record<string, unknown>>): Promise<Status> {
   return collectStatus(store, mqttStatus) satisfies Promise<StatusContract>;

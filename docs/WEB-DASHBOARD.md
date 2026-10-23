@@ -25,6 +25,11 @@ browser (LAN) ──:5090──> com.ranch.web   Next standalone (pf refuses 509
 
 ## Pages
 
+`/system` also carries the Wyze bridge's metrics (bridge state, per-camera state, Wyze API call counters) via the
+daemon's `/api/bridge`: the bridge's own UI on 5080 is loopback-only since 23 Oct because opening it attached a go2rtc
+consumer per camera. Reach that UI with `make tunnel` → `http://127.0.0.1:5080` (Prometheus text at `/metrics.prom`).
+
+
 | Route | Content |
 |---|---|
 | `/` | health strip, derived alerts (camera offline, daemon down, detector stale, taxonomy drift, disk, burst throttling, no frames), camera cards with live thumbnails and the equine count, activity feed (bursts/tracks, live over SSE), detections per camera × label with raw-label tooltips, events placeholder |
@@ -79,6 +84,19 @@ Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/we
 - M4 (22 Oct): cut-over. Status daemon on 127.0.0.1:5091 (API only, HTML pages deleted), web app on 5090.
 - M5 (22 Oct): deterministic e2e and hardening, below.
 - M6 (22 Oct): agentic e2e, below.
+- 23 Oct: live-view crash fixed (Incidents, below); the Wyze bridge's metrics page moved to `/system`; bridge UI and
+  go2rtc ports loopback-only; player retry backoff.
+
+## Incidents
+
+**23 Oct, live view crashed the status daemon.** 16 `SIGBUS` crash reports in two days (`/Library/Logs/DiagnosticReports/node-*.ips`,
+"FS pagein error", libvips worker in `jpeg_read_scanlines`), each 2–17 s after a buffer stream opened: `sharp(path)`
+memory-mapped the buffer JPEG that ffmpeg was still writing. The player's fixed 10 s retry re-crashed the daemon for as
+long as the page stayed open; each crash took the API, SSE and MQTT down for ~1 s. Fix: the daemon reads every JPEG into
+memory before sharp (`apps/status/src/jpeg.ts`), the recorder writes atomically, the player backs off 10 → 60 s. The
+full timeline, including why the camera drops were not the dashboard's doing, is in docs/CAMERA-ARCHITECTURE.md.
+Measured after the fix (10-minute soak, one viewer, 300 thumbnail requests at 5/s): 398 live frames delivered, 300/300
+thumbnails 200, crash reports 25 → 25, daemon restarts 0, web socket errors 0, daemon RSS 175 → 205 MB.
 
 ## Agentic e2e (M6)
 

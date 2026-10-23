@@ -1,0 +1,17 @@
+{
+  "bridge": { "version": "4.5.0", "uptime_s": 562047, "started_at": "2026-10-16T21:54:26.204852-04:00", "camera_count": 8, "streaming_count": 7, "error_count": 1, "sse_clients": 0 },
+  "cameras": [
+    { "name": "back_pasture_cam", "nickname": "Back Pasture Cam", "model": "HL_CAM4", "model_name": "V4", "protocol": "tutk", "state": "streaming", "quality": "hd", "audio": true, "error_count": 0, "recording": false },
+    { "name": "back_yard_cam", "nickname": "Back Yard Cam", "model": "HL_CAM4", "model_name": "V4", "protocol": "tutk", "state": "streaming", "quality": "hd", "audio": true, "error_count": 0, "recording": false },
+    { "name": "donkey_cam", "nickname": "Donkey Cam", "model": "HL_CAM4", "model_name": "V4", "protocol": "tutk", "state": "streaming", "quality": "hd", "audio": true, "error_count": 0, "recording": false },
+    { "name": "front_porch_cam", "nickname": "Front Porch Cam", "model": "WYZE_CAKP2JFUS", "model_name": "V3", "protocol": "tutk", "state": "streaming", "quality": "hd", "audio": true, "error_count": 0, "recording": false },
+    { "name": "living_room_cam", "nickname": "Living Room Cam", "model": "HL_CAM4", "model_name": "V4", "protocol": "tutk", "state": "offline", "quality": "hd", "audio": true, "error_count": 0, "recording": false },
+    { "name": "mops_cam", "nickname": "Mops Cam", "model": "HL_CAM3P", "model_name": "V3 Pro", "protocol": "tutk", "state": "error", "quality": "hd", "audio": true, "error_count": 3, "recording": false },
+    { "name": "tractor_cam", "nickname": "Tractor Cam", "model": "HL_CAM4", "model_name": "V4", "protocol": "tutk", "state": "streaming", "quality": "hd", "audio": true, "error_count": 0, "recording": false },
+    { "name": "wash_stall", "nickname": "Wash Stall", "model": "HL_CAM4", "model_name": "V4", "protocol": "tutk", "state": "streaming", "quality": "hd", "audio": true, "error_count": 0, "recording": false }
+  ],
+  "wyzeapi": [
+    { "Path": "/app/user/refresh_token", "Count": 6, "Errors": 0, "LastStatus": 200, "LastLatency": 673739250, "TotalNanos": 4196563291, "FirstCall": "2026-10-17T16:54:27.697003-04:00", "LastCall": "2026-10-22T11:54:27.672342-04:00" },
+    { "Path": "/app/v2/home_page/get_object_list", "Count": 12, "Errors": 1, "LastStatus": 200, "LastLatency": 412000000, "TotalNanos": 5100000000, "FirstCall": "2026-10-16T21:54:27.000000-04:00", "LastCall": "2026-10-22T11:54:28.000000-04:00" }
+  ]
+}

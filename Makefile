@@ -43,8 +43,12 @@ taxonomy-pull:    ## Bring the mini's active taxonomy version into the repo (pac
 
 # ---- web app (apps/web, docs/WEB-DASHBOARD.md) ---------------------------------------------------------------------
 STATUS_PORT ?= 5091
-tunnel:
-	@ssh -f -N -o ExitOnForwardFailure=yes -L $(STATUS_PORT):127.0.0.1:$(STATUS_PORT) $(HOST) 2>/dev/null || true
+BRIDGE_PORT ?= 5080
+tunnel:           ## ssh -L to the mini's loopback-only ports: status API 5091, Wyze bridge UI 5080 (the UI starts camera consumers, so it is never on the LAN)
+	@ssh -f -N -o ExitOnForwardFailure=yes -L $(STATUS_PORT):127.0.0.1:$(STATUS_PORT) -L $(BRIDGE_PORT):127.0.0.1:$(BRIDGE_PORT) $(HOST) 2>/dev/null || true
+
+camera-owners:    ## Who consumes camera streams right now (go2rtc consumers, :8554 sockets, buffer writers); the single-consumer rule, measured
+	@ssh $(HOST) /usr/local/ranch/bin/camera-owners.sh
 
 web-dev: tunnel        ## Next dev on the laptop against the mini's status daemon over an ssh tunnel
 	RANCH_DAEMON_URL=http://127.0.0.1:$(STATUS_PORT) RANCH_APP_DIR=$(CURDIR) npm -w apps/web run dev

@@ -38,6 +38,7 @@
     - { name: quiet-audiomxd.sh, daemon: com.ranch.quiet-audiomxd }
     - { name: wyze-bridge.sh, daemon: com.ranch.wyze-bridge }
     - { name: recorder.sh, daemon: com.ranch.recorder }
+    - { name: camera-owners.sh, daemon: "" }
     - { name: ranch, daemon: "" }
   loop_control: { label: "{{ item.name }}" }
   register: scripts
@@ -68,7 +69,8 @@
   become: true
   loop: "{{ ranch_daemons_retired | map('regex_replace', '^(.*)$', '/Library/LaunchDaemons/\\1.plist') | list + ranch_scripts_retired | map('regex_replace', '^(.*)$', ranch_bin_dir ~ '/\\1') | list }}"
 
-# Packet filter: close the listed ports on the node's Tailscale addresses (docs/STATUS-DASHBOARD.md).
+# Packet filter: close tailscale_blocked_ports on the node's Tailscale addresses and loopback_only_ports on every
+# interface but lo0 (docs/CAMERA-ARCHITECTURE.md, docs/WEB-DASHBOARD.md).
 - name: Tailscale addresses of this node
   ansible.builtin.command: /opt/homebrew/bin/tailscale ip
   register: ts_ip
@@ -103,6 +105,32 @@
   changed_when: pf_anchor.changed or pf_conf.changed
   failed_when: "'Status: Enabled' not in pf_apply.stdout"
   become: true
+  when: not ansible_check_mode
+
+# The single-consumer rule, measured (docs/CAMERA-ARCHITECTURE.md): go2rtc on loopback only, every RTSP client an
+# ffmpeg of com.ranch.recorder, ≤ 1 consumer per stream, only the recorder writing the buffer. Reported on every run,
+# fatal in verify mode (-e strict_quiet=true) so a regression fails `make verify` instead of killing a camera.
+- name: Camera owners (single-consumer rule)
+  ansible.builtin.command: "{{ ranch_bin_dir }}/camera-owners.sh"
+  register: owners
+  changed_when: false
+  check_mode: false
+  failed_when: owners.rc != 0 and (strict_quiet | default(false) | bool)
+  become: true
+- name: Camera owners report
+  ansible.builtin.debug:
+    msg: "{{ owners.stdout_lines }}"
+
+# Loopback-only ports must be refused from outside the mini. Checked from the laptop over the tailnet address (the
+# LAN path is the same pf rule on another interface; curl exit 7 = connection refused is the pass condition).
+- name: Loopback-only ports refused from the laptop
+  ansible.builtin.command: "curl -s -m 3 -o /dev/null http://{{ ansible_host | default(inventory_hostname) }}:{{ item }}/"
+  register: closed
+  delegate_to: localhost
+  changed_when: false
+  check_mode: false
+  failed_when: closed.rc == 0
+  loop: "{{ loopback_only_ports }}"
   when: not ansible_check_mode
 
 # Write token for the status page's editors (docs/TAXONOMY-UI.md §6): generated once on the mini, never in the repo.

@@ -1,0 +1,32 @@
+11:05  up 9 days,  3:32, 0 users, load averages: 52.68 53.07 53.06
+
+
+System-wide memory free percentage: 86%
+
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                    36640.
+Pages active:                                 186017.
+Pages inactive:                               205119.
+Pages speculative:                               989.
+Pages throttled:                                   0.
+Pages wired down:                              54197.
+Pages purgeable:                                1820.
+
+vm.swapusage: total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
+
+PID    COMMAND          %CPU MEM  
+75194  PerfPowerService 0.0  6576K
+63123  containermanager 0.0  3072K
+63122  com.apple.geod   0.0  7696K
+63051  wifivelocityd    0.0  4368K
+61587  ospredictiond    0.0  3632K
+59306  ANECompilerServi 0.0  5473K
+59305  aned             0.0  3680K
+58881  secd             0.0  5104K
+58880  lsd              0.0  4048K
+49185  tail             0.0  1040K
+49184  top              0.0  2608K
+49177  zsh              0.0  1680K
+49176  sshd-session     0.0  2592K
+49173  sshd-session     0.0  3937K
+48985  sleep            0.0  1008K

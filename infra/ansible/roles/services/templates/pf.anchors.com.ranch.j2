@@ -1,7 +1,16 @@
-# Managed by Ansible (roles/services, docs/STATUS-DASHBOARD.md). Ports that must not be reachable over Tailscale:
-# the LAN keeps them, the tailnet addresses of this node refuse them. "return" = immediate connection refused.
+# Managed by Ansible (roles/services, docs/CAMERA-ARCHITECTURE.md, docs/WEB-DASHBOARD.md).
+# "return" = immediate connection refused instead of a silent drop.
+#
+# 1. LAN-only services: the LAN keeps them, the tailnet addresses of this node refuse them (tailscale_blocked_ports).
 {% for port in tailscale_blocked_ports %}
 {% for addr in tailscale_addrs %}
 block return in quick proto tcp from any to {{ addr }} port {{ port }}
 {% endfor %}
+{% endfor %}
+#
+# 2. Loopback-only services (loopback_only_ports): refused on every interface except lo0, LAN and tailnet alike.
+#    Anything that can attach a go2rtc consumer makes go2rtc dial a camera; only processes on the mini may do that.
+{% for port in loopback_only_ports %}
+block return in quick on ! lo0 inet proto tcp from any to any port {{ port }}
+block return in quick on ! lo0 inet6 proto tcp from any to any port {{ port }}
 {% endfor %}

@@ -23,18 +23,25 @@ free_gb() { df -g "$RECORDER_DIR" | awk 'NR==2{print $4}'; }
 # One persistent ffmpeg per camera. ffmpeg exits only if the local RTSP drops (go2rtc restart, or the camera's
 # producer genuinely dies); we wait 30 s and reconnect. We never DELETE or re-handshake a camera from here.
 pull() {
-  local cam=$1 dir="$RECORDER_DIR/$1"
-  mkdir -p "$dir"
+  local cam=$1 dir="$RECORDER_DIR/$1" errf
+  mkdir -p "$dir"; errf=$(mktemp -t "recorder-$1")
   while true; do
     if [ "$(free_gb)" -lt "$RECORDER_MIN_FREE_GB" ]; then
       log "$cam: free disk $(free_gb) GB < $RECORDER_MIN_FREE_GB GB, paused"
       sleep 120; continue
     fi
     log "$cam: start"
+    # -atomic_writing: each JPEG is written as <name>.jpg.tmp and renamed into place, so a reader (the status daemon's
+    # sharp/libvips, which memory-maps its input) can never open a half-written file. Without it the daemon died 16
+    # times on 22-23 Oct with SIGBUS "FS pagein error" inside jpeg_read_scanlines (docs/CAMERA-ARCHITECTURE.md).
+    # ffmpeg's stderr is relayed line by line; the last line and the exit status are logged once per drop so the
+    # reasons (decode errors, 404 while go2rtc has no producer, timeout) are countable without the decode noise.
     ffmpeg -nostdin -loglevel error -rtsp_transport tcp -timeout 10000000 -skip_frame nokey \
       -i "$RTSP/$cam" -q:v "$RECORDER_JPEG_Q" \
-      -f image2 -strftime 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" 2>&1 | sed "s/^/$cam: ffmpeg: /"
-    log "$cam: rtsp ended, reconnect in 30 s"
+      -f image2 -strftime 1 -atomic_writing 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" 2>&1 \
+      | { last=""; while IFS= read -r l; do echo "$cam: ffmpeg: $l"; last=$l; done; printf '%s' "$last" > "$errf"; }
+    rc=${PIPESTATUS[0]}
+    log "$cam: rtsp ended (exit $rc: $(cut -c1-160 < "$errf")), reconnect in 30 s"
     sleep 30
   done
 }
@@ -43,6 +50,7 @@ pull() {
 prune() {
   while true; do
     find "$RECORDER_DIR" -type f -name '*.jpg' -mmin +"$RECORDER_BUFFER_MIN" -delete 2>/dev/null
+    find "$RECORDER_DIR" -type f -name '*.jpg.tmp' -mmin +1 -delete 2>/dev/null   # leftovers of an ffmpeg killed mid-write
     sleep 60
   done
 }

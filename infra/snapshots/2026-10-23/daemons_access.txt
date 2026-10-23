@@ -1,0 +1,42 @@
+/etc/ssh/sshd_config.d:
+total 16
+drwxr-xr-x   4 root  wheel  128 Oct 13 22:49 .
+drwxr-xr-x  15 root  wheel  480 Oct 13 21:41 ..
+-rw-r--r--   1 root  wheel  168 Oct 13 22:49 010-keys-only.conf
+-rw-r--r--   1 root  wheel  133 Apr  1  2023 100-macos.conf
+
+/etc/sudoers.d:
+total 8
+drwxr-xr-x   3 root  wheel    96 Oct 13 22:49 .
+drwxr-xr-x  78 root  wheel  2496 Oct 21 22:48 ..
+-r--r-----   1 root  wheel    80 Oct 13 22:49 ranch-nopasswd
+
+/Library/LaunchDaemons:
+total 104
+drwxr-xr-x  15 root  wheel   480 Oct 22 12:14 .
+drwxr-xr-x  66 root  wheel  2112 Oct 14 07:18 ..
+-rw-r--r--   1 root  wheel   536 Oct 16 21:54 com.ranch.caffeinate.plist
+-rw-r--r--   1 root  wheel  1511 Oct 21 23:43 com.ranch.detector.plist
+-rw-r--r--   1 root  wheel   983 Oct 16 21:54 com.ranch.go2rtc.plist
+-rw-r--r--   1 root  wheel  1512 Oct 22 12:02 com.ranch.ingest.plist
+-rw-r--r--   1 root  wheel   720 Oct 16 21:54 com.ranch.mosquitto.plist
+-rw-r--r--   1 root  wheel  1181 Oct 16 21:54 com.ranch.netprobe.plist
+-rw-r--r--   1 root  wheel   603 Oct 21 22:51 com.ranch.pf.plist
+-rw-r--r--   1 root  wheel   567 Oct 16 21:54 com.ranch.quiet-audiomxd.plist
+-rw-r--r--   1 root  wheel  1203 Oct 22 10:43 com.ranch.recorder.plist
+-rw-r--r--   1 root  wheel  1780 Oct 22 12:14 com.ranch.status.plist
+-rw-r--r--   1 root  wheel   626 Oct 16 21:53 com.ranch.tailscaled.plist
+-rw-r--r--   1 root  wheel  1673 Oct 22 12:14 com.ranch.web.plist
+-rw-r--r--   1 root  wheel  1452 Oct 16 21:54 com.ranch.wyze-bridge.plist
+
+# Managed by Ansible (infra/ansible/roles/access). Keys only; no passwords over SSH.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+# Options set by macOS that differ from the OpenSSH defaults.
+UsePAM yes
+AcceptEnv LANG LC_*
+Subsystem	sftp	/usr/libexec/sftp-server
+
+# Managed by Ansible (infra/ansible/roles/access)
+ranch ALL=(ALL) NOPASSWD: ALL

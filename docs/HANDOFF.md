@@ -41,7 +41,7 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
 | Status page | `com.ranch.status`, `apps/status`, port 5090 on all interfaces, no auth; ~1 Node process, `node:http` + SSE, reads SQLite/MQTT/launchd/logs/seed dir |
 | App paths | tree `/usr/local/ranch/app` (rsync of the laptop checkout), models `/usr/local/ranch/models`, DB `/usr/local/ranch/var/ranch-events.sqlite`, frames `/usr/local/ranch/media/frames/<cam>/<date>/` |
 | Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |
-| Ports (LAN + tailnet, no auth) | RTSP 8554, go2rtc API 1984, bridge UI 5080, status page 5090, WebRTC 8889 + 8189/udp, HLS 8888; Mosquitto 1883 on loopback only |
+| Ports | Dashboard 5090 on the LAN only (pf refuses it on the tailnet). **Loopback only since 23 Oct:** bridge UI/API 5080, go2rtc API 1984, RTSP 8554, WebRTC 8889/tcp (go2rtc binds 127.0.0.1; pf refuses them on every other interface), status API 5091, Mosquitto 1883. `make tunnel` forwards 5091 and 5080. Reason: anything that attaches a go2rtc consumer makes it dial a camera (docs/CAMERA-ARCHITECTURE.md) |
 | Measured headless, 10 min uptime | load 1.30, 91% memory free, 0 swap, ~212 processes, reboot→SSH 25–28 s |
 
 ## Operating it

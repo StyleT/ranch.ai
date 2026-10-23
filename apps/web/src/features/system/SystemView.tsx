@@ -3,12 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { keys } from '@/lib/query/keys';
 import { apiGet } from '@/lib/query/fetch';
-import type { SystemData } from '@/lib/types';
+import type { SystemData, BridgeData } from '@/lib/types';
 import { Card, Section, Badge, Skeleton, Button } from '@/components/ui';
 import { StatusKV } from '@/components/table/StatusKV';
 import { DataTable } from '@/components/table/DataTable';
 import { BarList } from '@/components/charts/BarList';
-import { formatUptime, localTime } from '@/lib/format';
+import { formatUptime, localTime, localDateTime } from '@/lib/format';
+import { nanosToMs, stateTone } from './bridgeFormat';
 import { useTz } from '@/lib/tz';
 import { useActivity } from '@/features/live/LiveProvider';
 import { tid } from '@/lib/testids';
@@ -42,15 +43,48 @@ export function SystemView() {
           <Section title="Network probe"><Card className="p-0">
             <DataTable caption="Network probe per camera" rows={d.netprobe} rowKey={(r) => r.camera} rowTestId={(r) => tid.netprobeRow(r.camera)} columns={[
               { key: 'camera', header: 'camera', cell: (r) => <b>{r.camera.replace('_cam', '')}</b> }, { key: 'ip', header: 'ip', cell: (r) => r.ip ?? '–', priority: 2 },
-              { key: 'producer', header: 'producer', cell: (r) => (r.producer === null ? '–' : r.producer ? '●' : '○') }, { key: 'consumers', header: 'cons', cell: (r) => r.consumers ?? '–', align: 'right' },
+              // connected = go2rtc holds a live session with the camera (producer alone only means "configured", 23 Oct)
+              { key: 'connected', header: 'conn', cell: (r) => { const v = r.connected ?? r.producer; return v === null ? '–' : v ? '●' : '○'; } }, { key: 'consumers', header: 'cons', cell: (r) => r.consumers ?? '–', align: 'right' },
               { key: 'rx', header: 'MB/s', cell: (r) => (r.rx_bytes_delta ? (r.rx_bytes_delta / 15 / 1048576).toFixed(2) : '–'), align: 'right' }, { key: 'ping', header: 'ping ms', cell: (r) => (r.ping_ms === null ? '–' : Math.round(r.ping_ms)), align: 'right' },
             ]} />
             {d.wifi && <p className="px-2 py-1 text-xs text-dim">wifi {Object.entries(d.wifi).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}</p>}
           </Card></Section>
+          {d.bridge ? <BridgeSection b={d.bridge} tz={tz} /> : <Section title="Wyze bridge"><Card className="text-sm text-dim">bridge metrics unavailable</Card></Section>}
           <Section title="Live MQTT"><Ticker tz={tz} /></Section>
         </div>
       </div>
     </>
+  );
+}
+/** The bridge's own /metrics page, re-homed here: its UI on :5080 is loopback-only since 23 Oct because every visit
+ *  attached one go2rtc consumer per camera (docs/CAMERA-ARCHITECTURE.md). Data via the daemon's /api/bridge. */
+function BridgeSection({ b, tz }: { b: BridgeData; tz: string }) {
+  const tiles: [string, string | number][] = [['cameras', b.bridge.camera_count], ['streaming', b.bridge.streaming_count], ['errored', b.bridge.error_count], ['SSE clients', b.bridge.sse_clients], [`up · v${b.bridge.version}`, formatUptime(b.bridge.uptime_s)]];
+  return (
+    <Section title="Wyze bridge" action={<a className="text-xs text-accent underline" href="/api/ui/system">json</a>}>
+      <Card className="grid gap-2 p-0">
+        <div data-testid={tid.bridgeSummary} className="flex flex-wrap gap-4 px-3 pt-3 text-sm">
+          {tiles.map(([k, v]) => <div key={k}><b className="block text-lg tabular-nums">{v}</b><span className="text-xs text-dim">{k}</span></div>)}
+        </div>
+        <DataTable caption="Bridge camera state" rows={b.cameras} rowKey={(r) => r.name} rowTestId={(r) => tid.bridgeCamera(r.name)} columns={[
+          { key: 'name', header: 'camera', cell: (r) => <b>{r.name.replace('_cam', '')}</b> },
+          { key: 'state', header: 'state', cell: (r) => <Badge tone={stateTone(r.state)}>{r.state}</Badge> },
+          { key: 'model', header: 'model', cell: (r) => r.model_name ?? r.model ?? '–', priority: 2 },
+          { key: 'protocol', header: 'protocol', cell: (r) => `${r.protocol ?? '–'}${r.quality ? ` · ${r.quality}` : ''}`, priority: 2 },
+          { key: 'errors', header: 'errors', cell: (r) => r.error_count ?? 0, align: 'right' },
+          { key: 'rec', header: 'rec', cell: (r) => (r.recording ? '●' : '○'), priority: 3 },
+        ]} />
+        <DataTable caption="Wyze API calls" rows={b.wyzeapi} rowKey={(r) => r.Path} rowTestId={(r) => tid.bridgeApiRow(r.Path)} columns={[
+          { key: 'path', header: 'Wyze API path', cell: (r) => <code className="text-xs">{r.Path}</code> },
+          { key: 'calls', header: 'calls', cell: (r) => r.Count, align: 'right' },
+          { key: 'errors', header: 'errors', cell: (r) => r.Errors, align: 'right' },
+          { key: 'status', header: 'last', cell: (r) => r.LastStatus, align: 'right', priority: 2 },
+          { key: 'lat', header: 'ms', cell: (r) => nanosToMs(r.LastLatency), align: 'right', priority: 2 },
+          { key: 'at', header: 'last call', cell: (r) => <time dateTime={r.LastCall}>{localDateTime(r.LastCall, tz)}</time>, priority: 3 },
+        ]} />
+        <p className="px-3 pb-2 text-xs text-dim">The bridge UI (:5080) is reachable only from the mini: opening it attaches a go2rtc consumer per camera. Use <code>make tunnel</code>.</p>
+      </Card>
+    </Section>
   );
 }
 function Ticker({ tz }: { tz: string }) {

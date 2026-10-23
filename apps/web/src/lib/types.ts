@@ -1,5 +1,5 @@
 // UI contracts: what the BFF returns to the pages (docs/WEB-DASHBOARD.md §3). Everything the client renders is one of these.
-import type { Detection } from '@ranch/contracts';
+import type { Detection, BridgeMetrics } from '@ranch/contracts';
 
 export type Alert = { kind: 'camera_offline' | 'daemon_down' | 'detector_stale' | 'taxonomy_drift' | 'disk_low' | 'burst_throttled' | 'no_frames'; text: string; href: string; severity: 'warn' | 'bad' };
 
@@ -50,9 +50,13 @@ export type DetectionsPage = { source: 'live' | 'baseline'; items: FrameCard[]; 
 export type SystemData = {
   ts: string; host: string; uptime_s: number; load: number[]; disk: { free_gb: number | null; total_gb: number | null };
   totals: { frames: number; detections: number; events: number }; buffer: { total: number; stale_s: number | null };
-  daemons: DaemonView[]; netprobe: { camera: string; ip: string | null; producer: boolean | null; consumers: number | null; rx_bytes_delta: number | null; ping_ms: number | null }[];
+  daemons: DaemonView[]; netprobe: { camera: string; ip: string | null; producer: boolean | null; connected: boolean | null; consumers: number | null; rx_bytes_delta: number | null; ping_ms: number | null }[];
   wifi: Record<string, unknown> | null; web: { rss_mb: number; heap_mb: number; uptime_s: number; build: Record<string, unknown> | null }; daemon_ping: Record<string, unknown> | null;
+  bridge: BridgeData | null;
 };
+/** The Wyze bridge's metrics page, re-homed on /system (its UI on 5080 is loopback-only since 23 Oct): the daemon's
+ *  /api/bridge contract with the Wyze API table always present. */
+export type BridgeData = { bridge: BridgeMetrics['bridge']; cameras: BridgeMetrics['cameras']; wyzeapi: NonNullable<BridgeMetrics['wyzeapi']> };
 
 export type LeaderboardRow = { date: string; tag: string; model: string; frames: string; labels: string; r_at_fppf: string; horse_recall: string; ap: string; fppf_all: string; count_exact: string; p50_ms: string; rss_mb: string; result: string; prod: boolean };
 export type EvalsData = { rows: LeaderboardRow[]; files: { file: string; ts: string | null; tag: string | null; models: string[] }[]; datasets: { id: string; kind: string; created: string; n: string; parent: string; location: string }[]; notes: string };

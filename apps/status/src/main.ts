@@ -8,8 +8,11 @@
 //   GET /api/ping, /api/counts/series, /api/frames/series, /api/tracks, /api/frames/<id>   series and bursts for the web app (docs/WEB-DASHBOARD.md); contract in packages/contracts
 //   GET /api/taxonomy[/versions[/<id>]]; POST /api/taxonomy/{validate,score,apply,revert}  the taxonomy editor (docs/TAXONOMY-UI.md)
 //   GET /api/buffer/<cam>?w=   newest frame of the recorder's buffer; /api/buffer/<cam>/stream?w=  MJPEG of that buffer as it fills (docs/CAMERA-ARCHITECTURE.md): the only live view, no camera is touched
+//   GET /api/bridge            the Wyze bridge's own metrics (:5080/api/metrics), proxied because 5080 is loopback-only since 23 Oct
+// Every JPEG goes through jpeg.ts (read into memory, then sharp): sharp(path) memory-maps and a file still being written
+// killed this process with SIGBUS 16 times on 22-23 Oct.
 import { createServer, type ServerResponse } from 'node:http';
-import { createReadStream, existsSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -18,10 +21,10 @@ import { config } from '@ranch/config';
 import { EventStore, parseSince, type FrameReason } from '@ranch/events';
 import type { Ping, CountSeries, FrameSeries, TrackSummary } from '@ranch/contracts';
 import { connectBus } from '@ranch/bus';
-import { collect, bufferNewestPath, bufferNameMs, type Status } from './collect.ts';
+import { collect, bufferNewestPath, bufferNewestPaths, bufferNameMs, bridgeMetrics, type Status } from './collect.ts';
+import { jpegFromFile, firstReadableJpeg } from './jpeg.ts';
 import { getTaxonomy, getTaxonomyVersionId, validateTaxonomy, canonical, loadTaxonomyFile, REPO_TAXONOMY_FILE, type Taxonomy } from '@ranch/taxonomy';
 import { activateFromStore, applyRow, differsFromRepo, TAXONOMY_TOPIC, type TaxonomyMessage } from '@ranch/taxonomy/store';
-import sharp from 'sharp';
 
 const PORT = Number(process.env.RANCH_STATUS_PORT ?? 5091);
 const HOST = process.env.RANCH_STATUS_HOST ?? '127.0.0.1';
@@ -37,6 +40,7 @@ let bufferStreams = 0; const BUFFER_STREAM_MAX = Number(process.env.RANCH_BUFFER
 const writeToken = (() => { try { const m = /^RANCH_STATUS_WRITE_TOKEN=(\S+)/m.exec(readFileSync(STATUS_ENV, 'utf8')); return m?.[1] ?? null; } catch { return null; } })();
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), svc: 'status', msg, ...extra }) + '\n');
+const sendJpeg = (res: ServerResponse, buf: Buffer, headers: Record<string, string>) => { res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': String(buf.length), ...headers }); res.end(buf); };
 
 const store = new EventStore(config.dbPath);
 activateFromStore(store, log);
@@ -160,6 +164,8 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(await status()));
     } else if (url.pathname === '/api/ping') {
       json(res, 200, { ok: true, ts: new Date().toISOString(), pid: process.pid, rss_mb: Math.round(process.memoryUsage().rss / 1048576), taxonomy_version: getTaxonomyVersionId(), api: 1 } satisfies Ping); return;
+    } else if (url.pathname === '/api/bridge') {
+      try { json(res, 200, await bridgeMetrics()); } catch (e) { json(res, 503, { error: 'bridge_unreachable', detail: String(e) }); } return;
     } else if (url.pathname === '/api/counts/series' || url.pathname === '/api/frames/series') {
       const p = url.searchParams; const bucketS = parseBucket(p.get('bucket') ?? '5m');
       const since = clampSince(parseSince(p.get('since') ?? '1h'));
@@ -213,16 +219,13 @@ const server = createServer(async (req, res) => {
       const path = join('/usr/local/ranch/media/baseline', rel);
       if (rel.includes('..') || !existsSync(path)) { res.writeHead(404); res.end('no frame'); return; }
       const w = Number(url.searchParams.get('w') ?? 0);
-      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=3600' });
-      if (w > 0 && w < 4000) sharp(path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 82 }).pipe(res).on('error', () => res.destroy());
-      else createReadStream(path).on('error', () => res.destroy()).pipe(res);
+      sendJpeg(res, await jpegFromFile(path, w), { 'cache-control': 'max-age=3600' });
     } else if (/^\/api\/buffer\/[a-z0-9_]+$/.test(url.pathname)) {
-      const cam = url.pathname.split('/')[3]!; const path = bufferNewestPath(cam);
-      if (!path) { res.writeHead(404); res.end('no buffered frame'); return; }
-      const w = Number(url.searchParams.get('w') ?? 0);
-      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-frame-ts': new Date(bufferNameMs(basename(path))).toISOString() });
-      if (w > 0 && w < 4000) sharp(path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 82 }).pipe(res).on('error', () => res.destroy());
-      else createReadStream(path).on('error', () => res.destroy()).pipe(res);
+      const cam = url.pathname.split('/')[3]!; const paths = bufferNewestPaths(cam, 2);
+      if (!paths.length) { res.writeHead(404); res.end('no buffered frame'); return; }
+      const r = await firstReadableJpeg(paths, Number(url.searchParams.get('w') ?? 0));
+      if (!r) { json(res, 503, { error: 'frame_not_ready' }); return; }
+      sendJpeg(res, r.buf, { 'cache-control': 'no-store', 'x-frame-ts': new Date(bufferNameMs(basename(r.path))).toISOString() });
     } else if (/^\/api\/buffer\/[a-z0-9_]+\/stream$/.test(url.pathname)) {
       // MJPEG assembled from the buffer as the recorder fills it (~1 frame / 2 s). Reads disk only: no camera, no go2rtc.
       const cam = url.pathname.split('/')[3]!; const w = Number(url.searchParams.get('w') ?? 0);
@@ -231,14 +234,17 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'multipart/x-mixed-replace; boundary=frame', 'cache-control': 'no-store', connection: 'keep-alive' });
       let last = ''; let closed = false;
       const stop = () => { if (closed) return; closed = true; clearInterval(timer); clearTimeout(hardStop); bufferStreams--; log('buffer stream closed', { camera: cam, open: bufferStreams }); };
+      let busy = false;
       const tick = async () => {
-        if (closed) return;
-        const path = bufferNewestPath(cam); if (!path || path === last) return; last = path;
+        if (closed || busy) return;
+        const path = bufferNewestPath(cam); if (!path || path === last) return;
+        busy = true;
         try {
-          const buf = w > 0 && w < 4000 ? await sharp(path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer() : readFileSync(path);
+          const buf = await jpegFromFile(path, w, 80);   // in memory, never mmapped: a half-written file is skipped, not fatal
           if (closed) return;
+          last = path;
           res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${buf.length}\r\nX-Frame-Ts: ${new Date(bufferNameMs(basename(path))).toISOString()}\r\n\r\n`); res.write(buf); res.write('\r\n');
-        } catch { /* file rotated away; next tick */ }
+        } catch { /* not decodable yet or rotated away; the next tick retries the newest file */ } finally { busy = false; }
       };
       const timer = setInterval(() => void tick(), 500); void tick();
       const hardStop = setTimeout(() => { stop(); res.end(); }, 30 * 60_000);
@@ -247,10 +253,7 @@ const server = createServer(async (req, res) => {
       const key = decodeURIComponent(url.pathname.slice('/api/frame/'.length));
       const f = /^\d+$/.test(key) ? store.frameById(Number(key)) : store.lastFrame(key);
       if (!f || !existsSync(f.path)) { res.writeHead(404); res.end('no frame'); return; }
-      const w = Number(url.searchParams.get('w') ?? 0);
-      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-frame-ts': f.ts, 'x-frame-id': String(f.id) });
-      if (w > 0 && w < 4000) sharp(f.path).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: 82 }).pipe(res).on('error', () => res.destroy());
-      else createReadStream(f.path).on('error', () => res.destroy()).pipe(res);
+      sendJpeg(res, await jpegFromFile(f.path, Number(url.searchParams.get('w') ?? 0)), { 'cache-control': 'no-store', 'x-frame-ts': f.ts, 'x-frame-id': String(f.id) });
     } else if (url.pathname === '/api/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
       res.write(': connected\n\n');

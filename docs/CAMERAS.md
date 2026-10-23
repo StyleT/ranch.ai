@@ -58,7 +58,11 @@ this inventory:
   `WYZE_EMAIL`, `WYZE_PASSWORD`, `WYZE_API_ID`, `WYZE_API_KEY` (`WYZE_TOTP_KEY` if 2FA). These live on the mini
   in `~/.config/ranch/wyze.env`, mode 600, never in the repo.
 - Ports: RTSP 8554, HLS 8888, WebRTC 8889 and 8189/udp, go2rtc API 1984, bridge web UI 5080. Streams are
-  `rtsp://ranch-ai:8554/<camera_name>` with spaces replaced by underscores (`back_pasture_cam`).
+  `rtsp://127.0.0.1:8554/<camera_name>` with spaces replaced by underscores (`back_pasture_cam`). **Since 23 Oct 5080,
+  1984, 8554 and 8889 are reachable only from the mini itself** (go2rtc binds 127.0.0.1, pf refuses them on every other
+  interface, `loopback_only_ports` in group_vars): the bridge UI attached one go2rtc consumer per camera on every visit,
+  which makes go2rtc dial the cameras (docs/CAMERA-ARCHITECTURE.md). Its metrics live on the dashboard's `/system` page;
+  the UI itself is reachable through `make tunnel` at `http://127.0.0.1:5080`.
 
 The mini is on the ranch LAN at 192.168.1.173 (router 192.168.1.1). The cameras must be on the same L2
 network for TUTK LAN mode and for WebRTC ICE to go direct.

@@ -27,16 +27,19 @@ async function cameras(): Promise<CamInfo[]> {
   return camsCache.cams;
 }
 
-interface StreamState { producer: boolean; consumers: number; rx_bytes: number | null; remote: string | null }
+// `producer` means go2rtc lists the source (true even while the camera is unreachable); `connected` means that
+// producer has a remote address, i.e. a live camera session. The distinction mattered on 23 Oct: the hourly table read
+// producer 240/240 for a camera that had been off the LAN for ten hours.
+interface StreamState { producer: boolean; connected: boolean; state: string | null; consumers: number; rx_bytes: number | null; remote: string | null }
 async function streamState(name: string): Promise<StreamState | null> {
   try {
     const res = await fetch(`${config.go2rtcUrl}/api/streams?src=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(4000) });
-    if (res.status === 404) return { producer: false, consumers: 0, rx_bytes: null, remote: null };
+    if (res.status === 404) return { producer: false, connected: false, state: null, consumers: 0, rx_bytes: null, remote: null };
     if (!res.ok) return null;
-    const d = (await res.json()) as { producers?: { remote_addr?: string; receivers?: { bytes?: number }[] }[]; consumers?: unknown[] };
+    const d = (await res.json()) as { producers?: { remote_addr?: string; state?: string; receivers?: { bytes?: number }[] }[]; consumers?: unknown[] };
     const p = d.producers?.[0];
     const bytes = p?.receivers?.reduce((s, r) => s + (r.bytes ?? 0), 0);
-    return { producer: !!p, consumers: d.consumers?.length ?? 0, rx_bytes: bytes === undefined ? null : bytes, remote: p?.remote_addr ?? null };
+    return { producer: !!p, connected: !!p?.remote_addr, state: p?.state ?? null, consumers: d.consumers?.length ?? 0, rx_bytes: bytes === undefined ? null : bytes, remote: p?.remote_addr ?? null };
   } catch { return null; }
 }
 
@@ -71,11 +74,12 @@ async function main(): Promise<void> {
       const [st, rtt] = await Promise.all([streamState(c.name), ping(c.ip)]);
       const p = prev.get(c.name);
       const delta = st && p && st.rx_bytes !== null && p.rx_bytes !== null && st.remote === p.remote ? st.rx_bytes - p.rx_bytes : null;
-      const row = { camera: c.name, ip: c.ip, producer: st?.producer ?? null, consumers: st?.consumers ?? null, rx_bytes_delta: delta, remote: st?.remote ?? null, ping_ms: rtt };
+      const row = { camera: c.name, ip: c.ip, producer: st?.producer ?? null, connected: st?.connected ?? null, state: st?.state ?? null, consumers: st?.consumers ?? null, rx_bytes_delta: delta, remote: st?.remote ?? null, ping_ms: rtt };
       log('probe', row);
       snapshot[c.name] = row;
       if (st) {
         if (p && p.producer !== st.producer) log('producer changed', { camera: c.name, producer: st.producer });
+        if (p && p.connected !== st.connected) log('connected changed', { camera: c.name, connected: st.connected, remote: st.remote, state: st.state });
         const isFlowing = delta !== null ? delta > 0 : null;
         if (isFlowing !== null && flowing.get(c.name) !== undefined && flowing.get(c.name) !== isFlowing) log(isFlowing ? 'bytes flowing again' : 'bytes stopped', { camera: c.name, rx_bytes_delta: delta });
         if (isFlowing !== null) flowing.set(c.name, isFlowing);

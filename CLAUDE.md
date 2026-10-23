@@ -28,7 +28,10 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   `roles/services/tasks/main.yml` (`ranch_daemons`). A changed plist is re-bootstrapped (kickstart would keep the
   old definition).
 - Ports listed in `tailscale_blocked_ports` (group_vars) are refused on the Tailscale addresses by a pf anchor and are
-  LAN-only (today: 5090, the dashboard). Verify them with `ssh ranch curl 127.0.0.1:<port>`, not over the tailnet.
+  LAN-only (today: 5090, the dashboard). Ports in `loopback_only_ports` (5080 bridge, 1984/8554/8889 go2rtc) are refused
+  on every interface but lo0: only processes on the mini may talk to go2rtc or the bridge, because a go2rtc consumer
+  makes it dial a camera. Verify with `ssh ranch curl 127.0.0.1:<port>` and `make camera-owners`; `make tunnel` forwards
+  5091 and 5080 to the laptop.
 - The dashboard is `apps/web` (Next.js, `docs/WEB-DASHBOARD.md`) on 5090; `apps/status` is its JSON/SSE API on
   `127.0.0.1:5091` and serves no HTML. `make web-dev` runs the app on the laptop against the mini's API.
 - Classes, subclasses and detector thresholds live in `packages/taxonomy/taxonomy.json` and nowhere else; the mini
@@ -56,3 +59,5 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   calls go2rtc or a camera. Prefer the local TUTK/LAN path; keep the bridge's WebRTC fallback. Never `DELETE`/
   recreate a go2rtc stream from our code. This exists because go2rtc dials a camera on consumer-attach and drops
   it at zero consumers, so dynamic/multiple consumers churn camera handshakes and overload the cameras (22 Oct).
+  Readers never memory-map a buffer file (`apps/status/src/jpeg.ts`: read into a Buffer, then sharp); the recorder
+  writes atomically. The rule is measured, not assumed: `make camera-owners` / `make verify` fail on any other consumer.

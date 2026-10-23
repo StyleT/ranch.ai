@@ -11,6 +11,7 @@ export const DAEMON = 'http://127.0.0.1:5091';
 export const handlers = [
   http.get(`${DAEMON}/api/status`, () => HttpResponse.json(fixture('status'))),
   http.get(`${DAEMON}/api/ping`, () => HttpResponse.json(fixture('ping'))),
+  http.get(`${DAEMON}/api/bridge`, () => HttpResponse.json(fixture('bridge'))),
   http.get(`${DAEMON}/api/frames`, ({ request }) => { const u = new URL(request.url); return HttpResponse.json(fixture(u.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames')); }),
   http.get(`${DAEMON}/api/frames/:id`, ({ params }) => (params.id === '999999' ? HttpResponse.json({ error: 'no such frame' }, { status: 404 }) : HttpResponse.json(fixture('frame-head')))),
   http.get(`${DAEMON}/api/tracks`, () => HttpResponse.json(fixture('tracks'))),

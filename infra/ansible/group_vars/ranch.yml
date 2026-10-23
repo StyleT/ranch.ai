@@ -97,6 +97,7 @@ ranch_var_dir: /usr/local/ranch/var       # daemon state (bridge state file, mos
 ranch_media_dir: /usr/local/ranch/media   # snapshots and recordings (same disk; 200 GB free on 14 Oct)
 ranch_etc_dir: /usr/local/ranch/etc       # config files we template (go2rtc.yaml)
 go2rtc_api_port: 1984
+go2rtc_api_log: trace     # 23 Oct: go2rtc logs "[api] METHOD URL remote" only at trace; one day of it derives api.allow_paths (docs/CAMERA-ARCHITECTURE.md); then warn
 
 # Wyze bridge: IDisposable's Go rewrite on top of go2rtc (docs/CAMERAS.md). Pure Go, no cgo, built on
 # the mini with Homebrew go. Pinned to a release tag; bump deliberately and re-measure.
@@ -137,7 +138,16 @@ ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/a
 ranch_models_dir: /usr/local/ranch/models   # CoreML packages, not in git
 # Ports closed on the Tailscale addresses (pf anchor com.ranch): LAN-only services. 22 stays open on both.
 tailscale_blocked_ports:
-  - 5090                                     # status dashboard
+  - 5090                                     # web dashboard (LAN only)
+# Ports refused on every interface except lo0 (pf anchor com.ranch), 23 Oct: anything that can attach a go2rtc consumer
+# makes go2rtc dial a camera, and the bridge UI on 5080 opens one WebSocket player + one snapshot per camera on load
+# (eight consumers per visit, including living_room_cam which nobody else holds). Only processes on the mini may reach
+# these; from the laptop use `make tunnel` (ssh -L). docs/CAMERA-ARCHITECTURE.md.
+loopback_only_ports:
+  - 5080                                     # Wyze bridge UI + API (its metrics are on the dashboard's /system page)
+  - 1984                                     # go2rtc API (also bound to 127.0.0.1 in go2rtc.yaml)
+  - 8554                                     # go2rtc RTSP (also bound to 127.0.0.1)
+  - 8889                                     # go2rtc WebRTC TCP (consumer entry; the source-side fallback is outbound)
 ranch_daemons_retired:                       # unloaded and deleted by roles/services
   - com.ranch.logrotate                      # 16 Oct: custom rotation replaced by the unified log
   - com.ranch.seed-recorder                  # 22 Oct: superseded by the always-on recorder (disk buffer)

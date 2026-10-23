@@ -4,14 +4,17 @@
 log:
   level: info
   streams: debug      # producer connect/disconnect, keyframe waits: the evidence for camera dropouts
-  api: warn
+  api: {{ go2rtc_api_log }}   # trace while measuring which API paths the bridge calls (for api.allow_paths; requests log only at trace), warn otherwise
   rtsp: info
   webrtc: warn
+# Loopback only (23 Oct): go2rtc dials a camera whenever a consumer attaches, so any LAN or tailnet device that could
+# reach these ports could make it dial. Only processes on the mini may talk to go2rtc; the recorder is the single
+# stream consumer (docs/CAMERA-ARCHITECTURE.md). pf refuses the same ports off-lo0 as the belt (loopback_only_ports).
 api:
-  listen: :{{ go2rtc_api_port }}
+  listen: 127.0.0.1:{{ go2rtc_api_port }}
   origin: '*'
 rtsp:
-  listen: :8554
+  listen: 127.0.0.1:8554
 webrtc:
   listen: :8889
   ice_servers:

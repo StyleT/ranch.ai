@@ -96,7 +96,16 @@ export const SseMqtt = z.looseObject({ topic: z.string(), payload: z.unknown() }
 export const TaxonomyMessage = z.looseObject({ version_id: z.number(), created: Iso, author: z.string() });
 export const DetectorStatus = z.looseObject({ ts: Iso, pid: z.number(), model: z.string(), family: z.string(), taxonomy_version: NullableNum, processed: z.number(), dropped: z.number(), inflight: z.number(), raw_boxes: z.number(), kept_boxes: z.number(), bursts: z.number(), rss_mb: z.number() });
 export const IngestStatus = z.looseObject({ ts: Iso, pid: z.number(), cameras: z.array(z.string()), rss_mb: z.number(), resets: z.number(), bursts: z.number(), burst_frames: z.number(), burst_throttled: z.number(), burst_budget_per_min: z.number(), motion_threshold: z.number().optional(), motion: z.record(z.string(), z.looseObject({ n: z.number(), p50: z.number(), p90: z.number(), max: z.number() })).optional() });
-export const NetprobeCamera = z.looseObject({ camera: z.string(), ip: z.string().nullable().optional(), producer: z.boolean().optional(), consumers: z.number().optional(), rx_bytes_delta: NullableNum.optional(), ping_ms: NullableNum.optional() });
+// `producer` = go2rtc has the source configured (true even for a dead camera); `connected` = the producer has a remote
+// address, i.e. a live camera session (23 Oct: the hourly table showed producer 240/240 for a camera that was off).
+export const NetprobeCamera = z.looseObject({ camera: z.string(), ip: z.string().nullable().optional(), producer: z.boolean().nullable().optional(), connected: z.boolean().nullable().optional(), state: z.string().nullable().optional(), consumers: z.number().nullable().optional(), rx_bytes_delta: NullableNum.optional(), ping_ms: NullableNum.optional() });
+/** The Wyze bridge's own metrics (`GET :5080/api/metrics`), proxied by the daemon at /api/bridge because 5080 is
+ *  loopback-only since 23 Oct (its UI attached eight go2rtc consumers per visit). Shape as observed on 4.5.0. */
+export const BridgeMetrics = z.looseObject({
+  bridge: z.looseObject({ version: z.string(), uptime_s: z.number(), started_at: z.string(), camera_count: z.number(), streaming_count: z.number(), error_count: z.number(), sse_clients: z.number() }),
+  cameras: z.array(z.looseObject({ name: z.string(), nickname: z.string().optional(), model: z.string().optional(), model_name: z.string().optional(), protocol: z.string().optional(), state: z.string(), quality: z.string().optional(), audio: z.boolean().optional(), error_count: z.number().optional(), recording: z.boolean().optional() })),
+  wyzeapi: z.array(z.looseObject({ Path: z.string(), Count: z.number(), Errors: z.number(), LastStatus: z.number(), LastLatency: z.number(), TotalNanos: z.number(), FirstCall: z.string(), LastCall: z.string() })).nullable().optional(),
+});
 export const Wifi = z.looseObject({ rssi_dbm: NullableNum.optional(), noise_dbm: NullableNum.optional(), tx_rate_mbps: NullableNum.optional(), channel: z.unknown().optional(), mcs: z.unknown().optional(), error: z.string().optional() });
 
 export type Status = z.infer<typeof Status>; export type DaemonRow = z.infer<typeof DaemonRow>; export type CameraRow = z.infer<typeof CameraRow>;
@@ -106,6 +115,7 @@ export type CountSeries = z.infer<typeof CountSeries>; export type FrameSeries =
 export type ScoreSummary = z.infer<typeof ScoreSummary>; export type ScoreResponse = z.infer<typeof ScoreResponse>; export type TaxonomyMeta = z.infer<typeof TaxonomyMeta>;
 export type TaxonomyVersionItem = z.infer<typeof TaxonomyVersionItem>; export type TaxonomyVersionFull = z.infer<typeof TaxonomyVersionFull>;
 export type DetectorStatus = z.infer<typeof DetectorStatus>; export type IngestStatus = z.infer<typeof IngestStatus>; export type NetprobeCamera = z.infer<typeof NetprobeCamera>; export type Wifi = z.infer<typeof Wifi>;
+export type BridgeMetrics = z.infer<typeof BridgeMetrics>;
 
 /** Parse or throw with a readable issue list (used at the BFF boundary and by the contract test). */
 export function parseContract<T extends z.ZodType>(schema: T, data: unknown, what: string): z.infer<T> {
