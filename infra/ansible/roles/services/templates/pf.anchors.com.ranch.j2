@@ -1,11 +1,21 @@
-# Managed by Ansible (roles/services, docs/CAMERA-ARCHITECTURE.md, docs/WEB-DASHBOARD.md).
-# "return" = immediate connection refused instead of a silent drop.
+# Managed by Ansible (roles/services, docs/WEB-DASHBOARD.md, docs/CAMERA-ARCHITECTURE.md).
+# "return" = immediate connection refused instead of a silent drop. Rules are "quick": first match wins, so the pass
+# rules come before the block rules.
 #
-# 1. LAN-only services: the LAN keeps them, the tailnet addresses of this node refuse them (tailscale_blocked_ports).
-{% for port in tailscale_blocked_ports %}
+# 1. Tailnet-only services (tailscale_only_ports): accepted only from Tailscale clients (CGNAT 100.64.0.0/10 and the
+#    tailnet ULA fd7a:115c:a1e0::/48) addressed to this node's tailnet addresses; refused on every other interface,
+#    the ranch LAN included. Loopback stays open for ssh -L and local health checks. (23 Oct: the dashboard moved from
+#    LAN-only to tailnet-only; the tailnet is the authenticated network, the Wi-Fi is shared with the cameras.)
+{% for port in tailscale_only_ports %}
 {% for addr in tailscale_addrs %}
-block return in quick proto tcp from any to {{ addr }} port {{ port }}
+{% if ':' in addr %}
+pass in quick inet6 proto tcp from fd7a:115c:a1e0::/48 to {{ addr }} port {{ port }}
+{% else %}
+pass in quick inet proto tcp from 100.64.0.0/10 to {{ addr }} port {{ port }}
+{% endif %}
 {% endfor %}
+block return in quick on ! lo0 inet proto tcp from any to any port {{ port }}
+block return in quick on ! lo0 inet6 proto tcp from any to any port {{ port }}
 {% endfor %}
 #
 # 2. Loopback-only services (loopback_only_ports): refused on every interface except lo0, LAN and tailnet alike.

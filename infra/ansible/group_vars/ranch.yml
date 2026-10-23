@@ -136,9 +136,11 @@ recorder_min_free_gb: 20
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)
 ranch_models_dir: /usr/local/ranch/models   # CoreML packages, not in git
-# Ports closed on the Tailscale addresses (pf anchor com.ranch): LAN-only services. 22 stays open on both.
-tailscale_blocked_ports:
-  - 5090                                     # web dashboard (LAN only)
+# Ports accepted ONLY from Tailscale clients (pf anchor com.ranch): refused on the ranch LAN and every other interface,
+# open on loopback. 23 Oct, Vlad: the dashboard is for the phone/laptop over the tailnet, never for the shared Wi-Fi.
+# 22 (ssh) stays open everywhere.
+tailscale_only_ports:
+  - 5090                                     # web dashboard (http://ranch-ai.tail6d04cd.ts.net:5090)
 # Ports refused on every interface except lo0 (pf anchor com.ranch), 23 Oct: anything that can attach a go2rtc consumer
 # makes go2rtc dial a camera, and the bridge UI on 5080 opens one WebSocket player + one snapshot per camera on load
 # (eight consumers per visit, including living_room_cam which nobody else holds). Only processes on the mini may reach
@@ -172,7 +174,7 @@ detector_family: coco            # key into MODEL_MAPPINGS; a fine-tuned model g
 # Status page (com.ranch.status, apps/status, docs/STATUS-DASHBOARD.md). No auth; LAN + tailnet only.
 status_port: 5091       # the status daemon's JSON/SSE API, loopback only since 22 Oct (the web app on 5090 is the page)
 status_host: 127.0.0.1
-# Next.js dashboard (com.ranch.web, apps/web, docs/WEB-DASHBOARD.md): the page on 5090, LAN-only via tailscale_blocked_ports.
+# Next.js dashboard (com.ranch.web, apps/web, docs/WEB-DASHBOARD.md): the page on 5090, tailnet-only via tailscale_only_ports.
 web_port: 5090
 web_host: 0.0.0.0
 web_max_streams: 4        # concurrent buffer MJPEG viewers (disk reads only; no camera is involved)

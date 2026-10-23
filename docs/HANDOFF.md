@@ -16,7 +16,7 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
    boxes missed by every model, seven of them large daytime donkeys. Reference labels: `labels-ranch-claude-revised-vlad-v1` (Vlad removed Claude's five cat boxes, rest accepted). Datasets on the Hub (`vladlenfedosov/ranch-frames`).
    21 Oct: class filter shipped (`docs/TAXONOMY.md`, `packages/taxonomy`): FPPF(all) 0.81 → 0.27, horse recall 0.30 →
    0.55 on the reference labels. 22 Oct: the taxonomy is editable on `:5090/taxonomy` with a measured gate and
-   versions (`docs/TAXONOMY-UI.md`); the status port is LAN-only. 22 Oct, later: the dashboard was rebuilt as a
+   versions (`docs/TAXONOMY-UI.md`); the status port was LAN-only (tailnet-only since 23 Oct). 22 Oct, later: the dashboard was rebuilt as a
    Next.js app (`apps/web`, `docs/WEB-DASHBOARD.md`) with unit, integration, Playwright and agentic e2e tests; the
    status daemon is API-only on loopback 5091; cameras follow `docs/CAMERA-ARCHITECTURE.md` (the app reads the
    recorder buffer, never go2rtc). Next: Post 1; the yolo11s swap row; Phase 1b
@@ -41,7 +41,7 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
 | Status page | `com.ranch.status`, `apps/status`, port 5090 on all interfaces, no auth; ~1 Node process, `node:http` + SSE, reads SQLite/MQTT/launchd/logs/seed dir |
 | App paths | tree `/usr/local/ranch/app` (rsync of the laptop checkout), models `/usr/local/ranch/models`, DB `/usr/local/ranch/var/ranch-events.sqlite`, frames `/usr/local/ranch/media/frames/<cam>/<date>/` |
 | Phase 1 paths | bridge binary + go2rtc in `/usr/local/ranch/bin`, source checkouts `/usr/local/ranch/src`, state `/usr/local/ranch/var`, media `/usr/local/ranch/media` (all owned by `ranch`) |
-| Ports | Dashboard 5090 on the LAN only (pf refuses it on the tailnet). **Loopback only since 23 Oct:** bridge UI/API 5080, go2rtc API 1984, RTSP 8554, WebRTC 8889/tcp (go2rtc binds 127.0.0.1; pf refuses them on every other interface), status API 5091, Mosquitto 1883. `make tunnel` forwards 5091 and 5080. Reason: anything that attaches a go2rtc consumer makes it dial a camera (docs/CAMERA-ARCHITECTURE.md) |
+| Ports | Dashboard 5090 **tailnet-only since 23 Oct** (pf accepts it only from Tailscale clients; refused on the ranch LAN): http://ranch-ai.tail6d04cd.ts.net:5090. **Loopback only since 23 Oct:** bridge UI/API 5080, go2rtc API 1984, RTSP 8554, WebRTC 8889/tcp (go2rtc binds 127.0.0.1; pf refuses them on every other interface), status API 5091, Mosquitto 1883. `make tunnel` forwards 5091 and 5080. Reason: anything that attaches a go2rtc consumer makes it dial a camera (docs/CAMERA-ARCHITECTURE.md) |
 | Measured headless, 10 min uptime | load 1.30, 91% memory free, 0 swap, ~212 processes, reboot→SSH 25–28 s |
 
 ## Operating it
@@ -52,12 +52,12 @@ make verify      # after a reboot: asserts no console user, no noisy agents, aud
 make snapshot    # infra/snapshots/<date>/ ; commit the result
 make logs        # live tail of every daemon (unified log); make logs-last H=3 for the last 3 hours
 make taxonomy-pull  # after editing classes/thresholds on :5090/taxonomy: bring the active version into the repo, commit
-# dashboard http://ranch-ai.local:5090 (Next.js, docs/WEB-DASHBOARD.md): home, cameras, detections, taxonomy, system, evals
+# dashboard http://ranch-ai.tail6d04cd.ts.net:5090 (Next.js, docs/WEB-DASHBOARD.md; tailnet only): home, cameras, detections, taxonomy, system, evals
 # make web-dev runs it on the laptop against the mini's API; the API itself is 127.0.0.1:5091 on the mini
 make bootstrap   # only on a freshly erased mini (Xcode CLT + Homebrew), see infra/MANUAL.md
 ```
-**Tracking the pipeline:** the status page at http://ranch-ai.tail6d04cd.ts.net:5090/ (`ranch-ai.local:5090` on the
-LAN) replaces the ssh one-liners: daemon pids and last log lines, per-camera thumbnail / last-frame age / frames
+**Tracking the pipeline:** the dashboard at http://ranch-ai.tail6d04cd.ts.net:5090/ (tailnet only since 23 Oct; the
+LAN name is refused) replaces the ssh one-liners: daemon pids and last log lines, per-camera thumbnail / last-frame age / frames
 per minute / horse count / online (= a kept frame in the last 60 s; the bridge's "streaming" is not liveness),
 detections by label for the last hour, latest events, seed-recorder progress, free disk, and a live MQTT ticker over
 server-sent events. JSON at `/api/status`, thumbnails at `/api/frame/<camera>`, stream at `/api/events`. No auth,

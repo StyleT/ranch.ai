@@ -1,7 +1,7 @@
 // Agentic e2e: Claude Code (the user's subscription, `claude -p`) drives the dashboard through the Playwright MCP
 // server and answers each task; a code oracle checks the answer against the daemon API (docs/WEB-DASHBOARD.md).
 //   make e2e-ai [MODEL=haiku|sonnet|opus] [TASK=name] [TARGET=live|tunnel|fixtures]
-//   live     browser -> http://ranch-ai.local:5090 (ranch LAN), oracle -> ssh tunnel 127.0.0.1:5091
+//   live     browser -> http://ranch-ai.tail6d04cd.ts.net:5090 (tailnet; 5090 is tailnet-only since 23 Oct), oracle -> ssh tunnel 127.0.0.1:5091
 //   tunnel   browser -> http://127.0.0.1:5097 (ssh tunnel to the mini's 5090), oracle -> 127.0.0.1:5091
 //   fixtures browser -> local standalone build on 5096 over the fixture daemon on 5095 (no ranch needed)
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
@@ -15,7 +15,7 @@ import { daemonApi, judge, type Answer, type Expected } from './oracle.ts';
 const here = dirname(fileURLToPath(import.meta.url)); const app = join(here, '..', '..'); const repo = join(app, '..', '..');
 const MODEL = process.env.RANCH_E2E_MODEL || 'haiku'; const TARGET = process.env.RANCH_E2E_TARGET || 'fixtures'; const ONLY = process.env.RANCH_E2E_TASK || '';
 const MCP_VERSION = '0.0.83';
-const targets = { live: { base: 'http://ranch-ai.local:5090', daemon: 'http://127.0.0.1:5091' }, tunnel: { base: 'http://127.0.0.1:5097', daemon: 'http://127.0.0.1:5091' }, fixtures: { base: 'http://127.0.0.1:5096', daemon: 'http://127.0.0.1:5095' } } as const;
+const targets = { live: { base: 'http://ranch-ai.tail6d04cd.ts.net:5090', daemon: 'http://127.0.0.1:5091' }, tunnel: { base: 'http://127.0.0.1:5097', daemon: 'http://127.0.0.1:5091' }, fixtures: { base: 'http://127.0.0.1:5096', daemon: 'http://127.0.0.1:5095' } } as const;
 if (!(TARGET in targets)) { console.error(`unknown target ${TARGET}`); process.exit(2); }
 const { base, daemon } = targets[TARGET as keyof typeof targets];
 

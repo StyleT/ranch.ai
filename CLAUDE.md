@@ -27,8 +27,9 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   pipe is safe. Template in `infra/launchd/<label>.plist.j2`, scripts in `infra/bin/`, registered in
   `roles/services/tasks/main.yml` (`ranch_daemons`). A changed plist is re-bootstrapped (kickstart would keep the
   old definition).
-- Ports listed in `tailscale_blocked_ports` (group_vars) are refused on the Tailscale addresses by a pf anchor and are
-  LAN-only (today: 5090, the dashboard). Ports in `loopback_only_ports` (5080 bridge, 1984/8554/8889 go2rtc) are refused
+- Ports listed in `tailscale_only_ports` (group_vars) are accepted by the pf anchor only from Tailscale clients on the
+  node's tailnet addresses and refused on the ranch LAN (today: 5090, the dashboard: `http://ranch-ai.tail6d04cd.ts.net:5090`;
+  `ranch-ai.local:5090` is refused). Ports in `loopback_only_ports` (5080 bridge, 1984/8554/8889 go2rtc) are refused
   on every interface but lo0: only processes on the mini may talk to go2rtc or the bridge, because a go2rtc consumer
   makes it dial a camera. Verify with `ssh ranch curl 127.0.0.1:<port>` and `make camera-owners`; `make tunnel` forwards
   5091 and 5080 to the laptop.

@@ -69,8 +69,8 @@
   become: true
   loop: "{{ ranch_daemons_retired | map('regex_replace', '^(.*)$', '/Library/LaunchDaemons/\\1.plist') | list + ranch_scripts_retired | map('regex_replace', '^(.*)$', ranch_bin_dir ~ '/\\1') | list }}"
 
-# Packet filter: close tailscale_blocked_ports on the node's Tailscale addresses and loopback_only_ports on every
-# interface but lo0 (docs/CAMERA-ARCHITECTURE.md, docs/WEB-DASHBOARD.md).
+# Packet filter: tailscale_only_ports accepted only from Tailscale clients on the node's tailnet addresses (refused on
+# the LAN), loopback_only_ports refused on every interface but lo0 (docs/WEB-DASHBOARD.md, docs/CAMERA-ARCHITECTURE.md).
 - name: Tailscale addresses of this node
   ansible.builtin.command: /opt/homebrew/bin/tailscale ip
   register: ts_ip
@@ -120,6 +120,17 @@
 - name: Camera owners report
   ansible.builtin.debug:
     msg: "{{ owners.stdout_lines }}"
+
+# Tailnet-only ports must answer a Tailscale client: the laptop reaches the mini's tailnet address during provisioning.
+- name: Tailnet-only ports reachable from the laptop over Tailscale
+  ansible.builtin.command: "curl -s -m 5 -o /dev/null -w '%{http_code}' http://{{ ansible_host | default(inventory_hostname) }}:{{ item }}/"
+  register: open_ts
+  delegate_to: localhost
+  changed_when: false
+  check_mode: false
+  failed_when: open_ts.rc != 0
+  loop: "{{ tailscale_only_ports }}"
+  when: not ansible_check_mode
 
 # Loopback-only ports must be refused from outside the mini. Checked from the laptop over the tailnet address (the
 # LAN path is the same pf rule on another interface; curl exit 7 = connection refused is the pass condition).

@@ -17,7 +17,7 @@ view on a camera page is an MJPEG the daemon assembles from that buffer as the r
 capped at four concurrent viewers, closed when the page is hidden or left.
 
 ```
-browser (LAN) ──:5090──> com.ranch.web   Next standalone (pf refuses 5090 on the tailnet)
+browser (tailnet) ──:5090──> com.ranch.web   Next standalone (pf accepts 5090 only from Tailscale clients; the LAN is refused, 23 Oct)
                               │ loopback
                               └──> com.ranch.status  127.0.0.1:5091   JSON + SSE + frames + buffer MJPEG + taxonomy + bench
                                         └──> SQLite, MQTT, launchctl, log show, <media>/buffer/<cam>/ (written by com.ranch.recorder)
@@ -86,6 +86,9 @@ Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/we
 - M6 (22 Oct): agentic e2e, below.
 - 23 Oct: live-view crash fixed (Incidents, below); the Wyze bridge's metrics page moved to `/system`; bridge UI and
   go2rtc ports loopback-only; player retry backoff.
+- 23 Oct, later: 5090 is **tailnet-only** (Vlad: the dashboard is for the phone and laptop over Tailscale, never for the
+  shared Wi-Fi). pf passes 5090 only from `100.64.0.0/10` / `fd7a:115c:a1e0::/48` to the node's tailnet addresses and
+  refuses it on every other interface; loopback stays open for `ssh -L`. The agentic e2e `live` target uses the MagicDNS name.
 
 ## Incidents
 
@@ -108,7 +111,7 @@ tools removed, an allowlist of browser tools (no `browser_evaluate`), `--permiss
 `--max-turns`, `--max-budget-usd 0.50`, `--no-session-persistence`, a rubric appended to the system prompt
 (`e2e/ai/rubric.md`), and `--json-schema` for a structured answer. The run happens from a neutral temp cwd with
 `ANTHROPIC_API_KEY` unset. Targets: `tunnel` (default: the browser reaches the mini's 5090 through an ssh tunnel,
-so it works off the ranch LAN), `live` (ranch LAN), `fixtures` (the fixture daemon + a local build, no ranch).
+so it works anywhere), `live` (http://ranch-ai.tail6d04cd.ts.net:5090 over the tailnet), `fixtures` (the fixture daemon + a local build, no ranch).
 
 Tasks (`e2e/ai/tasks.ts`) and their oracles (`e2e/ai/oracle.ts`, code over `@ranch/contracts`, evaluated before
 and after the run because live data moves): camera with the most horse detections in the last hour; donkey_cam's

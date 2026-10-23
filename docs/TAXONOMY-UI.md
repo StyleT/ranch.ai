@@ -67,8 +67,8 @@ leaderboard of taxonomy changes.
 
 ## 6. Security and limits
 
-:5090 is LAN-only since 22 Oct (pf refuses it on the Tailscale addresses), and still without auth; the page can
-change what the detector counts, so a write needs more than "is on the LAN". Minimum in this step: `RANCH_STATUS_WRITE_TOKEN` (on the mini in
+:5090 was LAN-only from 22 Oct and is tailnet-only since 23 Oct (pf accepts it only from Tailscale clients), still
+without auth of its own; the page can change what the detector counts, so a write needs more than "is on the tailnet". Minimum in this step: `RANCH_STATUS_WRITE_TOKEN` (on the mini in
 `~/.config/ranch/status.env`), required as a header for every write endpoint; the page asks for it once and keeps
 it in session storage. Reads stay open. The token is the same mechanism the later MCP surface will use.
 
