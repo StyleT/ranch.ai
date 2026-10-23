@@ -20,7 +20,7 @@ export type CameraRow = {
   horse_last_min: number | null; model: string | null; fw: string | null; ip: string | null; buffer_frames: number; buffer_age_s: number | null;
   live_age_s: number | null;   // seconds since the recorder last rewrote this camera's HLS playlist (null = no HLS output yet)
   connected: boolean | null;   // netprobe: go2rtc holds a live session with the camera (null = no probe yet)
-  state: 'connected' | 'degraded' | 'down' | 'unknown';   // connected + frames flowing | connected but no frames for 10 s | no session | unknown
+  state: 'connected' | 'degraded' | 'down' | 'unknown';   // connected = JPEG buffer fresh (delivering video) | down = stale | unknown = no buffer yet ('degraded' retired 23 Oct)
 }
 export type Status = {
   ts: string; host: string; uptime_s: number; load: number[]; disk_free_gb: number | null; disk_total_gb: number | null;
@@ -148,7 +148,6 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
   const iso = (msAgo: number) => new Date(now.getTime() - msAgo).toISOString();
   const [daemons, df, bridge, logLines] = await Promise.all([launchd(), disk(), bridgeCameras(), lastLogLines()]);
   const buffer = bufferState(); const live = liveState();
-  const probe = (mqttStatus.get('netprobe') ?? {}) as Record<string, { connected?: boolean | null } | unknown>;
   const db = store.db;
   const camNames = new Set<string>([
     ...Object.keys(bridge).filter((n) => !config.camerasExclude.includes(n)),
@@ -163,11 +162,13 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
     const b = bridge[name]; const buf = buffer[name];
     const bufAge = buf?.ageS !== null && buf?.ageS !== undefined && Number.isFinite(buf.ageS) ? buf.ageS : null;
     const liveAge = live[name]?.ageS === null || live[name]?.ageS === undefined ? null : Math.round(live[name]!.ageS!);
-    const pr = probe[name] as { connected?: boolean | null } | undefined; const connected = typeof pr?.connected === 'boolean' ? pr.connected : null;
+    // "connected" = the camera is delivering video, measured by the JPEG buffer (the recorder always writes it; the HLS
+    // playlist is on-demand since 23 Oct and absent when nobody is watching, so it cannot be the ground truth).
+    const connected = bufAge === null ? null : bufAge < STALE_S;
     // online = the recorder has a fresh buffered frame; a kept frame in the last minute is the fallback when no buffer exists
     const online = bufAge !== null ? bufAge < STALE_S : age !== null && age < 60;
     return { name, online, last_frame_ts: last?.ts ?? null, last_frame_age_s: age === null ? null : Math.round(age), width: last?.width ?? null, height: last?.height ?? null,
-      frames_10m: per10m.get(name) ?? 0, horse_last_min: horse.get(name) ?? null, model: b?.model ?? null, fw: b?.fw ?? null, ip: b?.ip ?? null, buffer_frames: buf?.frames ?? 0, buffer_age_s: bufAge === null ? null : Math.round(bufAge), live_age_s: liveAge, connected, state: connected === null ? 'unknown' : !connected ? 'down' : liveAge !== null && liveAge < 10 ? 'connected' : 'degraded' };
+      frames_10m: per10m.get(name) ?? 0, horse_last_min: horse.get(name) ?? null, model: b?.model ?? null, fw: b?.fw ?? null, ip: b?.ip ?? null, buffer_frames: buf?.frames ?? 0, buffer_age_s: bufAge === null ? null : Math.round(bufAge), live_age_s: liveAge, connected, state: connected === null ? 'unknown' : connected ? 'connected' : 'down' };
   });
   const labels = db.prepare(`SELECT d.label, COUNT(*) n, ROUND(AVG(d.confidence), 2) conf FROM detections d JOIN frames f ON f.id = d.frame_id
     WHERE f.ts >= ? GROUP BY d.label ORDER BY n DESC LIMIT 12`).all(iso(3600e3)) as { label: string; n: number; conf: number }[];

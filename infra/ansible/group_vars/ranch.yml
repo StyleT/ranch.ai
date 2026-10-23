@@ -136,15 +136,16 @@ ranch_cameras:
 recorder_jpeg_q: 4
 recorder_buffer_min: 5
 recorder_min_free_gb: 20
-# HLS live output (23 Oct, docs/WEB-DASHBOARD.md): the same ffmpeg also writes <media>/live/<cam>/ (fMP4 segments, audio
-# AAC 8 kHz). list x seg_s seconds are kept; the player's latency is ~2-3 segments. The cameras' own keyframes come
-# 2-18 s apart, so the video is re-encoded on the Apple media engine with a keyframe every segment (recorder_transcode;
-# false = copy the camera's H.264 and accept 2-18 s segments).
+# HLS live view (23 Oct, docs/WEB-DASHBOARD.md). The same ffmpeg also writes <media>/live/<cam>/ (fMP4, 1 s segments,
+# AAC audio) but ONLY while a camera is being watched: re-encoding all seven cameras at once saturated the M2's single
+# video-encode engine and the picture fell minutes behind. On-demand, normally 0-1 encoders run and keep real-time at
+# ~2-3 s latency. The encode is software-decoded (robust to the lossy TUTK H.264) and hardware-encoded at 720p.
 recorder_hls_seg_s: 1
 recorder_hls_list: 8
 recorder_audio: true
-recorder_transcode: true
 recorder_hls_bitrate: 2000k
+recorder_live_height: 720      # encode the live view at this height (cameras are 1440p)
+recorder_demand_ttl: 20        # a camera is "watched" if the daemon touched <live>/<cam>/.demand within this many seconds
 
 # ---- Phase 1: apps --------------------------------------------------------------
 ranch_app_dir: /usr/local/ranch/app         # rsync of the working tree (roles/app)

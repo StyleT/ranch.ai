@@ -70,6 +70,15 @@ not grown for 30 s (the camera dropped), `PAUSED` when the page is hidden (the p
 (browser policy; the element is muted imperatively before `play()`, because React's `muted` prop is not a server-rendered
 attribute and Chrome decided "blocked" before hydration); the speaker button unmutes. The MJPEG-of-keyframes view is gone.
 
+## Live view latency (23 Oct)
+
+The recorder transcodes to HLS only while a camera is being watched (docs/CAMERA-ARCHITECTURE.md): the always-on path
+re-encoding all seven cameras saturated the media engine and the picture froze minutes behind. On-demand, one encoder
+runs and the recorder output is real-time (0 s). Measured glass-to-glass in Chrome over the tailnet (burned-in camera
+clock vs screenshot wall time): **~4 s**, moving, reliable. That is the standard-HLS floor (hold-back = 3x target
+duration, >= 3 s, plus a segment). The badge reports latency from the playhead's distance to the buffered edge plus the
+newest segment's age (capped at one segment so a stale poll does not inflate it). True sub-3 s needs LL-HLS or WebRTC.
+
 ## Live data
 
 One `EventSource('/api/ui/live')` per app (`features/live/LiveProvider`). `status` events invalidate the home

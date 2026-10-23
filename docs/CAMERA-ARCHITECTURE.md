@@ -207,6 +207,32 @@ ledger row closed as `recovered` after 30 s. The `udp` experiment the same eveni
 reaction because frames never stopped (TUTK relayed around the LAN block after ~40 s); recovery 26 s after the rule
 was removed.
 
+## 23 Oct, late: the live view froze; root cause and the on-demand rewrite
+
+The milestone-1 live view (re-encode every camera to HLS with 1 s keyframes) looked frozen and ran minutes behind while
+the files stayed fresh. Root cause, measured hop by hop (burned-in camera clock vs file write time, all under the live
+load): the camera scene reaches go2rtc in real-time (0-1 s); the H.264 decoder, hardware or software, keeps real-time
+(24 of 25 frames distinct); only the **hardware H.264 encoder** falls behind. Seven 1440p streams re-encoded at once on
+the M2's single video-encode engine ran the pipeline at ~0.15-0.44x real-time, so each encoder's output queue grew
+without bound (16 s, then 100 s a minute later, then minutes). The three "live" badges never caught it because they
+timed the playlist *file*, not the *picture*.
+
+Fix: **transcode on demand, two ffmpeg roles per camera** (both read the same go2rtc RTSP; go2rtc shares one producer,
+so this is still one camera connection and `camera-owners.sh` allows up to two recorder consumers):
+- **jpeg (always on)**: decode keyframes only -> the rolling JPEG buffer. Light, real-time, and it holds the go2rtc
+  producer up at all times, so starting or stopping the live encoder never re-dials the camera.
+- **hls (only while watched)**: software-decode (conceals the lossy TUTK corruption where the hardware decoder
+  hard-fails), scale to 720p, `format=yuv420p` (the hardware encoder rejects the decoder's full-range yuvj420p),
+  hardware-encode with a keyframe every segment. The daemon touches `<live>/<cam>/.demand` on every playlist request;
+  the recorder runs the encoder while that marker is fresh and stops it otherwise.
+
+Normally zero or one encoder runs, so the pipeline is real-time: measured 0 s at the recorder output, **~4 s
+glass-to-glass** in the browser. "connected" is now the JPEG buffer's freshness (always written), not the on-demand
+playlist. The ~4 s is the standard-HLS floor: the protocol's hold-back is 3x the target duration (>= 3 s) plus a
+segment, independent of hls.js tuning. Sub-3 s needs LL-HLS (ffmpeg's hls muxer does not emit it well) or WebRTC from
+go2rtc (which would share the recorder's producer, so no extra camera connection, but the web app must proxy the
+WebRTC signalling) -- a separate piece of work, not done here.
+
 ## Operating notes
 
 - A camera is "online" when its buffer has a frame newer than `RANCH_STALE_S` (30 s). Staleness means the

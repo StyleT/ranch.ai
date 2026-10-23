@@ -10,6 +10,7 @@ export type LiveState =
 export const OFFLINE_AFTER_S = 30;   // > list_size × seg_s would mean the playlist is fully stale; 30 s also matches RANCH_STALE_S
 export const STALL_AFTER_S = 8;      // playback not advancing for this long while the playlist is fresh
 export const STARTING_GRACE_S = 15;
+export const EDGE_AGE_CAP = 2;   // the newest frame at the source is at most ~one segment old when the playlist is fresh
 
 export interface LiveFacts {
   nowMs: number;
@@ -29,14 +30,19 @@ export const playlistAgeNow = (f: Pick<LiveFacts, 'nowMs' | 'playlistAgeS' | 'pl
 export function deriveLiveState(f: LiveFacts): LiveState {
   if (!f.visible) return { kind: 'paused' };
   const ageS = playlistAgeNow(f);
+  // Spin-up grace first: the HLS encoder is on-demand (23 Oct), so when the page opens the playlist may 404 for a few
+  // seconds until the recorder starts it. During the grace, before any frame has played, that is "connecting", not an
+  // outage. After the grace with still no playlist, it is offline.
+  if (f.lastProgressMs === null && !f.error && f.nowMs - f.startedMs < STARTING_GRACE_S * 1000) return { kind: 'starting' };
   if (ageS !== null && ageS > OFFLINE_AFTER_S) return { kind: 'offline', sinceMs: f.nowMs - ageS * 1000 };
   const progressing = f.lastProgressMs !== null && f.nowMs - f.lastProgressMs < STALL_AFTER_S * 1000;
   if (progressing && !f.error) {
-    // the buffered edge is at most one segment behind what the recorder wrote; what is written is `ageS` old
-    const latency = ageS === null || f.edgeGapS === null ? null : Math.round((ageS + Math.max(0, f.edgeGapS)) * 10) / 10;
+    // latency = how far the playhead is behind the buffered edge (edgeGapS) plus how old the newest frame at the source
+    // is. The latter is bounded by one segment when the playlist is fresh, so cap the playlist-age term at EDGE_AGE_CAP
+    // rather than letting a stale 5 s poll inflate the number (that made the badge read 6.5 s when the real delay was 4).
+    const latency = f.edgeGapS === null ? null : Math.round((Math.max(0, f.edgeGapS) + Math.min(ageS ?? 0, EDGE_AGE_CAP)) * 10) / 10;
     return { kind: 'live', latencyS: latency };
   }
-  if (f.lastProgressMs === null && !f.error && f.nowMs - f.startedMs < STARTING_GRACE_S * 1000) return { kind: 'starting' };
   return { kind: 'stalled', sinceMs: f.lastProgressMs ?? f.startedMs };
 }
 

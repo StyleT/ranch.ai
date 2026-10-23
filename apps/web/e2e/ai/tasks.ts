@@ -34,6 +34,17 @@ export const tasks: Task[] = [
     oracle: async (api) => { const rows = await api.get(C.FramesResponse, '/api/frames?since=24h&moving=1&label=person&limit=1'); const top = rows[0]; if (!top) return { kind: 'predicate', describe: 'no moving person: the answer must say none', check: (a) => /none/.test((a.value ?? a.answer).toLowerCase()) }; return { kind: 'predicate', describe: `camera ${top.camera} at ${top.ts}`, check: (a) => (a.value ?? a.answer).toLowerCase().includes(top.camera.replace('_cam', '').toLowerCase()) }; },
   },
   {
+    name: 'live-video',
+    goal: 'Open the camera page for back_yard_cam. Look at the live video area at the top: a badge in its corner says either "LIVE · N s" (with a latency), "connecting…", "buffering · N s" or "camera reconnecting · N". Wait up to 20 seconds for it to settle, then report the badge text you see, as shown.',
+    // the oracle reads the recorder's facts: frames flowing within 10 s => the player must say LIVE (or still be connecting); otherwise it must not say LIVE
+    oracle: async (api) => { const s = await api.get(C.Status, '/api/status'); const c = s.cameras.find((x) => x.name === 'back_yard_cam'); const flowing = c?.connected === true && (c.live_age_s ?? 999) < 10; return { kind: 'predicate', describe: flowing ? 'frames are flowing: the badge must say LIVE (connecting… is acceptable only if the page was just opened)' : `frames are not flowing (connected=${c?.connected}, live_age=${c?.live_age_s}): the badge must not say LIVE`, check: (a) => { const t = (a.value ?? a.answer).toLowerCase(); return flowing ? /live|connecting/.test(t) : !/^live|live ·/.test(t); } }; },
+  },
+  {
+    name: 'remediation-24h',
+    goal: 'Open the System page and find the "Camera supervisor · ledger · 24 h" table. Which cameras have an "outage" row in it? Answer with the camera names as shown (comma-separated), or "none" if the table says there were no outages.',
+    oracle: async (api) => { const rows = await api.get(C.RemediationResponse, '/api/remediation?since=24h&limit=200'); const cams = [...new Set(rows.filter((r) => r.action === 'down').map((r) => r.camera))]; return cams.length ? { kind: 'set', values: cams } : { kind: 'predicate', describe: 'no outages: the answer must say none', check: (a) => /none/.test((a.value ?? a.answer).toLowerCase()) }; },
+  },
+  {
     name: 'taxonomy-score-gate',
     model: 'sonnet', maxTurns: 30,
     goal: 'Open the Taxonomy page. In the coco mappings table, change the threshold of the "person" raw label to 0.7 (type into its threshold input). Then click "Score draft" and wait for the gate table. Report whether the gate passed: answer "pass" or "fail". Do NOT click Apply.',

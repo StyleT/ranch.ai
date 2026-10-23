@@ -13,7 +13,7 @@
 // Every JPEG goes through jpeg.ts (read into memory, then sharp): sharp(path) memory-maps and a file still being written
 // killed this process with SIGBUS 16 times on 22-23 Oct.
 import { createServer, type ServerResponse } from 'node:http';
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, statSync, createReadStream } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, statSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -238,6 +238,10 @@ const server = createServer(async (req, res) => {
       // The recorder's HLS files (docs/WEB-DASHBOARD.md): plain file reads, complete files only (ffmpeg writes them to a
       // temp name and renames). The playlist carries x-live-age-s so the player and tests can read staleness.
       const [, , , cam, file] = url.pathname.split('/');
+      // On-demand transcode (23 Oct): touch <live>/<cam>/.demand so the recorder runs the HLS encoder for this camera
+      // only while it is being watched. A playlist request repeats every few seconds while the player is open; the
+      // recorder drops the encoder when the marker goes stale. 404 while it spins up is normal (the player waits).
+      if (file === 'index.m3u8') { try { const d = join(config.liveDir, cam!); mkdirSync(d, { recursive: true }); writeFileSync(join(d, '.demand'), ''); } catch { /* best effort */ } }
       const path = join(config.liveDir, cam!, file!);
       let st; try { st = statSync(path); } catch { res.writeHead(404); res.end('no live file'); return; }
       const headers: Record<string, string> = { 'content-length': String(st.size) };

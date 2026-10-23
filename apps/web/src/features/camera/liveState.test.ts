@@ -23,6 +23,11 @@ describe('deriveLiveState', () => {
     const s = deriveLiveState({ ...base, nowMs: base.lastProgressMs! + (STALL_AFTER_S + 1) * 1000, playlistPolledMs: base.lastProgressMs! + STALL_AFTER_S * 1000, playlistAgeS: 1 });
     expect(s.kind).toBe('stalled');
   });
+  it('shows connecting, not offline, while the on-demand encoder spins up (playlist 404, within grace, never played)', () => {
+    const f = { ...base, lastProgressMs: null, playlistAgeS: 999, playlistPolledMs: T0 + 2_000, nowMs: T0 + 3_000 };
+    expect(deriveLiveState(f).kind).toBe('starting');
+    expect(deriveLiveState({ ...f, nowMs: T0 + (STARTING_GRACE_S + 1) * 1000, playlistPolledMs: T0 + STARTING_GRACE_S * 1000 }).kind).toBe('offline');
+  });
   it('is offline when the playlist is stale, even if the last frames are still "playing" from the buffer', () => {
     const s = deriveLiveState({ ...base, playlistAgeS: OFFLINE_AFTER_S + 5 });
     expect(s.kind).toBe('offline');

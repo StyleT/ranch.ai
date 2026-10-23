@@ -41,6 +41,7 @@
     - { name: recorder.sh, daemon: com.ranch.recorder }
     - { name: camera-owners.sh, daemon: "" }
     - { name: e2e-chaos.sh, daemon: "" }
+    - { name: verify-live.sh, daemon: "" }
     - { name: ranch, daemon: "" }
   loop_control: { label: "{{ item.name }}" }
   register: scripts

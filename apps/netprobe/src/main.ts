@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { config } from '@ranch/config';
 import { connectBus, topics } from '@ranch/bus';
 import { EventStore } from '@ranch/events';
-import { statSync } from 'node:fs';
+import { statSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const PROBE_S = Number(process.env.RANCH_PROBE_S ?? 15);
@@ -67,11 +67,14 @@ async function wifi(): Promise<Record<string, unknown> | null> {
 }
 
 const PROBE_KEEP_D = Number(process.env.RANCH_PROBE_KEEP_D ?? 7);
-const FRESH_S = Number(process.env.RANCH_FRESH_S ?? 15);
-/** Seconds since the recorder last wrote this camera's HLS playlist: frames flowing is the ground truth for "the camera
- *  delivers video". go2rtc's stream list can lie: after the bridge re-registers a stream (DELETE+PUT), the recorder's
- *  ffmpeg keeps consuming the orphaned old stream object while the new one shows no producer and no consumers (23 Oct). */
-function liveAgeS(cam: string): number | null { try { return (Date.now() - statSync(join(config.liveDir, cam, 'index.m3u8')).mtimeMs) / 1000; } catch { return null; } }
+const FRESH_S = Number(process.env.RANCH_FRESH_S ?? 30);
+/** Seconds since the recorder last wrote this camera's newest JPEG buffer frame. Frames on disk are the ground truth for
+ *  "the camera delivers video": the recorder always writes the buffer (the HLS playlist is on-demand since 23 Oct), and
+ *  go2rtc's stream list can lie (an orphaned stream object after the bridge re-registers, or a session that reads
+ *  connected ~90 s after the packets stop). */
+function liveAgeS(cam: string): number | null {
+  try { const dir = join(config.bufferDir, cam); const f = readdirSync(dir).filter((x) => /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.jpg$/.test(x)).sort().pop(); return f ? (Date.now() - statSync(join(dir, f)).mtimeMs) / 1000 : null; } catch { return null; }
+}
 
 async function main(): Promise<void> {
   const bus = await connectBus('netprobe');

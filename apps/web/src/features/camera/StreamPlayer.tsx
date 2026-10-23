@@ -9,7 +9,7 @@ import type Hls from 'hls.js';
 import { tid } from '@/lib/testids';
 import { deriveLiveState, parsePlaylist, retryDelayMs, badgeText, type LiveFacts } from './liveState';
 
-const POLL_MS = 5_000;
+const POLL_MS = 2_000;   // poll the tiny playlist often so x-live-age-s stays fresh and the latency badge is honest
 const nativeHls = (v: HTMLVideoElement) => v.canPlayType('application/vnd.apple.mpegurl') !== '';
 
 export function StreamPlayer({ camera, poster, playlist }: { camera: string; poster: string; playlist: string }) {
@@ -46,9 +46,10 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
     else {
       void import('hls.js').then(({ default: HlsCtor }) => {
         if (cancelled || !HlsCtor.isSupported()) { if (!cancelled) fail(); return; }
-        // 1 s segments: aim 2 s behind the edge, never more than 5 s (hls.js speeds playback up to 1.2× to catch up).
-        // Measured 23 Oct with the count-based defaults: 5.7–8.3 s; with these: see docs/WEB-DASHBOARD.md.
-        hls = new HlsCtor({ liveSyncDuration: 2, liveMaxLatencyDuration: 5, maxLiveSyncPlaybackRate: 1.2, enableWorker: true, lowLatencyMode: false });
+        // 1 s segments, on-demand encoder is real-time at the recorder (0 s), so the latency is all hls.js hold-back.
+        // Sit ~1.5 s behind the edge, speed up to 1.5x to catch up, cap at 4 s. lowLatencyMode makes hls.js target the
+        // edge aggressively even without LL-HLS parts. Measured glass-to-glass after this: see docs/WEB-DASHBOARD.md.
+        hls = new HlsCtor({ liveSyncDuration: 1, liveMaxLatencyDuration: 3, maxLiveSyncPlaybackRate: 2, liveDurationInfinity: true, lowLatencyMode: true, enableWorker: true, backBufferLength: 4 });
         hls.on(HlsCtor.Events.ERROR, (_e, data) => { if (data.fatal) fail(); });
         hls.on(HlsCtor.Events.MANIFEST_PARSED, play);
         hls.on(HlsCtor.Events.FRAG_BUFFERED, () => { if (video.paused) play(); });

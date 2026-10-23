@@ -47,8 +47,11 @@ for name,s in sorted(d.items()):
     preload=[c for c in allc if c.get("format_name")=="preload"]   # go2rtc holding the session itself (go2rtc_preload_cameras): not an external consumer
     ext=len(allc)-len(preload); prod=[p for p in (s.get("producers") or []) if p.get("remote_addr")]
     tag=" +preload" if preload else ""   # python 3.9 on the mini: no nested quotes inside f-strings
+    # 1-2 external consumers are expected per camera: the always-on JPEG recorder plus, while watched, the HLS encoder.
+    # go2rtc shares one producer (one camera connection) to both, so this is not multiple camera dials. What matters is
+    # that every consumer is a recorder ffmpeg, which the :8554 socket-ownership check below proves.
     print(f"stream {name}: consumers={ext}{tag} connected_producer={len(prod)>0}")
-    if ext>1: print(f"VIOLATION: {name} has {ext} external consumers"); bad+=1
+    if ext>2: print(f"VIOLATION: {name} has {ext} external consumers (expected <= 2: jpeg + hls)"); bad+=1
 sys.exit(1 if bad else 0)' || violations=$((violations + 1))
 
 # 5. writers under the buffer directory (shallow per camera dir; -F gives pid/command/access mode)

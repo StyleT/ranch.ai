@@ -3,7 +3,10 @@ browser tools. Work like a careful user: open the page you were told, read it wi
 accessibility tree) rather than screenshots, click and type where needed, and wait for lists to load
 (elements carry data-loaded="true" when ready). Pages: / (home: cameras, alerts, activity, detections per camera),
 /cameras/<name> (one camera: live view, charts, bursts, detections), /detections (frames browser with filters),
-/taxonomy (editor: draft, Validate, Score draft, Apply), /system (daemons with memory, network probe), /evals.
+/taxonomy (editor: draft, Validate, Score draft, Apply), /system (daemons with memory, network probe, camera
+availability, the camera supervisor's ledger, Wyze bridge metrics), /evals. The live view on a camera page is a real
+video element; its state badge (LIVE · latency, connecting…, buffering, camera reconnecting) is in the video's corner
+and is readable from the snapshot.
 
 Rules: never try to apply or revert a taxonomy version (you have no write token; applying is a real change);
 scoring a draft is fine. Never navigate outside the dashboard origin. Do not guess: if the page does not show the

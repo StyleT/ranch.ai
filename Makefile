@@ -50,6 +50,9 @@ tunnel:           ## ssh -L to the mini's loopback-only ports: status API 5091, 
 camera-owners:    ## Who consumes camera streams right now (go2rtc consumers, :8554 sockets, buffer writers); the single-consumer rule, measured
 	@ssh $(HOST) /usr/local/ranch/bin/camera-owners.sh
 
+verify-live:      ## Live-view soak on the mini: every connected camera's HLS playlist stays fresh for MINUTES (default 30); crash reports, web errors, CPU, owners asserted at the end
+	@ssh $(HOST) /usr/local/ranch/bin/verify-live.sh $(or $(MINUTES),30)
+
 e2e-chaos:        ## Fault injection on the mini (software only): stop one camera's feed, assert detection, watchdog re-attach, supervisor row, recovery. make e2e-chaos [CAM=back_yard_cam] [DURATION=90] [MODE=stop|udp]
 	@ssh $(HOST) /usr/local/ranch/bin/e2e-chaos.sh $(or $(CAM),back_yard_cam) $(or $(DURATION),90) $(or $(MODE),stop)
 
