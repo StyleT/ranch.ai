@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { config } from '@ranch/config';
 import { connectBus, topics } from '@ranch/bus';
+import { EventStore } from '@ranch/events';
 
 const PROBE_S = Number(process.env.RANCH_PROBE_S ?? 15);
 const WIFI_EVERY = Number(process.env.RANCH_WIFI_EVERY ?? 4); // probes
@@ -60,8 +61,13 @@ async function wifi(): Promise<Record<string, unknown> | null> {
   } catch (e) { return { error: String(e).slice(0, 120) }; }
 }
 
+const PROBE_KEEP_D = Number(process.env.RANCH_PROBE_KEEP_D ?? 7);
+
 async function main(): Promise<void> {
   const bus = await connectBus('netprobe');
+  // every sample also lands in SQLite (camera_probe): the availability numbers on the dashboard and the supervisor's
+  // facts come from there, not from the unified log (docs/CAMERA-ARCHITECTURE.md, 23 Oct)
+  const store = new EventStore(config.dbPath);
   const prev = new Map<string, StreamState>();
   const flowing = new Map<string, boolean>();
   let tick = 0;
@@ -69,7 +75,8 @@ async function main(): Promise<void> {
   for (;;) {
     const t0 = Date.now();
     const cams = await cameras();
-    const snapshot: Record<string, unknown> = { ts: new Date().toISOString(), pid: process.pid };
+    const row_ts = new Date().toISOString();
+    const snapshot: Record<string, unknown> = { ts: row_ts, pid: process.pid };
     await Promise.all(cams.map(async (c) => {
       const [st, rtt] = await Promise.all([streamState(c.name), ping(c.ip)]);
       const p = prev.get(c.name);
@@ -77,6 +84,7 @@ async function main(): Promise<void> {
       const row = { camera: c.name, ip: c.ip, producer: st?.producer ?? null, connected: st?.connected ?? null, state: st?.state ?? null, consumers: st?.consumers ?? null, rx_bytes_delta: delta, remote: st?.remote ?? null, ping_ms: rtt };
       log('probe', row);
       snapshot[c.name] = row;
+      if (st) { try { store.insertProbe({ ts: row_ts, camera: c.name, connected: st.connected, ping_ms: rtt, consumers: st.consumers }); } catch (e) { log('probe insert failed', { error: String(e).slice(0, 120) }); } }
       if (st) {
         if (p && p.producer !== st.producer) log('producer changed', { camera: c.name, producer: st.producer });
         if (p && p.connected !== st.connected) log('connected changed', { camera: c.name, connected: st.connected, remote: st.remote, state: st.state });
@@ -89,6 +97,7 @@ async function main(): Promise<void> {
     if (tick % WIFI_EVERY === 0) { const w = await wifi(); log('wifi', w ?? {}); snapshot.wifi = w; }
     try { await bus.publish(topics.status('netprobe'), snapshot, { retain: true }); } catch { /* broker hiccup */ }
     tick++;
+    if (tick % 240 === 0) { try { const n = store.pruneProbes(new Date(Date.now() - PROBE_KEEP_D * 86400e3).toISOString()); if (n) log('probes pruned', { deleted: n, keep_days: PROBE_KEEP_D }); } catch { /* next hour */ } }
     await new Promise((r) => setTimeout(r, Math.max(1000, PROBE_S * 1000 - (Date.now() - t0))));
   }
 }

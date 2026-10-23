@@ -1,2 +1,2 @@
 { "name": "@ranch/netprobe", "version": "0.0.1", "private": true, "type": "module",
-  "dependencies": { "@ranch/config": "*", "@ranch/bus": "*" } }
+  "dependencies": { "@ranch/config": "*", "@ranch/bus": "*", "@ranch/events": "*" } }

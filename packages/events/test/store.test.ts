@@ -4,7 +4,7 @@ import { EventStore, parseSince, detectionsDiffer } from '../src/index.ts';
 
 test('migrates an empty database and round-trips frames, detections and events', () => {
   const s = new EventStore(':memory:');
-  assert.equal(s.schemaVersion, 5);
+  assert.equal(s.schemaVersion, 6);
   const fid = s.insertFrame({ ts: '2026-10-15T00:00:00.000Z', camera: 'front_porch_cam', path: '/x/a.jpg', reason: 'floor', change: 0.01 });
   s.insertDetections(fid, [{ model: 'yolo11n', label: 'horse', confidence: 0.9, x: 0.1, y: 0.2, w: 0.3, h: 0.4 }]);
   assert.equal(s.detectionsForFrame(fid)[0]?.label, 'horse');
@@ -96,5 +96,23 @@ test('series and track summaries', () => {
   assert.equal(s.trackSummaries({ since: at(0), label: 'person' }).length, 0);
   const fw = s.frameWithBurst(head)!; assert.equal(fw.burst.length, 1); assert.equal(fw.burst[0]!.detections.length, 1);
   assert.equal(s.frameWithBurst(999999), undefined);
+  s.close();
+});
+
+test('availability from probe samples: percentage, outages with durations, ongoing outage, buckets', () => {
+  const s = new EventStore(':memory:');
+  const t0 = Date.parse('2026-10-23T00:00:00.000Z'); const at = (i: number) => new Date(t0 + i * 15_000).toISOString();
+  // 40 samples (10 min): up 0-9, down 10-13 (60 s), up 14-29, down 30-39 (still down at the end)
+  for (let i = 0; i < 40; i++) s.insertProbe({ ts: at(i), camera: 'donkey_cam', connected: !(i >= 10 && i <= 13) && i < 30, ping_ms: 12, consumers: 1 });
+  for (let i = 0; i < 40; i++) s.insertProbe({ ts: at(i), camera: 'wash_stall', connected: true, ping_ms: null, consumers: 1 });
+  const until = at(40);
+  const [donkey, wash] = s.availability({ since: at(0), until, bucketS: 300 });
+  assert.equal(donkey?.camera, 'donkey_cam'); assert.equal(donkey?.samples, 40); assert.equal(donkey?.connected_samples, 26);
+  assert.equal(donkey?.outages, 2); assert.equal(donkey?.outage_p50_s, 60); assert.equal(donkey?.outage_max_s, 150);   // 30..40 = 10 samples = 150 s to `until`
+  assert.equal(donkey?.down_since, at(30));
+  assert.equal(donkey?.series.length, 3); assert.deepEqual(donkey?.series[0], { ts: at(0), connected: 16, total: 20 });
+  assert.equal(wash?.availability, 1); assert.equal(wash?.outages, 0); assert.equal(wash?.down_since, null);
+  assert.equal(s.availability({ since: at(0), until, camera: 'wash_stall' }).length, 1);
+  assert.equal(s.pruneProbes(at(20)), 40); assert.equal(s.availability({ since: at(0), until })[0]?.samples, 20);
   s.close();
 });

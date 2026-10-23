@@ -121,6 +121,9 @@ Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/we
   1440p + audio on every V4, 1080p on the V3, segment fetch 17–140 ms over the tailnet.
   Recorder cost for seven cameras: software keyframe decode before 194–215 % CPU / load average 42–65; hardware pipeline
   15–22 % CPU / load average 2.3; RSS 2.1 → 2.4–3.0 GB. Daemon crash reports unchanged (25). `camera-owners.sh` OK.
+- 23 Oct, night: **availability on the pages.** Camera page: probe-derived session state badge and a 24 h availability
+  strip with outage statistics; `/system`: fleet availability table. Source: netprobe samples in SQLite via the daemon's
+  `/api/availability` (docs/CAMERA-ARCHITECTURE.md).
 - 23 Oct, later: 5090 is **tailnet-only** (Vlad: the dashboard is for the phone and laptop over Tailscale, never for the
   shared Wi-Fi). pf passes 5090 only from `100.64.0.0/10` / `fd7a:115c:a1e0::/48` to the node's tailnet addresses and
   refuses it on every other interface; loopback stays open for `ssh -L`. The agentic e2e `live` target uses the MagicDNS name.

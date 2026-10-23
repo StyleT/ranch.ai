@@ -16,7 +16,16 @@ export const CameraRow = z.looseObject({
   horse_last_min: NullableNum, model: z.string().nullable(), fw: z.string().nullable(), ip: z.string().nullable(), buffer_frames: z.number(), buffer_age_s: NullableNum.optional(),
   width: NullableNum.optional(), height: NullableNum.optional(),
   live_age_s: NullableNum.optional(),   // seconds since the recorder's HLS playlist for this camera last grew (23 Oct)
+  connected: z.boolean().nullable().optional(),   // netprobe: go2rtc holds a live session with the camera (producer has a remote address)
+  state: z.enum(['connected', 'degraded', 'down', 'unknown']).optional(),   // connected + frames flowing | connected but no frames | no session | no probe yet
 });
+/** Availability per camera over a window, from netprobe samples in SQLite (`/api/availability`, docs/CAMERA-ARCHITECTURE.md). */
+export const CameraAvailability = z.looseObject({
+  camera: z.string(), since: Iso, until: Iso, samples: z.number(), connected_samples: z.number(), availability: NullableNum,
+  outages: z.number(), outage_p50_s: NullableNum, outage_p90_s: NullableNum, outage_max_s: NullableNum, down_since: Iso.nullable(),
+  series: z.array(z.looseObject({ ts: Iso, connected: z.number(), total: z.number() })),
+});
+export const AvailabilityResponse = z.array(CameraAvailability);
 export const RanchEvent = z.looseObject({
   id: z.string(), ts: Iso, camera: z.string(), type: z.string(), confidence: z.number(), tier_decided: z.number(),
   verdict: z.string().nullable(), created_at: Iso,
@@ -117,6 +126,7 @@ export type ScoreSummary = z.infer<typeof ScoreSummary>; export type ScoreRespon
 export type TaxonomyVersionItem = z.infer<typeof TaxonomyVersionItem>; export type TaxonomyVersionFull = z.infer<typeof TaxonomyVersionFull>;
 export type DetectorStatus = z.infer<typeof DetectorStatus>; export type IngestStatus = z.infer<typeof IngestStatus>; export type NetprobeCamera = z.infer<typeof NetprobeCamera>; export type Wifi = z.infer<typeof Wifi>;
 export type BridgeMetrics = z.infer<typeof BridgeMetrics>;
+export type CameraAvailability = z.infer<typeof CameraAvailability>; export type AvailabilityResponse = z.infer<typeof AvailabilityResponse>;
 
 /** Parse or throw with a readable issue list (used at the BFF boundary and by the contract test). */
 export function parseContract<T extends z.ZodType>(schema: T, data: unknown, what: string): z.infer<T> {

@@ -129,6 +129,41 @@ and a starting recorder kills any ffmpeg still pulling go2rtc's RTSP: on 23 Oct 
 three restarts in a row (launchd does not always deliver TERM before the leader is gone) and kept consuming RTSP until
 `camera-owners.sh` flagged them.
 
+## 23 Oct, night: availability is measured, the bridge's blind fallback is off, go2rtc preload on trial
+
+- **Availability from facts.** netprobe writes every sample (15 s per camera: go2rtc session held, ping, consumers)
+  to SQLite `camera_probe` (7 days kept). The daemon derives `connected` and a `state` per camera for `/api/status`
+  (`connected` = frames flowing to disk within 10 s, `degraded` = session up but no frames, `down` = no session,
+  `unknown` = no probe yet) and `/api/availability` (24 h percentage, outages with p50/p90/longest, `down_since`,
+  15-min buckets). The camera page shows the strip and the numbers; `/system` shows the fleet table. These are the
+  before/after numbers for the supervisor (baseline, 23 Oct 24 h: 10–92 % per camera, see the plan).
+- **Bridge fallback off.** `TUTK_FALLBACK_THRESHOLD=0`: Wyze's cloud answers "camera does not use WebRTC streaming" for
+  this fleet, and the bridge's health check counts a configured-but-dead producer as alive anyway (`len(Producers) > 0`,
+  `internal/go2rtcmgr/apiclient.go`). Reported upstream (docs/upstream). The bridge's per-camera `state` on `/system`
+  is bridge-reported; trust netprobe's `connected` next to it.
+- **go2rtc `preload` trial: not viable as deployed.** `go2rtc_preload_cameras: [donkey_cam]` attached go2rtc's own
+  consumer at start (14:22:15), but the bridge registers every stream with DELETE + PUT 26 s later (14:22:41,
+  `connecting camera to go2rtc`), which recreates the stream object and drops the preload consumer: `/api/preload`
+  still lists it, the stream's consumers show only the recorder's `rtsp`. Preload would have to be re-applied after
+  every bridge (re)start, and it also cannot cure a hung dial (donkey_cam hung with the preload "attached"). Left in
+  the config until the next go2rtc change (allow_paths), then removed; the watchdog below is the fix that worked.
+
+## 23 Oct, night: the long outages are hung dials, and a watchdog cures them
+
+After the evening restarts four cameras (tractor, wash_stall, back_pasture, donkey) sat "down" for 11+ minutes with
+these facts: one `start producer` each, no `stop producer`, no go2rtc error, one recorder attempt, the camera
+answering ping 100 %, the recorder's ffmpeg alive with an **established RTSP socket to go2rtc**, go2rtc's producer with
+**no remote address and zero consumers**. That is a wyze dial hung inside go2rtc with no timeout, and ffmpeg blocked in
+the RTSP handshake behind it: no error ever fires, so the reconnect loop never runs. The same shape (3 producer starts
+in 24 h, 10 % availability) was tractor_cam's day. Experiment: SIGTERM the stuck ffmpeg; the recorder re-attached 2 s
+later and go2rtc connected the camera **within 5 s**, four cameras out of four.
+
+Fix (in the recorder, no new consumer, no go2rtc API call): a stall watchdog. While ffmpeg runs, if the camera's HLS
+playlist has not been written for `RECORDER_STALL_S` (45 s), kill that ffmpeg; the reconnect loop re-attaches and
+go2rtc dials again. This is the supervisor plan's "rung 1", placed where the fact is cheapest to see. The supervisor
+keeps the escalations (camera reboot via the Wyze cloud, go2rtc restart) for the cases the watchdog does not cure
+(e.g. mops_cam: `discovery timeout` while the camera does not answer ping).
+
 ## Operating notes
 
 - A camera is "online" when its buffer has a frame newer than `RANCH_STALE_S` (30 s). Staleness means the

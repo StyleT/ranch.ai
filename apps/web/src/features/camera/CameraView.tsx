@@ -11,6 +11,7 @@ import { DetectionsBrowser } from '@/features/detections/DetectionsBrowser';
 import { formatAge, localTime } from '@/lib/format';
 import { useTz } from '@/lib/tz';
 import { useThumbVersion } from '@/features/live/LiveProvider';
+import { tid } from '@/lib/testids';
 
 const WINDOWS = ['1h', '6h', '24h', '7d'] as const;
 export function CameraView({ name }: { name: string }) {
@@ -23,7 +24,7 @@ export function CameraView({ name }: { name: string }) {
   const net = d.net as { producer?: boolean; consumers?: number; rx_bytes_delta?: number; ping_ms?: number | null } | null;
   return (
     <>
-      <div className="mb-2 flex flex-wrap items-center gap-2"><Link href="/#cameras" aria-label="Back to home" className="min-h-touch min-w-touch text-xl">‹</Link><h1 className="text-lg font-semibold">{name}</h1><Badge tone={c.online ? 'ok' : 'bad'}>{c.online ? 'online' : 'offline'}</Badge><span className="text-sm text-dim">{c.last_frame_age_s !== null ? `${formatAge(c.last_frame_age_s)} ago` : ''} · {c.model ?? '–'} · {c.fw ?? ''} · {c.ip ?? ''}</span></div>
+      <div className="mb-2 flex flex-wrap items-center gap-2"><Link href="/#cameras" aria-label="Back to home" className="min-h-touch min-w-touch text-xl">‹</Link><h1 className="text-lg font-semibold">{name}</h1><Badge tone={c.online ? 'ok' : 'bad'}>{c.online ? 'online' : 'offline'}</Badge><Badge tone={c.state === 'connected' ? 'ok' : c.state === 'degraded' ? 'warn' : c.state === 'down' ? 'bad' : 'dim'} data-testid={tid.cameraState} data-state={c.state}>{c.state === 'down' ? 'camera session down' : c.state === 'degraded' ? 'session up, no frames' : c.state}</Badge><span className="text-sm text-dim">{c.last_frame_age_s !== null ? `${formatAge(c.last_frame_age_s)} ago` : ''} · {c.model ?? '–'} · {c.fw ?? ''} · {c.ip ?? ''}</span></div>
       <div className="md:grid md:grid-cols-[3fr_2fr] md:gap-4">
         <div>
           <StreamPlayer camera={name} poster={poster} playlist={d.stream.playlist} />
@@ -35,6 +36,18 @@ export function CameraView({ name }: { name: string }) {
             <Card className="grid gap-3">
               <TimelineStrip points={d.online_series} tz={tz} title={`online · ${win}`} />
               <StepLine points={d.equine_series} tz={tz} title={`${horse} count · ${win}`} />
+            </Card>
+          </Section>
+          <Section title="Availability · 24 h">
+            <Card className="grid gap-2 text-sm" data-testid={tid.availability}>
+              {d.availability ? (<>
+                <TimelineStrip points={d.availability.series.map((p) => ({ t: p.ts, frames: p.connected }))} tz={tz} title="camera session held by go2rtc · 15 min buckets" />
+                <div className="text-xs text-dim">
+                  <b className="text-fg">{d.availability.availability === null ? '–' : `${(100 * d.availability.availability).toFixed(1)}%`}</b> connected · {d.availability.outages} outage{d.availability.outages === 1 ? '' : 's'}
+                  {d.availability.outage_p50_s !== null ? ` · p50 ${formatAge(d.availability.outage_p50_s)}` : ''}{d.availability.outage_p90_s !== null ? ` · p90 ${formatAge(d.availability.outage_p90_s)}` : ''}{d.availability.outage_max_s !== null ? ` · longest ${formatAge(d.availability.outage_max_s)}` : ''}
+                  {d.availability.down_since ? <span className="text-bad"> · down since {localTime(d.availability.down_since, tz, { second: undefined })}</span> : ''}
+                </div>
+              </>) : <span className="text-dim">no probe history yet</span>}
             </Card>
           </Section>
           <Section title="Signal"><Card className="grid gap-1 text-sm">

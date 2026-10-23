@@ -126,4 +126,22 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       ALTER TABLE detections ADD COLUMN dy REAL;
     `,
   },
+  {
+    version: 6,
+    name: 'camera probe history',
+    sql: `
+      -- One row per netprobe sample (every 15 s per camera): is go2rtc holding a live session with the camera
+      -- (producer has a remote address), does the camera answer ping, how many RTSP consumers. The source of the
+      -- availability numbers (docs/CAMERA-ARCHITECTURE.md, 23 Oct); pruned after 7 days by netprobe.
+      CREATE TABLE camera_probe (
+        ts TEXT NOT NULL,
+        camera TEXT NOT NULL,
+        connected INTEGER NOT NULL,
+        ping_ms REAL,
+        consumers INTEGER,
+        PRIMARY KEY (camera, ts)
+      );
+      CREATE INDEX camera_probe_ts ON camera_probe (ts);
+    `,
+  },
 ];

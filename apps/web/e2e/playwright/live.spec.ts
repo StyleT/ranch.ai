@@ -15,6 +15,14 @@ test('the camera page plays the recorder HLS and says LIVE with a latency', asyn
   await expect(player.getByText(/^LIVE · \d+(\.\d+)? s$/)).toBeVisible();
 });
 
+test('the camera page shows the probe-derived session state and the 24 h availability strip', async ({ page }) => {
+  await page.goto('/cameras/donkey_cam');
+  await expect(page.getByTestId('camera-state')).toHaveAttribute('data-state', /^(connected|degraded|down|unknown)$/);
+  const avail = page.getByTestId('availability'); await avail.scrollIntoViewIfNeeded();
+  await expect(avail).toContainText(/% connected/);
+  await expect(avail.locator('[data-testid=chart-timeline]')).toBeVisible();
+});
+
 test('unmute toggles the audio track', async ({ page }) => {
   await page.goto('/cameras/donkey_cam');
   const video = page.getByTestId('stream-player').locator('video');

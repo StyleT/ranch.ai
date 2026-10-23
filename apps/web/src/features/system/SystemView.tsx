@@ -8,7 +8,7 @@ import { Card, Section, Badge, Skeleton, Button } from '@/components/ui';
 import { StatusKV } from '@/components/table/StatusKV';
 import { DataTable } from '@/components/table/DataTable';
 import { BarList } from '@/components/charts/BarList';
-import { formatUptime, localTime, localDateTime } from '@/lib/format';
+import { formatUptime, localTime, localDateTime, formatAge } from '@/lib/format';
 import { nanosToMs, stateTone } from './bridgeFormat';
 import { useTz } from '@/lib/tz';
 import { useActivity } from '@/features/live/LiveProvider';
@@ -48,6 +48,17 @@ export function SystemView() {
               { key: 'rx', header: 'MB/s', cell: (r) => (r.rx_bytes_delta ? (r.rx_bytes_delta / 15 / 1048576).toFixed(2) : '–'), align: 'right' }, { key: 'ping', header: 'ping ms', cell: (r) => (r.ping_ms === null ? '–' : Math.round(r.ping_ms)), align: 'right' },
             ]} />
             {d.wifi && <p className="px-2 py-1 text-xs text-dim">wifi {Object.entries(d.wifi).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}</p>}
+          </Card></Section>
+          <Section title="Camera availability · 24 h"><Card className="p-0" data-testid={tid.availability}>
+            <DataTable caption="Camera availability over the last 24 hours" rows={d.availability} rowKey={(r) => r.camera} rowTestId={(r) => tid.availabilityRow(r.camera)} columns={[
+              { key: 'camera', header: 'camera', cell: (r) => <b>{r.camera.replace('_cam', '')}</b> },
+              { key: 'avail', header: 'connected', cell: (r) => (r.availability === null ? '–' : <span className={r.availability < 0.9 ? 'text-bad' : r.availability < 0.99 ? 'text-warn' : ''}>{(100 * r.availability).toFixed(1)}%</span>), align: 'right' },
+              { key: 'outages', header: 'outages', cell: (r) => r.outages, align: 'right' },
+              { key: 'p50', header: 'p50', cell: (r) => (r.outage_p50_s === null ? '–' : formatAge(r.outage_p50_s)), align: 'right', priority: 2 },
+              { key: 'max', header: 'longest', cell: (r) => (r.outage_max_s === null ? '–' : formatAge(r.outage_max_s)), align: 'right', priority: 2 },
+              { key: 'down', header: 'down since', cell: (r) => (r.down_since ? <time dateTime={r.down_since} className="text-bad">{localTime(r.down_since, tz, { second: undefined })}</time> : '–'), priority: 2 },
+            ]} />
+            {d.availability.length === 0 && <p className="px-3 py-2 text-xs text-dim">no probe history yet</p>}
           </Card></Section>
           {d.bridge ? <BridgeSection b={d.bridge} tz={tz} /> : <Section title="Wyze bridge"><Card className="text-sm text-dim">bridge metrics unavailable</Card></Section>}
           <Section title="Live MQTT"><Ticker tz={tz} /></Section>

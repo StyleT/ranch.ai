@@ -35,6 +35,18 @@ export interface NewEvent {
 }
 export interface EventQuery { since?: string; until?: string; camera?: string; type?: string; limit?: number; verdict?: Verdict | 'none' }
 
+export interface NewProbe { ts: string; camera: string; connected: boolean; ping_ms: number | null; consumers: number | null }
+/** A camera's availability over a window, from netprobe samples (docs/CAMERA-ARCHITECTURE.md). An outage is a run of
+ *  disconnected samples; its duration runs from the first disconnected sample to the first connected one after it
+ *  (or to `until` while it is still going, in which case `down_since` is set). */
+export type CameraAvailability = {
+  camera: string; since: string; until: string; samples: number; connected_samples: number;
+  availability: number | null;             // connected_samples / samples, 0..1
+  outages: number; outage_p50_s: number | null; outage_p90_s: number | null; outage_max_s: number | null;
+  down_since: string | null;
+  series: { ts: string; connected: number; total: number }[];   // per bucket
+};
+
 /** "24h", "90m", "7d", "30s" or an ISO timestamp → UTC ISO string. */
 export function parseSince(spec: string, now: Date = new Date()): string {
   const m = /^(\d+(?:\.\d+)?)\s*([smhd])$/.exec(spec.trim());
@@ -281,6 +293,41 @@ export class EventStore {
   }
 
   // ---- counts
+  insertProbe(p: NewProbe): void {
+    this.db.prepare('INSERT OR REPLACE INTO camera_probe (ts, camera, connected, ping_ms, consumers) VALUES (?, ?, ?, ?, ?)').run(p.ts, p.camera, p.connected ? 1 : 0, p.ping_ms, p.consumers);
+  }
+  pruneProbes(before: string): number {
+    return Number(this.db.prepare('DELETE FROM camera_probe WHERE ts < ?').run(before).changes);
+  }
+  /** Availability per camera over [since, until] with `bucketS`-second buckets (default 15 min). */
+  availability(q: { since: string; until?: string; bucketS?: number; camera?: string }): CameraAvailability[] {
+    const until = q.until ?? new Date().toISOString(); const bucketS = q.bucketS ?? 900;
+    const rows = this.db.prepare(`SELECT camera, ts, connected FROM camera_probe WHERE ts >= ? AND ts <= ? ${q.camera ? 'AND camera = ?' : ''} ORDER BY camera, ts`)
+      .all(...([q.since, until, ...(q.camera ? [q.camera] : [])] as SQLInputValue[])) as { camera: string; ts: string; connected: number }[];
+    const untilMs = Date.parse(until); const sinceMs = Date.parse(q.since); const b = bucketS * 1000;
+    const byCam = new Map<string, typeof rows>();
+    for (const r of rows) (byCam.get(r.camera) ?? byCam.set(r.camera, []).get(r.camera)!).push(r);
+    const quantile = (xs: number[], p: number) => (xs.length ? xs.slice().sort((a, c) => a - c)[Math.min(xs.length - 1, Math.ceil(p * xs.length) - 1)]! : null);
+    return [...byCam.entries()].sort(([a], [c]) => a.localeCompare(c)).map(([camera, rs]) => {
+      const durations: number[] = []; let downSince: number | null = null; let connectedN = 0;
+      const buckets = new Map<number, { connected: number; total: number }>();
+      for (const r of rs) {
+        const t = Date.parse(r.ts); const up = r.connected === 1; if (up) connectedN++;
+        const k = Math.floor(t / b) * b; const bk = buckets.get(k) ?? buckets.set(k, { connected: 0, total: 0 }).get(k)!; bk.total++; if (up) bk.connected++;
+        if (!up && downSince === null) downSince = t;
+        if (up && downSince !== null) { durations.push((t - downSince) / 1000); downSince = null; }
+      }
+      const ongoing = downSince !== null ? (untilMs - downSince) / 1000 : null;
+      const all = ongoing !== null ? [...durations, ongoing] : durations;
+      const series: CameraAvailability['series'] = [];
+      for (let k = Math.floor(sinceMs / b) * b; k <= untilMs; k += b) { const bk = buckets.get(k); series.push({ ts: new Date(k).toISOString(), connected: bk?.connected ?? 0, total: bk?.total ?? 0 }); }
+      return {
+        camera, since: q.since, until, samples: rs.length, connected_samples: connectedN, availability: rs.length ? connectedN / rs.length : null,
+        outages: all.length, outage_p50_s: quantile(all, 0.5), outage_p90_s: quantile(all, 0.9), outage_max_s: all.length ? Math.max(...all) : null,
+        down_since: downSince === null ? null : new Date(downSince).toISOString(), series,
+      };
+    });
+  }
   upsertCameraCount(c: { ts: string; camera: string; label: string; count: number; model: string }): void {
     this.db.prepare(`INSERT INTO camera_counts (ts, camera, label, count, model) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT (ts, camera, label) DO UPDATE SET count = excluded.count, model = excluded.model`).run(c.ts, c.camera, c.label, c.count, c.model);

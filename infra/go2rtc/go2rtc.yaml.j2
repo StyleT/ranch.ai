@@ -21,3 +21,12 @@ webrtc:
     - urls: [ stun:stun.l.google.com:19302 ]
 ffmpeg:
   bin: {{ brew_prefix }}/bin/ffmpeg
+{% if go2rtc_preload_cameras %}
+# Preload (go2rtc >= 1.9.11): go2rtc itself holds these cameras' sessions with no external consumer, so a recorder
+# restart is no longer a camera redial and the dial cadence lives in one place. 23 Oct trial on one camera, measured
+# for a day (producer starts per hour, availability) before the fleet (docs/CAMERA-ARCHITECTURE.md).
+preload:
+{% for cam in go2rtc_preload_cameras %}
+  {{ cam }}: "video&audio"
+{% endfor %}
+{% endif %}

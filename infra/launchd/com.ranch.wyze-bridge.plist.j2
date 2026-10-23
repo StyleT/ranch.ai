@@ -23,6 +23,11 @@
     <key>MQTT_PORT</key><string>{{ mosquitto_port }}</string>
     <key>MQTT_TOPIC</key><string>wyzebridge</string>
     <key>LOG_LEVEL</key><string>info</string>
+    <!-- 23 Oct: the bridge's TUTK->WebRTC auto-promotion is off. Wyze's cloud answers "camera does not use WebRTC
+         streaming" for this fleet, so a promotion would swap TUTK for a 404; and the bridge's health check cannot see a
+         dead TUTK producer anyway (it counts a configured source as alive). Camera health is the supervisor's job
+         (docs/CAMERA-ARCHITECTURE.md). -->
+    <key>TUTK_FALLBACK_THRESHOLD</key><string>0</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

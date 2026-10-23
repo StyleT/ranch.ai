@@ -10,6 +10,13 @@ export type CameraCard = {
   equine_now: number | null; equine_spark: (number | null)[]; thumb: string; thumb_version: string;
   detections_1h: { label: string; n: number; conf: number; raw: Record<string, number> }[];
   model: string | null; fw: string | null; ip: string | null; width: number | null; height: number | null; buffer_frames: number; buffer_age_s: number | null;
+  connected: boolean | null; state: 'connected' | 'degraded' | 'down' | 'unknown';   // netprobe + recorder facts (docs/CAMERA-ARCHITECTURE.md)
+};
+/** A camera's availability over a window, from netprobe samples (daemon /api/availability). */
+export type Availability = {
+  since: string; until: string; samples: number; connected_samples: number; availability: number | null;
+  outages: number; outage_p50_s: number | null; outage_p90_s: number | null; outage_max_s: number | null; down_since: string | null;
+  series: { ts: string; connected: number; total: number }[];
 };
 
 export type ActivityItem = { t: string; camera: string; label: string; moving: boolean; members: number; seen: number; conf: number; frame_id: number; img: string };
@@ -41,6 +48,7 @@ export type CameraDetail = {
   net: Record<string, unknown> | null;
   motion: { n: number; p50: number; p90: number; max: number } | null;
   stream: { kind: 'hls'; playlist: string; live_age_s: number | null };
+  availability: Availability | null;   // last 24 h, 15-min buckets
 };
 
 export type Box = { label: string; raw_label: string | null; confidence: number; x: number; y: number; w: number; h: number; seen: number | null; dx: number | null; dy: number | null; gold: boolean };
@@ -53,6 +61,7 @@ export type SystemData = {
   daemons: DaemonView[]; netprobe: { camera: string; ip: string | null; producer: boolean | null; connected: boolean | null; consumers: number | null; rx_bytes_delta: number | null; ping_ms: number | null }[];
   wifi: Record<string, unknown> | null; web: { rss_mb: number; heap_mb: number; uptime_s: number; build: Record<string, unknown> | null }; daemon_ping: Record<string, unknown> | null;
   bridge: BridgeData | null;
+  availability: { camera: string; availability: number | null; outages: number; outage_p50_s: number | null; outage_max_s: number | null; down_since: string | null }[];   // last 24 h per camera
 };
 /** The Wyze bridge's metrics page, re-homed on /system (its UI on 5080 is loopback-only since 23 Oct): the daemon's
  *  /api/bridge contract with the Wyze API table always present. */

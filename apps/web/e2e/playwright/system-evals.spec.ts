@@ -11,6 +11,13 @@ test('system shows every daemon with parsed status and the probe table', async (
   await probe.scrollIntoViewIfNeeded();
   await expect(probe).toBeVisible({ timeout: 20_000 });
 });
+test('system shows 24 h camera availability from the probe history', async ({ page }) => {
+  await page.goto('/system');
+  const row = page.getByTestId('availability-row-mops_cam').or(page.getByTestId('availability-row-mops_cam-card')).filter({ visible: true }).first();
+  await row.scrollIntoViewIfNeeded();
+  await expect(row).toContainText('%');
+  await expect(row).toContainText(/down since|\d{1,2}:\d{2}/);
+});
 test('system shows the Wyze bridge metrics moved from :5080', async ({ page }) => {
   await page.goto('/system');
   const summary = page.getByTestId('bridge-summary'); await summary.scrollIntoViewIfNeeded();

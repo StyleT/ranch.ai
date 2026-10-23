@@ -4,7 +4,8 @@ import { server } from './setup-server';
 import { DAEMON } from '../msw/handlers';
 import { invalidate } from '@/bff/daemon';
 import { GET as systemGET } from '@/app/api/ui/system/route';
-import type { SystemData } from '@/lib/types';
+import { GET as cameraGET } from '@/app/api/ui/cameras/[name]/route';
+import type { SystemData, CameraDetail } from '@/lib/types';
 
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 beforeEach(() => invalidate());
@@ -19,6 +20,16 @@ describe('/api/ui/system', () => {
     expect(d.bridge?.cameras.find((c) => c.name === 'mops_cam')?.state).toBe('error');
     expect(d.bridge?.wyzeapi.map((r) => r.Path)).toContain('/app/user/refresh_token');
     for (const row of d.netprobe) expect(row).toHaveProperty('connected');
+    expect(d.availability.length).toBe(7);
+    expect(d.availability.find((a) => a.camera === 'mops_cam')?.down_since).not.toBeNull();
+    expect(d.availability.find((a) => a.camera === 'wash_stall')?.availability).toBe(1);
+  });
+  it('the camera detail carries 24 h availability with 15-min buckets and the probe-derived state', async () => {
+    const res = await cameraGET(new Request('http://x/api/ui/cameras/donkey_cam'), { params: Promise.resolve({ name: 'donkey_cam' }) }); expect(res.status).toBe(200);
+    const d = (await res.json()) as CameraDetail;
+    expect(d.availability?.series.length).toBeGreaterThan(90);
+    expect(d.availability?.outages).toBeGreaterThan(0);
+    expect(['connected', 'degraded', 'down', 'unknown']).toContain(d.camera.state);
   });
   it('still renders when the bridge is unreachable', async () => {
     server.use(http.get(`${DAEMON}/api/bridge`, () => HttpResponse.json({ error: 'bridge_unreachable' }, { status: 503 })));

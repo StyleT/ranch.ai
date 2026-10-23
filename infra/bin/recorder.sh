@@ -22,6 +22,7 @@ RECORDER_HLS_LIST="${RECORDER_HLS_LIST:-8}"      # segments kept in the playlist
 RECORDER_AUDIO="${RECORDER_AUDIO:-1}"            # 1 = AAC audio in the HLS output, 0 = video only
 RECORDER_TRANSCODE="${RECORDER_TRANSCODE:-1}"    # 1 = re-encode video on the Apple media engine with a fixed 1 s GOP (see below), 0 = copy the camera's H.264
 RECORDER_HLS_BITRATE="${RECORDER_HLS_BITRATE:-2000k}"
+RECORDER_STALL_S="${RECORDER_STALL_S:-45}"        # no playlist write for this long while ffmpeg runs = a hung dial or dead feed: re-attach
 RTSP="${RTSP_BASE:-rtsp://127.0.0.1:8554}"
 log() { echo "$(date -u '+%FT%TZ') $*"; }
 free_gb() { df -g "$RECORDER_DIR" | awk 'NR==2{print $4}'; }
@@ -31,7 +32,7 @@ free_gb() { df -g "$RECORDER_DIR" | awk 'NR==2{print $4}'; }
 # ten short-lived attempts (a camera that is unreachable; every attempt makes go2rtc dial it, so back off). The
 # counter resets after a run of at least 60 s. We never DELETE or re-handshake a camera from here.
 pull() {
-  local cam=$1 dir="$RECORDER_DIR/$1" live="$RECORDER_LIVE_DIR/$1" errf attempt=0 t0 run rc delay audio input graph vmap jmap
+  local cam=$1 dir="$RECORDER_DIR/$1" live="$RECORDER_LIVE_DIR/$1" errf attempt=0 t0 run rc delay audio input graph vmap jmap pipe last_write ffpid
   mkdir -p "$dir" "$live"; errf=$(mktemp -t "recorder-$1")
   if [ "$RECORDER_AUDIO" = "1" ]; then audio=(-map '0:a?' -c:a aac -ar 8000 -ac 1 -b:a 24k); else audio=(-an); fi
   while true; do
@@ -78,8 +79,24 @@ pull() {
         -hls_fmp4_init_filename "init-$run.mp4" -hls_segment_filename "$live/seg$run-%06d.m4s" \
         -hls_flags delete_segments+temp_file+omit_endlist "$live/index.m3u8" \
       "${jmap[@]}" -f image2 -strftime 1 -atomic_writing 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" 2>&1 \
-      | { last=""; while IFS= read -r l; do echo "$cam: ffmpeg: $l"; last=$l; done; printf '%s' "$last" > "$errf"; }
-    rc=${PIPESTATUS[0]}
+      | { last=""; while IFS= read -r l; do echo "$cam: ffmpeg: $l"; last=$l; done; printf '%s' "$last" > "$errf"; } &
+    pipe=$!
+    # Stall watchdog (23 Oct): go2rtc's wyze dial can hang with no error and no timeout, and ffmpeg then sits in the
+    # RTSP handshake forever (tractor_cam: 11 min with an established socket, zero frames; four cameras at once after
+    # a restart; the same state behind the 10-30 h outages). Re-attaching the consumer made go2rtc dial again and
+    # connect within 5 s every time it was tried. So: no playlist write for RECORDER_STALL_S while ffmpeg runs -> kill it;
+    # the reconnect loop below does the rest.
+    while kill -0 "$pipe" 2>/dev/null; do
+      sleep 10
+      last_write=$(stat -f %m "$live/index.m3u8" 2>/dev/null || echo "$t0")
+      if [ $(( $(date +%s) - last_write )) -ge "$RECORDER_STALL_S" ] && kill -0 "$pipe" 2>/dev/null; then
+        ffpid=$(pgrep -f "ffmpeg .*${RTSP}/${cam}[[:space:]]" | head -1)
+        log "$cam: no frames for $(( $(date +%s) - last_write )) s (hung dial or dead feed), re-attaching (killing ffmpeg ${ffpid:-?})"
+        [ -n "$ffpid" ] && { kill -TERM "$ffpid" 2>/dev/null; sleep 3; kill -KILL "$ffpid" 2>/dev/null; }
+        break
+      fi
+    done
+    wait "$pipe"; rc=$?
     if [ $(( $(date +%s) - t0 )) -ge 60 ]; then attempt=0; fi
     case $attempt in 0) delay=2;; 1) delay=5;; 2) delay=10;; 3|4|5|6|7|8|9) delay=30;; *) delay=60;; esac
     attempt=$((attempt + 1))

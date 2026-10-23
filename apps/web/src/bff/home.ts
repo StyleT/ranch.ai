@@ -17,6 +17,7 @@ export function cameraCards(status: Status, spark: Map<string, (number | null)[]
     equine_now: c.horse_last_min, equine_spark: spark.get(c.name) ?? [], thumb: `/api/ui/frame/${encodeURIComponent(c.name)}`, thumb_version: c.last_frame_ts ?? '',
     detections_1h: (byCam.get(c.name) ?? []).sort((a, b) => b.n - a.n), model: c.model, fw: c.fw, ip: c.ip, width: c.width ?? null, height: c.height ?? null,
     buffer_frames: c.buffer_frames, buffer_age_s: c.buffer_age_s ?? null,
+    connected: c.connected ?? null, state: c.state ?? 'unknown',
   }));
 }
 

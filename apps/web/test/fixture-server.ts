@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { makeAvailability } from './fixtures/availability.ts';
 
 const FX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const fx = <T = unknown>(name: string): T => JSON.parse(readFileSync(join(FX, 'daemon', `${name}.json`), 'utf8')) as T;
@@ -28,6 +29,7 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://x'); const p = url.pathname;
   if (p === '/api/ping') return json(res, 200, fx('ping'));
   if (p === '/api/bridge') return json(res, 200, fx('bridge'));
+  if (p === '/api/availability') return json(res, 200, makeAvailability((status.cameras as { name: string }[]).map((c) => c.name), Date.now(), url.searchParams.get('bucket') === '1h' ? 3600 : 900, url.searchParams.get('camera')));
   if (p === '/api/status') return json(res, 200, { ...status, ts: new Date().toISOString() });
   if (p === '/api/frames') return json(res, 200, fx(url.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames'));
   if (/^\/api\/frames\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); const head = fx<{ id: number }[]>('frames').find((f) => f.id === id) ?? (id === 999999 ? null : fx('frame-head')); return head ? json(res, 200, head) : json(res, 404, { error: 'no such frame' }); }

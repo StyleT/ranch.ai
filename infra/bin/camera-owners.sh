@@ -43,9 +43,12 @@ curl -s -m 4 "$GO2RTC/api/streams" | python3 -c '
 import json,sys
 d=json.load(sys.stdin); bad=0
 for name,s in sorted(d.items()):
-    cons=len(s.get("consumers") or []); prod=[p for p in (s.get("producers") or []) if p.get("remote_addr")]
-    print(f"stream {name}: consumers={cons} connected_producer={len(prod)>0}")
-    if cons>1: print(f"VIOLATION: {name} has {cons} consumers"); bad+=1
+    allc=s.get("consumers") or []
+    preload=[c for c in allc if c.get("format_name")=="preload"]   # go2rtc holding the session itself (go2rtc_preload_cameras): not an external consumer
+    ext=len(allc)-len(preload); prod=[p for p in (s.get("producers") or []) if p.get("remote_addr")]
+    tag=" +preload" if preload else ""   # python 3.9 on the mini: no nested quotes inside f-strings
+    print(f"stream {name}: consumers={ext}{tag} connected_producer={len(prod)>0}")
+    if ext>1: print(f"VIOLATION: {name} has {ext} external consumers"); bad+=1
 sys.exit(1 if bad else 0)' || violations=$((violations + 1))
 
 # 5. writers under the buffer directory (shallow per camera dir; -F gives pid/command/access mode)

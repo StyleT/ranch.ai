@@ -98,6 +98,10 @@ ranch_media_dir: /usr/local/ranch/media   # snapshots and recordings (same disk;
 ranch_etc_dir: /usr/local/ranch/etc       # config files we template (go2rtc.yaml)
 go2rtc_api_port: 1984
 go2rtc_api_log: trace     # 23 Oct: go2rtc logs "[api] METHOD URL remote" only at trace; one day of it derives api.allow_paths (docs/CAMERA-ARCHITECTURE.md); then warn
+# go2rtc holds these cameras' sessions itself (preload), so a recorder restart is not a camera redial. 23 Oct: trial on
+# one camera for 24 h (compare producer starts/hour and availability with the others), then the fleet or not.
+go2rtc_preload_cameras:
+  - donkey_cam
 
 # Wyze bridge: IDisposable's Go rewrite on top of go2rtc (docs/CAMERAS.md). Pure Go, no cgo, built on
 # the mini with Homebrew go. Pinned to a release tag; bump deliberately and re-measure.
