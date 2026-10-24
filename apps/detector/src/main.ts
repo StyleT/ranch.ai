@@ -6,6 +6,7 @@ import { config } from '@ranch/config';
 import { EventStore } from '@ranch/events';
 import { connectBus, topics } from '@ranch/bus';
 import { Runner } from './runner.ts';
+import { associate, isMoving, isStable } from './tracks.ts';
 import { mapDetection, interestLabels, getTaxonomyVersionId } from '@ranch/taxonomy';
 import { activateFromStore, applyRow, TAXONOMY_TOPIC, type TaxonomyMessage } from '@ranch/taxonomy/store';
 
@@ -23,24 +24,8 @@ const log = (msg: string, extra: Record<string, unknown> = {}) =>
 
 interface FrameMsg { id: number; ts: string; camera: string; path: string; burst_id?: number; seq?: number }
 interface Det { id: number; label: string; raw_label: string; confidence: number; x: number; y: number; w: number; h: number }
-const MOVING = Number(process.env.RANCH_MOVING_MIN ?? 0.02); // normalized displacement that counts as movement
-const iou = (a: Det, b: Det) => { const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y), x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h); const i = Math.max(0, x2 - x1) * Math.max(0, y2 - y1); return i / (a.w * a.h + b.w * b.h - i); };
-/** Greedy same-label IoU association across the frames of a burst -> tracks with seen count and displacement. */
-function associate(frames: { id: number; dets: Det[] }[]): { track: number; label: string; raw_label: string; seen: number; dx: number; dy: number; confidence: number; ids: number[] }[] {
-  const tracks: { track: number; label: string; raw_label: string; first: Det; last: Det; ids: number[]; confidence: number }[] = [];
-  let next = 1; let prev: { det: Det; t: number }[] = [];
-  for (const f of frames) {
-    const cur: { det: Det; t: number }[] = []; const used = new Set<number>();
-    for (const d of [...f.dets].sort((a, b) => b.confidence - a.confidence)) {
-      let best = -1; let bestIou = 0.3;
-      prev.forEach((p, i) => { if (!used.has(i) && p.det.label === d.label) { const v = iou(p.det, d); if (v >= bestIou) { best = i; bestIou = v; } } });
-      if (best >= 0) { used.add(best); const t = tracks[prev[best]!.t - 1]!; t.last = d; t.ids.push(d.id); t.confidence = Math.max(t.confidence, d.confidence); cur.push({ det: d, t: t.track }); }
-      else { tracks.push({ track: next, label: d.label, raw_label: d.raw_label, first: d, last: d, ids: [d.id], confidence: d.confidence }); cur.push({ det: d, t: next }); next++; }
-    }
-    prev = cur;
-  }
-  return tracks.map((t) => ({ track: t.track, label: t.label, raw_label: t.raw_label, seen: t.ids.length, dx: +((t.last.x + t.last.w / 2) - (t.first.x + t.first.w / 2)).toFixed(4), dy: +((t.last.y + t.last.h / 2) - (t.first.y + t.first.h / 2)).toFixed(4), confidence: t.confidence, ids: t.ids }));
-}
+// Track association (associate, isStable, isMoving) lives in tracks.ts, shared with bench.ts --bursts so an evaluated
+// burst policy uses exactly the production definition of a track.
 
 async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
@@ -67,7 +52,7 @@ async function main(): Promise<void> {
     for (const id of b.frame_ids) frameDets.delete(id);
     for (const t of tracks) for (const id of t.ids) store.updateTrack(id, { track: t.track, seen: t.seen, dx: t.dx, dy: t.dy });
     burstsDone++;
-    await bus.publish(topics.tracks(b.camera), { burst_id: burstId, camera: b.camera, frames: b.frame_ids.length, tracks: tracks.map((t) => ({ track: t.track, label: t.label, raw_label: t.raw_label, seen: t.seen, dx: t.dx, dy: t.dy, moving: Math.hypot(t.dx, t.dy) >= MOVING, stable: t.seen >= 2, confidence: t.confidence })) });
+    await bus.publish(topics.tracks(b.camera), { burst_id: burstId, camera: b.camera, frames: b.frame_ids.length, tracks: tracks.map((t) => ({ track: t.track, label: t.label, raw_label: t.raw_label, seen: t.seen, dx: t.dx, dy: t.dy, moving: isMoving(t), stable: isStable(t), confidence: t.confidence })) });
   };
   await bus.subscribe('ranch/bursts/+', (_t, payload) => {
     const b = payload as { burst_id: number; camera: string; frame_ids: number[] };

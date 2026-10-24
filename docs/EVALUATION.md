@@ -94,6 +94,7 @@ trained on and never used to pick thresholds. `frames-ranch-v1` and its labels a
 |---|---|---|
 | 1 detector (Core ML) | boxes per frame | golden boxes |
 | 1 counter | horse count per frame, per minute | count of golden horse boxes |
+| 1 bursts (track policy) | the burst's head frame after a track policy (`none`, `drop-still`, `require-stable`, `drop-still-person`) | golden boxes on the head frame; members scored too as a second slice |
 | 2 VLM (Phase 2) | structured JSON per frame or crop | golden posture / gate / trough fields |
 | 3 escalation (Phase 2) | Claude verdict per event | human verdict on the event |
 | events (Phase 2–3) | event rows with type and time | human verdicts (`events.verdict`) and the event set |
@@ -109,6 +110,16 @@ trained on and never used to pick thresholds. `frames-ranch-v1` and its labels a
   the 0.05-threshold predictions); **false positives per frame (FPPF)** for the interest classes and for *all*
   classes (the "bench" problem is an all-classes number).
 - Horse count: MAE and the share of frames with the exact count, per camera.
+- Burst track policies (`bench.ts --bursts --policy`, 23 Oct): a frames dataset whose rows carry `burst_id`/`seq`
+  (picked with `snapshot.ts --bursts N`, whole bursts). Per burst, predictions are mapped and cut at the operating
+  threshold first (production order), tracks are built with the detector's own `associate`
+  (`apps/detector/src/tracks.ts`: same-label IoU ≥ 0.3 between consecutive members; `stable` = seen ≥ 2;
+  `moving` = centre displacement ≥ 0.02 of the frame), then the policy removes whole tracks from every member's
+  prediction list before the matching above runs. `none` scores the head frame exactly as emitted and **is the
+  no-bursts baseline** (the head is the change keep a single-frame pipeline would have produced); the other
+  policies are reported as per-class precision/recall deltas against it, with intervals, on the heads-only slice
+  (primary) and on all frames (tighter intervals). Boxes below the operating threshold are never tracked and pass
+  through unchanged.
 - Latency p50/p95 and runner RSS on the Neural Engine, as already measured in `evals/detector/README.md`.
 
 ### 4.2 Confidence intervals
@@ -143,6 +154,13 @@ node apps/detector/src/bench.ts --frames evals/baseline/<date>/frames.jsonl --la
 and to read predictions files (`--predictions evals/baseline/<date>/predictions.<model>.jsonl`) so a set can
 be re-scored without re-running the model. A result file records: the frames and labels dataset ids and their sha256, model
 package sha256, class mapping, commit, macOS and go2rtc/bridge versions, host, command line, timestamp.
+
+Burst policies re-score a stored predictions file of a bursts dataset, no model run needed:
+```
+node apps/detector/src/bench.ts --frames evals/baseline/<date>/frames.jsonl --labels evals/golden/labels-ranch-bursts-<labeler>-vN.jsonl \
+  --predictions evals/baseline/<date>/predictions.<model>.jsonl --taxonomy coco --min-label-conf 0.5 \
+  --bursts --policy none|drop-still|require-stable|drop-still-person --tag bursts-<policy> --out evals/results/<date>-bursts-<policy>.json
+```
 
 **Approaches, not just models.** Anything that changes what tier 1 sees or outputs is a run with a `tag`: input
 resolution (640 vs 1280 letterbox vs tiles), SD vs HD source, class filter, threshold, temporal smoothing of

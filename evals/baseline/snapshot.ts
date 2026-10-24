@@ -2,6 +2,7 @@
 // model says about it, with no training and no tuning. Later changes are re-run on the same frames and diffed.
 //   node evals/baseline/snapshot.ts --id frames-<name>-vN --n 300 [--since 7d] [--seed 20261020] [--out-media /usr/local/ranch/media/baseline] [--out evals/baseline]
 //   node evals/baseline/snapshot.ts --existing evals/baseline/<date> --models yolo26n,yolo26s   add models' predictions to a frozen set (no new pick)
+//   node evals/baseline/snapshot.ts --id frames-<name>-bursts-vN --bursts 50   pick N burst HEADS (stratified as above) and take every member with them
 // Writes <out>/<date>/frames.jsonl, predictions.<model>.jsonl (all boxes >= 0.05), manifest.json; images under <out-media>/<date>/<camera>/.
 import { parseArgs } from 'node:util';
 import { mkdirSync, copyFileSync, writeFileSync, readdirSync, createReadStream, statSync, readFileSync } from 'node:fs';
@@ -19,6 +20,7 @@ const { values: a } = parseArgs({ options: {
   models: { type: 'string', default: '/usr/local/ranch/models' }, threshold: { type: 'string', default: '0.05' }, tz: { type: 'string', default: config.timezone },
   exclude: { type: 'string', default: 'living_room_cam' }, id: { type: 'string' }, parent: { type: 'string' },
   existing: { type: 'string' }, 'models-only': { type: 'string' },
+  bursts: { type: 'string' },   // pick this many burst heads instead of --n single frames; every member rides along (docs/EVALUATION.md §2)
 } });
 if (!a.existing && (!a.id || !/^frames-[a-z0-9-]+-v\d+$/.test(a.id))) { console.error('--id frames-<name>-vN is required (docs/EVALUATION.md §2)'); process.exit(2); }
 
@@ -59,28 +61,32 @@ if (a.existing) {
 
 const date = new Date().toISOString().slice(0, 10);
 const store = new EventStore(config.dbPath);
-const all = store.frames({ since: parseSince(a.since!), limit: 500000 }).filter((f) => !a.exclude!.split(/\s+/).includes(f.camera) && !(f.seq && f.seq > 0));
+// Pool: single frames and burst heads (never a member on its own); with --bursts, heads only, each expanded to its
+// whole burst after the pick so the stratification counts bursts, not frames.
+const burstsMode = a.bursts != null;
+const all = store.frames({ since: parseSince(a.since!), limit: 500000 }).filter((f) => !a.exclude!.split(/\s+/).includes(f.camera) && (burstsMode ? f.burst_id != null && f.seq === 0 : !(f.seq && f.seq > 0)));
 const buckets = new Map<string, typeof all>();
 for (const f of all) { const k = `${f.camera}|${period(f.ts)}`; (buckets.get(k) ?? buckets.set(k, []).get(k)!).push(f); }
-const keys = [...buckets.keys()].sort(); const n = Number(a.n); const per = Math.floor(n / keys.length);
+const keys = [...buckets.keys()].sort(); const n = burstsMode ? Number(a.bursts) : Number(a.n); const per = Math.floor(n / keys.length);
 const picked: typeof all = [];
 for (const k of keys) { const pool = buckets.get(k)!; for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [pool[i], pool[j]] = [pool[j]!, pool[i]!]; } picked.push(...pool.slice(0, per)); }
 let i = 0; while (picked.length < n && i < keys.length * 100) { const pool = buckets.get(keys[i++ % keys.length]!)!; const next = pool.find((f) => !picked.includes(f)); if (next) picked.push(next); }
 picked.sort((u, v) => u.camera.localeCompare(v.camera) || u.ts.localeCompare(v.ts));
+const expanded = burstsMode ? picked.flatMap((h) => store.burstMembers(h.burst_id!)) : picked;   // bursts stay contiguous, members in seq order
 
 const mediaDir = join(a['out-media']!, date); const outDir = join(a.out!, date);
 mkdirSync(outDir, { recursive: true });
-const rows = picked.map((f) => {
+const rows = expanded.map((f) => {
   const dst = join(mediaDir, f.camera, basename(f.path)); mkdirSync(join(mediaDir, f.camera), { recursive: true });
   try { statSync(dst); } catch { copyFileSync(f.path, dst); }
-  return { path: dst, source: f.path, frame_id: f.id, camera: f.camera, ts: f.ts, period: period(f.ts), reason: f.reason, width: f.width, height: f.height };
+  return { path: dst, source: f.path, frame_id: f.id, camera: f.camera, ts: f.ts, period: period(f.ts), reason: f.reason, width: f.width, height: f.height, burst_id: f.burst_id ?? null, seq: f.seq ?? null };
 });
 writeFileSync(join(outDir, 'frames.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
 const summary: Record<string, number> = {}; for (const r of rows) summary[`${r.camera}/${r.period}`] = (summary[`${r.camera}/${r.period}`] ?? 0) + 1;
-console.log(JSON.stringify({ date, picked: rows.length, pools: Object.fromEntries(keys.map((k) => [k, buckets.get(k)!.length])), chosen: summary }));
+console.log(JSON.stringify({ date, picked: rows.length, ...(burstsMode ? { bursts: picked.length } : {}), pools: Object.fromEntries(keys.map((k) => [k, buckets.get(k)!.length])), chosen: summary }));
 
 const models = readdirSync(a.models!).filter((m) => m.endsWith('.mlpackage')).sort();
-const manifest: Record<string, unknown> = { date, host: hostname(), n: rows.length, seed: Number(a.seed), since: a.since, threshold: Number(a.threshold), media_dir: mediaDir, models: {} as Record<string, unknown> };
+const manifest: Record<string, unknown> = { date, host: hostname(), n: rows.length, bursts: burstsMode ? picked.length : null, seed: Number(a.seed), since: a.since, threshold: Number(a.threshold), media_dir: mediaDir, models: {} as Record<string, unknown> };
 for (const m of models) {
   const path = join(a.models!, m); const name = m.replace(/\.mlpackage$/, '');
   // RF-DETR fp32 returns zero logits on the Neural Engine (evals/detector/README.md); it runs on the GPU.
@@ -98,7 +104,7 @@ writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) +
 const commit = (() => { try { return execSync('git rev-parse --short HEAD 2>/dev/null').toString().trim() || null; } catch { return null; } })();
 const framesSha = await sha256(join(outDir, 'frames.jsonl'));
 writeFileSync(join(outDir, 'dataset.json'), JSON.stringify({ id: a.id, kind: 'frames', version: Number(a.id!.split('-v').pop()), created: new Date().toISOString(), parent: a.parent ?? null, n: rows.length,
-  sha256: { 'frames.jsonl': framesSha }, source: { query: 'frames table', since: a.since, seed: Number(a.seed), stratify: 'camera x day/night', exclude: a.exclude }, host: hostname(), commit, media_dir: mediaDir,
+  sha256: { 'frames.jsonl': framesSha }, source: { query: 'frames table', since: a.since, seed: Number(a.seed), stratify: burstsMode ? 'burst heads, camera x day/night; all members' : 'camera x day/night', ...(burstsMode ? { bursts: picked.length } : {}), exclude: a.exclude }, host: hostname(), commit, media_dir: mediaDir,
   preds: Object.fromEntries(Object.entries(manifest.models as Record<string, { sha256: string }>).map(([m, v]) => [`preds-${a.id}-${m}-${v.sha256.slice(0, 8)}`, `predictions.${m}.jsonl`])) }, null, 2) + '\n');
 console.log(JSON.stringify({ dataset: a.id, sha256: framesSha.slice(0, 12) }));
 console.log(JSON.stringify({ out: outDir, models: models.length }));
