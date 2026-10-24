@@ -11,7 +11,8 @@ node_modules/
 evals/golden/frames/
 evals/golden/batches/
 evals/baseline/*/frames/
-.claude/
+.claude/*
+!.claude/skills/
 apps/web/.next/
 apps/web/test-results/
 apps/web/playwright-report/
