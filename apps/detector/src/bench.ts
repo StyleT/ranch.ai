@@ -110,6 +110,18 @@ for (const run of runs) {
     const op = (row.score as { operating_points: { r_at_fppf01: { recall: number; threshold: number | null }; r_at_p90: { recall: number } } }).operating_points;
     const h = all.classes.horse; const pe = all.classes.person;
     console.log(`${run.name.padEnd(22)}${a.bursts ? ` [${a.policy}]` : ''} frames ${headFrames.length}${a.bursts ? ` heads (${scoredFrames.length} all)` : ''}  horse gold ${h?.gold ?? 0}  P ${h?.precision.toFixed(2)} R ${h?.recall.toFixed(2)} [${all.horse_recall_ci?.lo.toFixed(2)}–${all.horse_recall_ci?.hi.toFixed(2)}] AP ${h?.ap.toFixed(2)}` + (pe ? `  person gold ${pe.gold} P ${pe.precision.toFixed(2)} (tp ${pe.tp} fp ${pe.fp}) R ${pe.recall.toFixed(2)}` : '') + `  FPPF(all) ${all.fppf_all.toFixed(2)}  count-exact ${all.horse_count.exact.toFixed(2)}  R@FPPF≤0.1 ${op.r_at_fppf01.recall.toFixed(2)}@${op.r_at_fppf01.threshold}  R@P90 ${op.r_at_p90.recall.toFixed(2)}` + (run.latency ? `  p50 ${(run.latency.p50_ms as number).toFixed(1)} ms` : ''));
+  } else if (a.bursts) {
+    // No labels: a label-free preview of what the policy removes from the head frames, per camera and label, so a
+    // policy's blast radius is visible before a labels dataset exists (24 Oct: drop-still removed 20 of 22 parked cars).
+    const base = burstPolicyPreds(frames, run.preds, 'none'), after = burstPolicyPreds(frames, run.preds, a.policy!);
+    const tally = new Map<string, { heads: number; removed: number }>();
+    for (const f of headFrames) {
+      const kept = new Set(after.get(f.path) ?? []);
+      for (const p of (base.get(f.path) ?? []).filter((p) => p.confidence >= thrOf(p.label))) { const k = `${f.camera}|${p.label}`; const t = tally.get(k) ?? tally.set(k, { heads: 0, removed: 0 }).get(k)!; t.heads++; if (!kept.has(p)) t.removed++; }
+    }
+    console.log(`${run.name.padEnd(22)} [${a.policy}] label-free preview over ${headFrames.length} head frames: boxes above the operating threshold, and how many the policy removes`);
+    for (const [k, t] of [...tally].sort()) console.log(`  ${k.padEnd(28)} heads ${String(t.heads).padStart(3)}  removed ${String(t.removed).padStart(3)}`);
+    row.preview = Object.fromEntries(tally);
   } else if (run.latency) {
     console.log(`${run.name.padEnd(22)} p50 ${(run.latency.p50_ms as number).toFixed(1)} ms  p95 ${(run.latency.p95_ms as number).toFixed(1)} ms  ${(run.latency.fps_wall as number).toFixed(1)} fps  rss ${run.latency.peak_rss_mb} MB`);
   }
