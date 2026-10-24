@@ -13,6 +13,13 @@ Rules: docs/EVALUATION.md §2. Verify a dataset by comparing its `dataset.json` 
 | labels-ranch-claude-revised-vlad-v1 | labels | 2026-10-20 | 100 | labels-ranch-claude-v1 | 88fd9e2f3fd77486… | `evals/golden/labels-ranch-claude-revised-vlad-v1.jsonl` (+ `.dataset.json`) | [tag labels-ranch-claude-revised-vlad-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-claude-revised-vlad-v1) `labels/` |
 | preds-frames-ranch-v1-yolo26n-b4693414 | preds | 2026-10-22 | 300 | frames-ranch-v1 | 3a21179959c0fead… | `evals/baseline/2026-10-20/predictions.yolo26n.jsonl` | same repo, `frames-ranch-v1/predictions.yolo26n.jsonl` |
 | preds-frames-ranch-v1-yolo26s-01e03dff | preds | 2026-10-22 | 300 | frames-ranch-v1 | 3df0ebecf96b8aac… | `evals/baseline/2026-10-20/predictions.yolo26s.jsonl` | same repo, `frames-ranch-v1/predictions.yolo26s.jsonl` |
+| frames-ranch-bursts-v1 | frames | 2026-10-24 | 156 (50 bursts) | – | 85459ef56c287411… (frames.jsonl) | `evals/baseline/2026-10-24/`, images `/usr/local/ranch/media/baseline/2026-10-24/` on ranch-ai | [vladlenfedosov/ranch-frames @ frames-ranch-bursts-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/frames-ranch-bursts-v1) (private) |
+| preds-frames-ranch-bursts-v1-rfdetr-nano-float16-a786ba8a | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | b296cf22bd3e3e4d… | `evals/baseline/2026-10-24/predictions.rfdetr-nano-float16.jsonl` | same repo and tag, `predictions.*.jsonl` |
+| preds-frames-ranch-bursts-v1-rfdetr-nano-float32-b7d49936 | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 4e24ad61dfb88b4f… | `evals/baseline/2026-10-24/predictions.rfdetr-nano-float32.jsonl` | same repo and tag |
+| preds-frames-ranch-bursts-v1-yolo11n-7edec780 | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 82bab32e4021ddbc… | `evals/baseline/2026-10-24/predictions.yolo11n.jsonl` | same repo and tag |
+| preds-frames-ranch-bursts-v1-yolo11s-0b717c6c | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | ba32d48ec92c4502… | `evals/baseline/2026-10-24/predictions.yolo11s.jsonl` | same repo and tag |
+| preds-frames-ranch-bursts-v1-yolo26n-b4693414 | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 20e533b6d648f755… | `evals/baseline/2026-10-24/predictions.yolo26n.jsonl` | same repo and tag |
+| preds-frames-ranch-bursts-v1-yolo26s-01e03dff | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 029af01153979b54… | `evals/baseline/2026-10-24/predictions.yolo26s.jsonl` | same repo and tag |
 
 Notes on `labels-ranch-claude-v1` (smoke-verified 20 Oct, see LEADERBOARD.md): reliable at labeler confidence ≥ 0.7;
 boxes at 0.25–0.45 are hedged guesses on dark blobs and include a static patch on front_porch_cam boxed as a cat in
@@ -20,3 +27,13 @@ four frames. Score with `--min-label-conf 0.5` until the human labels (`labels-r
 `friendly` person kind is never set by Claude by design.
 
 `labels-ranch-claude-revised-vlad-v1`: Vlad reviewed Claude's labels in the frame browser (20 Oct) and removed every cat box (5; shadows and a static patch); all other boxes accepted. This is the labels dataset to score against until `labels-ranch-vlad-v1` exists.
+
+`frames-ranch-bursts-v1` (24 Oct): the first dataset of whole bursts, for the bursts-vs-no-bursts question
+(docs/EVALUATION.md §3, §4.1 "Burst track policies"). `snapshot.ts --bursts 50 --since 7d`, seed 20261020: 50 burst
+heads picked stratified camera × day/night from a pool of 519 bursts (22–24 Oct; front_porch held 55 % of the pool and
+gets 9 of the 50), then every member of each burst — 156 frames, burst sizes 2: 19 · 3: 6 · 4: 25; per camera
+back_yard 10, donkey 10, front_porch 9, wash_stall 8, back_pasture 7, tractor 5, mops 1. Rows carry `burst_id` and
+`seq`; the head (seq 0) is the frame a single-frame pipeline would have emitted and is the primary scoring unit.
+Predictions at threshold 0.05 from all six models (the same package hashes as on `frames-ranch-v1`). Labels:
+`labels-ranch-bursts-claude-v1`, Claude on all 156 frames (batch `msgbatch_01CBNq9y41hnogJ7NcXKJRWh`, est. $1.63),
+registered when collected.

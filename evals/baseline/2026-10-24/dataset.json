@@ -1,0 +1,30 @@
+{
+  "id": "frames-ranch-bursts-v1",
+  "kind": "frames",
+  "version": 1,
+  "created": "2026-10-24T00:57:55.967Z",
+  "parent": null,
+  "n": 156,
+  "sha256": {
+    "frames.jsonl": "85459ef56c287411935d49f4fc6631772f7efc62092090fcffb217da85a3f79c"
+  },
+  "source": {
+    "query": "frames table",
+    "since": "7d",
+    "seed": 20261020,
+    "stratify": "burst heads, camera x day/night; all members",
+    "bursts": 50,
+    "exclude": "living_room_cam"
+  },
+  "host": "ranch-ai",
+  "commit": null,
+  "media_dir": "/usr/local/ranch/media/baseline/2026-10-24",
+  "preds": {
+    "preds-frames-ranch-bursts-v1-rfdetr-nano-float16-a786ba8a": "predictions.rfdetr-nano-float16.jsonl",
+    "preds-frames-ranch-bursts-v1-rfdetr-nano-float32-b7d49936": "predictions.rfdetr-nano-float32.jsonl",
+    "preds-frames-ranch-bursts-v1-yolo11n-7edec780": "predictions.yolo11n.jsonl",
+    "preds-frames-ranch-bursts-v1-yolo11s-0b717c6c": "predictions.yolo11s.jsonl",
+    "preds-frames-ranch-bursts-v1-yolo26n-b4693414": "predictions.yolo26n.jsonl",
+    "preds-frames-ranch-bursts-v1-yolo26s-01e03dff": "predictions.yolo26s.jsonl"
+  }
+}
