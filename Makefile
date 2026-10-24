@@ -18,11 +18,17 @@ verify:           ## After a reboot: apply + assert the quiet role took effect
 snapshot:         ## Dump live state into infra/snapshots/<date>/
 	infra/snapshot.sh $(HOST)
 
+# /usr/bin/log, not log: the mini's login shell is zsh, where `log` is a builtin ("zsh:log:1: too many arguments").
 logs:             ## Live tail of every ranch daemon (unified log; Ctrl-C to stop)
-	ssh $(HOST) 'log stream --predicate '"'"'process == "logger"'"'"' --style compact'
+	ssh $(HOST) '/usr/bin/log stream --predicate '"'"'process == "logger"'"'"' --style compact'
 
 logs-last:        ## Last H hours (default 1) of daemon output, e.g. make logs-last H=3
-	ssh $(HOST) 'log show --last $(or $(H),1)h --predicate '"'"'process == "logger"'"'"' --style compact'
+	ssh $(HOST) '/usr/bin/log show --last $(or $(H),1)h --predicate '"'"'process == "logger"'"'"' --style compact'
+
+# The unified log does not keep logger's -t tag; each daemon's output comes from its own logger process, so the
+# logger's pid selects one daemon (its current run only: the pid changes when the daemon restarts).
+logs-of:          ## Last H hours (default 1) of ONE daemon's current run, e.g. make logs-of D=camsup H=3
+	@ssh $(HOST) 'p=$$(pgrep -f "^/usr/bin/logger -t ranch\.$(D) " | head -1); [ -n "$$p" ] || { echo "no logger for ranch.$(D)"; exit 1; }; /usr/bin/log show --last $(or $(H),1)h --predicate "processID == $$p" --style compact'
 
 HF_REPO ?= vladlenfedosov/ranch-frames
 
@@ -52,6 +58,9 @@ camera-owners:    ## Who consumes camera streams right now (go2rtc consumers, :8
 
 verify-live:      ## Live-view soak on the mini: every connected camera's JPEG buffer stays fresh for MINUTES (default 30); crash reports, web errors, CPU, owners asserted at the end
 	@ssh $(HOST) /usr/local/ranch/bin/verify-live.sh $(or $(MINUTES),30)
+
+live-probe:       ## The real dashboard over the tailnet in Chrome, per camera: player state, picture advancing, PNG for OSD glass-to-glass. make live-probe [CAMS=a,b]
+	node apps/web/e2e/live/probe.mjs $(CAMS)
 
 e2e-chaos:        ## Fault injection on the mini (software only): stop one camera's feed, assert detection, watchdog re-attach, supervisor row, recovery. make e2e-chaos [CAM=back_yard_cam] [DURATION=90] [MODE=stop|udp]
 	@ssh $(HOST) /usr/local/ranch/bin/e2e-chaos.sh $(or $(CAM),back_yard_cam) $(or $(DURATION),90) $(or $(MODE),stop)
