@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process';
 import { hostname } from 'node:os';
 import { Runner } from './runner.ts';
 import { scoreSet, type Scored, type Pred, type Box } from './score.ts';
-import { associate, isStable, isMoving, MOVING_MIN, ASSOC_IOU } from './tracks.ts';
+import { associate, isStable, isMoving, MOVING_MIN, ASSOC_IOU, ASSOC_DIST, ASSOC_GATE } from './tracks.ts';
 import { mapDetection, thresholdFor, interestLabels, getTaxonomy, getTaxonomyVersionId } from '@ranch/taxonomy';
 
 const POLICIES = ['none', 'drop-still', 'require-stable', 'drop-still-person'] as const;
@@ -23,7 +23,10 @@ const { values: a } = parseArgs({ options: {
   taxonomy: { type: 'string' },              // model family (e.g. coco): apply the production mapping and per-label thresholds (docs/TAXONOMY.md)
   bursts: { type: 'boolean', default: false }, // frames.jsonl carries burst_id/seq: associate tracks per burst and apply --policy (docs/EVALUATION.md §4.1)
   policy: { type: 'string', default: 'none' }, // none (the head frame as emitted: the no-bursts baseline) | drop-still | require-stable | drop-still-person
+  gate: { type: 'string' },                    // association gate: iou | dist (default: the production setting, tracks.ts ASSOC_GATE)
+  'gate-dist': { type: 'string' },             // dist gate size in box sides (default ASSOC_DIST)
 } });
+const assocOpts = { ...(a.gate ? { gate: a.gate as 'iou' | 'dist' } : {}), ...(a['gate-dist'] ? { dist: Number(a['gate-dist']) } : {}) };
 if (!a.frames) { console.error('--frames is required'); process.exit(2); }
 if (a.bursts && !(POLICIES as readonly string[]).includes(a.policy!)) { console.error(`--policy must be one of ${POLICIES.join('|')}`); process.exit(2); }
 const readJsonl = <T,>(p: string): T[] => readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as T);
@@ -70,7 +73,7 @@ function burstPolicyPreds(all: FrameRow[], preds: Map<string, Pred[]>, policy: s
     const byId = new Map<number, Pred>(); let nextId = 1;
     const tracked = members.map((f, i) => ({ id: i, dets: (preds.get(f.path) ?? []).filter((p) => p.confidence >= thrOf(p.label)).map((p) => { const id = nextId++; byId.set(id, p); return { id, label: p.label, confidence: p.confidence, x: p.x, y: p.y, w: p.w, h: p.h }; }) }));
     const drop = new Set<Pred>();
-    for (const t of associate(tracked)) {
+    for (const t of associate(tracked, assocOpts)) {
       const still = isStable(t) && !isMoving(t);
       const kill = policy === 'drop-still' ? still : policy === 'drop-still-person' ? still && t.label === 'person' : policy === 'require-stable' ? !isStable(t) : false;
       if (kill) for (const id of t.ids) drop.add(byId.get(id)!);
@@ -109,7 +112,7 @@ for (const run of runs) {
     const all = (row.score as { slices: Record<string, { classes: Record<string, { recall: number; precision: number; ap: number; gold: number; tp: number; fp: number }>; fppf_all: number; horse_count: { exact: number }; horse_recall_ci: { lo: number; hi: number } | null }> }).slices.all!;
     const op = (row.score as { operating_points: { r_at_fppf01: { recall: number; threshold: number | null }; r_at_p90: { recall: number } } }).operating_points;
     const h = all.classes.horse; const pe = all.classes.person;
-    console.log(`${run.name.padEnd(22)}${a.bursts ? ` [${a.policy}]` : ''} frames ${headFrames.length}${a.bursts ? ` heads (${scoredFrames.length} all)` : ''}  horse gold ${h?.gold ?? 0}  P ${h?.precision.toFixed(2)} R ${h?.recall.toFixed(2)} [${all.horse_recall_ci?.lo.toFixed(2)}–${all.horse_recall_ci?.hi.toFixed(2)}] AP ${h?.ap.toFixed(2)}` + (pe ? `  person gold ${pe.gold} P ${pe.precision.toFixed(2)} (tp ${pe.tp} fp ${pe.fp}) R ${pe.recall.toFixed(2)}` : '') + `  FPPF(all) ${all.fppf_all.toFixed(2)}  count-exact ${all.horse_count.exact.toFixed(2)}  R@FPPF≤0.1 ${op.r_at_fppf01.recall.toFixed(2)}@${op.r_at_fppf01.threshold}  R@P90 ${op.r_at_p90.recall.toFixed(2)}` + (run.latency ? `  p50 ${(run.latency.p50_ms as number).toFixed(1)} ms` : ''));
+    console.log(`${run.name.padEnd(22)}${a.bursts ? ` [${a.policy}, gate ${assocOpts.gate ?? ASSOC_GATE}${(assocOpts.gate ?? ASSOC_GATE) === 'dist' ? ` ${assocOpts.dist ?? ASSOC_DIST}` : ''}]` : ''} frames ${headFrames.length}${a.bursts ? ` heads (${scoredFrames.length} all)` : ''}  horse gold ${h?.gold ?? 0}  P ${h?.precision.toFixed(2)} R ${h?.recall.toFixed(2)} [${all.horse_recall_ci?.lo.toFixed(2)}–${all.horse_recall_ci?.hi.toFixed(2)}] AP ${h?.ap.toFixed(2)}` + (pe ? `  person gold ${pe.gold} P ${pe.precision.toFixed(2)} (tp ${pe.tp} fp ${pe.fp}) R ${pe.recall.toFixed(2)}` : '') + `  FPPF(all) ${all.fppf_all.toFixed(2)}  count-exact ${all.horse_count.exact.toFixed(2)}  R@FPPF≤0.1 ${op.r_at_fppf01.recall.toFixed(2)}@${op.r_at_fppf01.threshold}  R@P90 ${op.r_at_p90.recall.toFixed(2)}` + (run.latency ? `  p50 ${(run.latency.p50_ms as number).toFixed(1)} ms` : ''));
   } else if (a.bursts) {
     // No labels: a label-free preview of what the policy removes from the head frames, per camera and label, so a
     // policy's blast radius is visible before a labels dataset exists (24 Oct: drop-still removed 20 of 22 parked cars).
@@ -137,7 +140,7 @@ if (a.out) {
     labels: labelsFile ? { file: labelsFile, sha256: sha(labelsFile), dataset: (readJsonl<{ dataset?: string }>(labelsFile)[0]?.dataset) ?? null } : null,
     class_mapping: { donkey: 'horse', delivery_vehicle: 'truck', tractor: 'truck', atv: 'truck', trailer: 'truck', people: 'person' },
     min_label_conf: minLabelConf || null, taxonomy: family ? { family, file: process.env.RANCH_TAXONOMY_FILE ?? null, version_id: getTaxonomyVersionId(), thresholds: thresholdsByLabel, mapping: getTaxonomy().mappings[family] } : null,
-    bursts: a.bursts ? { policy: a.policy, n_bursts: new Set(frames.filter((f) => f.burst_id != null).map((f) => f.burst_id)).size, frames_heads: headFrames.length, frames_all: scoredFrames.length, moving_min: MOVING_MIN, assoc_iou: ASSOC_IOU } : null,
+    bursts: a.bursts ? { policy: a.policy, n_bursts: new Set(frames.filter((f) => f.burst_id != null).map((f) => f.burst_id)).size, frames_heads: headFrames.length, frames_all: scoredFrames.length, moving_min: MOVING_MIN, gate: assocOpts.gate ?? ASSOC_GATE, assoc_iou: ASSOC_IOU, assoc_dist: assocOpts.dist ?? ASSOC_DIST } : null,
     threshold, iou: iouMin, results,
   }, null, 2) + '\n');
   console.log('wrote', a.out);

@@ -122,3 +122,39 @@ second, so a walking person becomes a chain of one-frame tracks. Hence `require-
 objects and `drop-still` deletes the still real ones. yolo11n: the same picture (23 unmatched, 16 one-frame, 86 %
 agreement on 28). The threshold is not the problem; the gate is. A centre-distance gate scaled by box size, or a
 motion prior, is the fix to evaluate next — on this same dataset, whose labels now say what moved.
+
+## 2026-10-24-bursts-*-dist2.json: the gate fixed, same 50 bursts re-scored
+
+`tracks.ts` now continues a track when the centre distance between consecutive same-label boxes is at most
+`ASSOC_DIST` (2) times the larger box side, with the boxes' areas within a factor of 4 (`--gate dist|iou`,
+`--gate-dist k` on `bench.ts` and `moving-agreement.ts`; `RANCH_ASSOC_GATE` / `RANCH_ASSOC_DIST` in production). The
+deciding number is the agreement tool's `movers.followed_share`: of labeled movers the detector saw at all, the share
+that got a stable track flagged moving. Guard: `stills.false_motion_share`, still objects the gate set in motion.
+
+| gate | yolo26s movers followed (of 26 seen) | fragmented | stills false motion (of 24) | yolo11n followed (of 22) | false motion (of 22) |
+|---|---|---|---|---|---|
+| iou ≥ 0.3 (before) | 3 (0.12) | 18 | 1 (0.04) | 2 (0.09) | 0 |
+| dist ≤ 1 box side | 17 (0.65) | 7 | 1 (0.04) | 13 (0.59) | 0 |
+| dist ≤ 1.5 / 2 / 3 / 4 | 17 (0.65) | 7 | 1 (0.04) | 13 (0.59) | 0 |
+
+Flat from 1 to 4 box sides: labeled movers shift at most about one box side per second, so any non-overlap gate
+catches them and 2 is not a tuned value. The 7 movers still fragmented (and 8 unmatched) are detector misses on a
+middle member — the association is consecutive-only, so one missed frame ends the track; a one-frame gap is the next
+fix. Re-scored under the gate (heads; `none` is unchanged by construction):
+
+| model | policy | person P / R (tp/fp/fn) | horse P / R [CI] | car R | FPPF |
+|---|---|---|---|---|---|
+| yolo26s | none | 0.95 / 0.87 (20/1/3) | 1.00 / 0.50 [0.14–0.86] | 1.00 | 0.12 |
+| yolo26s | require-stable | **1.00 / 0.74** (17/0/6) | 1.00 / 0.20 [0.00–0.50] | 1.00 | 0.08 |
+| yolo26s | drop-still | 0.94 / 0.70 (16/1/7) | 1.00 / 0.50 | 0.05 | 0.06 |
+| yolo11n | none | 0.65 / 0.74 (17/9/6) | 0.75 / 0.30 | 1.00 | 0.24 |
+| yolo11n | require-stable | **0.93 / 0.57** (13/1/10) | 1.00 / 0.20 | 1.00 | 0.02 |
+
+All frames: yolo26s require-stable person 0.92 / 0.75 (59/5/20) vs none 0.88 / 0.85 (67/9/12), horse 0.86 / 0.34 vs
+0.81 / 0.49; yolo11n require-stable person 0.94 / 0.62 (49/3/30) vs none 0.79 / 0.72 (57/15/22), horse 0.83 / 0.29 vs
+0.71 / 0.34. **Reading.** With tracks that follow a walking person, "seen twice" becomes a usable precision filter:
+yolo26s loses its one false person and 13 points of person recall on the heads; yolo11n drops 8 of 9 false people for
+17 points. `drop-still` is still the wrong idea — it removed no false positive before and none now; still objects are
+real. Horses pay the most under `require-stable` because the detector sees them intermittently, which the gap fix
+addresses. Whether the recall price is worth paying is an event-layer question (a person present for 10 s will be
+seen twice), not a per-frame one; nothing is applied in production yet beyond the gate itself.

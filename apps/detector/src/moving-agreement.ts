@@ -8,10 +8,12 @@
 import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { iou, type Pred } from './score.ts';
-import { associate, isMoving, isStable, MOVING_MIN } from './tracks.ts';
+import { associate, isMoving, isStable, MOVING_MIN, ASSOC_GATE, ASSOC_DIST } from './tracks.ts';
 import { mapDetection, thresholdFor } from '@ranch/taxonomy';
 
-const { values: a } = parseArgs({ options: { frames: { type: 'string' }, labels: { type: 'string' }, predictions: { type: 'string' }, taxonomy: { type: 'string', default: 'coco' }, 'min-label-conf': { type: 'string', default: '0.5' }, iou: { type: 'string', default: '0.5' } } });
+const { values: a } = parseArgs({ options: { frames: { type: 'string' }, labels: { type: 'string' }, predictions: { type: 'string' }, taxonomy: { type: 'string', default: 'coco' }, 'min-label-conf': { type: 'string', default: '0.5' }, iou: { type: 'string', default: '0.5' },
+  gate: { type: 'string' }, 'gate-dist': { type: 'string' } } });   // association gate under test: iou | dist [size in box sides]
+const assocOpts = { ...(a.gate ? { gate: a.gate as 'iou' | 'dist' } : {}), ...(a['gate-dist'] ? { dist: Number(a['gate-dist']) } : {}) };
 if (!a.frames || !a.labels || !a.predictions) { console.error('--frames, --labels and --predictions are required'); process.exit(2); }
 const rows = <T,>(p: string): T[] => readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as T);
 interface FrameRow { path: string; camera: string; burst_id: number | null; seq: number | null }
@@ -27,6 +29,11 @@ const centre = (b: { x: number; y: number; w: number; h: number }) => [b.x + b.w
 const byBurst = new Map<number, FrameRow[]>();
 for (const f of frames) if (f.burst_id != null) (byBurst.get(f.burst_id) ?? byBurst.set(f.burst_id, []).get(f.burst_id)!).push(f);
 const tally = { both_moving: 0, gold_moved_track_still: 0, gold_still_track_moving: 0, both_still: 0, unmatched: 0, not_stable: 0 };
+// The deciding numbers, per the labeler's verdict: of the objects that moved, how many did the tracker follow (a stable
+// track flagged moving) rather than fragment or call still; of the objects that did not move, how many it wrongly set
+// in motion (a gate that is too loose links different objects and invents movement).
+const movers = { total: 0, followed: 0, flagged_still: 0, fragmented: 0, unmatched: 0 };
+const stills = { total: 0, flagged_moving: 0, kept_still: 0, fragmented: 0, unmatched: 0 };
 const shifts: { moved: boolean; shift: number; label: string }[] = [];
 const byLabel = new Map<string, typeof tally>();
 for (const members of byBurst.values()) {
@@ -40,21 +47,27 @@ for (const members of byBurst.values()) {
     for (const b of r.boxes) { if (!b.id || (conf.get(b.id) ?? 1) < minConf) continue; const o = objs.get(b.id) ?? objs.set(b.id, { label: b.label, boxes: [], moved: movedOf.get(b.id) ?? false }).get(b.id)!; o.boxes.push({ seq: f.seq ?? 0, box: b }); }
   }
   let id = 1; const owner = new Map<number, { seq: number; box: Pred }>();
-  const tracks = associate(members.map((f, i) => ({ id: i, dets: mapped(preds.get(f.path) ?? []).map((p) => { const d = { id: id++, ...p }; owner.set(d.id, { seq: f.seq ?? i, box: p }); return d; }) })));
+  const tracks = associate(members.map((f, i) => ({ id: i, dets: mapped(preds.get(f.path) ?? []).map((p) => { const d = { id: id++, ...p }; owner.set(d.id, { seq: f.seq ?? i, box: p }); return d; }) })), assocOpts);
   for (const o of objs.values()) {
     const first = o.boxes[0]!, last = o.boxes[o.boxes.length - 1]!;
     const [x0, y0] = centre(first.box), [x1, y1] = centre(last.box); shifts.push({ moved: o.moved, shift: Math.hypot(x1 - x0, y1 - y0), label: o.label });
     const t = tracks.find((t) => t.label === o.label && t.ids.some((i) => { const w = owner.get(i)!; return w.seq === first.seq && iou(w.box, first.box) >= iouMin; }));
     const l = byLabel.get(o.label) ?? byLabel.set(o.label, { ...tally, both_moving: 0, gold_moved_track_still: 0, gold_still_track_moving: 0, both_still: 0, unmatched: 0, not_stable: 0 }).get(o.label)!;
     const bump = (k: keyof typeof tally) => { tally[k]++; l[k]++; };
-    if (!t) { bump('unmatched'); continue; }
-    if (!isStable(t)) { bump('not_stable'); continue; }   // one-frame track: the flag is undefined
+    const side = o.moved ? movers : stills; side.total++;
+    if (!t) { bump('unmatched'); side.unmatched++; continue; }
+    if (!isStable(t)) { bump('not_stable'); side.fragmented++; continue; }   // one-frame track: the flag is undefined
     const m = isMoving(t);
     bump(o.moved && m ? 'both_moving' : o.moved && !m ? 'gold_moved_track_still' : !o.moved && m ? 'gold_still_track_moving' : 'both_still');
+    if (o.moved) { if (m) movers.followed++; else movers.flagged_still++; } else { if (m) stills.flagged_moving++; else stills.kept_still++; }
   }
 }
 const med = (xs: number[]) => { const s = [...xs].sort((u, v) => u - v); return s.length ? s[Math.floor(s.length / 2)]! : NaN; };
-console.log(JSON.stringify({ moving_min: MOVING_MIN, objects: shifts.length, ...tally,
+console.log(JSON.stringify({ gate: assocOpts.gate ?? ASSOC_GATE, gate_dist: assocOpts.dist ?? ASSOC_DIST, moving_min: MOVING_MIN, objects: shifts.length,
+  // movers_followed: share of labeled movers the detector saw at all that got a stable track flagged moving (the deciding number)
+  movers: { ...movers, followed_share: +(movers.followed / Math.max(1, movers.total - movers.unmatched)).toFixed(3) },
+  stills: { ...stills, false_motion_share: +(stills.flagged_moving / Math.max(1, stills.total - stills.unmatched)).toFixed(3) },
+  ...tally,
   agreement: (tally.both_moving + tally.both_still) / Math.max(1, tally.both_moving + tally.both_still + tally.gold_moved_track_still + tally.gold_still_track_moving),
   gold_shift_median: { moved: +med(shifts.filter((s) => s.moved).map((s) => s.shift)).toFixed(3), still: +med(shifts.filter((s) => !s.moved).map((s) => s.shift)).toFixed(3) },
   gold_moved_below_threshold: shifts.filter((s) => s.moved && s.shift < MOVING_MIN).length, gold_moved_total: shifts.filter((s) => s.moved).length,

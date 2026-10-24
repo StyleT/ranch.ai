@@ -40,6 +40,14 @@ Protocol: `docs/EVALUATION.md`. One row per result file in `evals/results/`. CI 
 | 2026-10-24 | bursts-drop-still | yolo11n | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.00 @– | R 0.20 [0.00–0.55] | 0.17 | 0.24 | 0.86 | | | `2026-10-24-bursts-drop-still.json` |
 | 2026-10-24 | bursts-require-stable | yolo11n | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.10 @0.55 | R 0.10 [0.00–0.38] | 0.10 | 0.00 | 0.86 | | | `2026-10-24-bursts-require-stable.json` |
 | 2026-10-24 | bursts-drop-still-person | yolo11n | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.00 @– | R 0.30 [0.00–0.71] | 0.25 | 0.24 | 0.88 | | | `2026-10-24-bursts-drop-still-person.json` |
+| 2026-10-24 | bursts-none-dist2 (association gate: centre distance ≤ 2 box sides; **prod gate from 24 Oct**) | yolo26s | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.20 @0.95 | R 0.50 [0.14–0.86] | 0.50 | 0.12 | 0.92 | | | `2026-10-24-bursts-none-dist2.json` |
+| 2026-10-24 | bursts-drop-still-dist2 | yolo26s | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.50 @0.7 | R 0.50 [0.14–0.86] | 0.50 | 0.06 | 0.92 | | | `2026-10-24-bursts-drop-still-dist2.json` |
+| 2026-10-24 | bursts-require-stable-dist2 | yolo26s | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.20 @0.7 | R 0.20 [0.00–0.50] | 0.20 | 0.08 | 0.88 | | | `2026-10-24-bursts-require-stable-dist2.json` |
+| 2026-10-24 | bursts-drop-still-person-dist2 | yolo26s | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.20 @0.95 | R 0.50 [0.14–0.86] | 0.50 | 0.12 | 0.92 | | | `2026-10-24-bursts-drop-still-person-dist2.json` |
+| 2026-10-24 | bursts-none-dist2 | yolo11n | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.00 @– | R 0.30 [0.00–0.71] | 0.25 | 0.24 | 0.88 | | | `2026-10-24-bursts-none-dist2.json` |
+| 2026-10-24 | bursts-drop-still-dist2 | yolo11n | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.00 @– | R 0.20 [0.00–0.55] | 0.17 | 0.24 | 0.86 | | | `2026-10-24-bursts-drop-still-dist2.json` |
+| 2026-10-24 | bursts-require-stable-dist2 | yolo11n | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.20 @0.55 | R 0.20 [0.00–0.50] | 0.20 | 0.02 | 0.88 | | | `2026-10-24-bursts-require-stable-dist2.json` |
+| 2026-10-24 | bursts-drop-still-person-dist2 | yolo11n | frames-ranch-bursts-v1 (50 heads) | labels-ranch-bursts-claude-v1, conf ≥ 0.5 | 0.00 @– | R 0.30 [0.00–0.71] | 0.25 | 0.24 | 0.88 | | | `2026-10-24-bursts-drop-still-person-dist2.json` |
 
 Notes 2026-10-20: 23 horse-class gold boxes (14 horses + 9 donkeys mapped to horse) in the 100 labeled frames; intervals are wide, as EVALUATION.md §4.2 warns. 12 of the 23 are missed by every model at 0.25: all seven large daytime donkeys (356–489 px wide), three animals under 120 px, one frame-filling night horse. IoU 0.3 changes nothing: misses are misses, not misplaced boxes. No model meets the FPPF ≤ 0.1 budget at any threshold except RF-DETR at 0.8 (recall 0.17).
 
@@ -94,3 +102,16 @@ heads carries that box above threshold for yolo26s; a per-camera fixture map is 
 (`moving-agreement.ts`): labeled movers shift a median 0.148 of the frame per burst while a person is 0.03–0.07 wide,
 and the tracker's IoU ≥ 0.3 gate cannot follow that, so 20 of 67 labeled objects got one-frame tracks and the `moving`
 flag caught 3 of 8 movers it did track — the policies delete real objects because the tracks are fragments.
+
+Gate fix, 24 Oct (rows `*-dist2`): the association gate is now the centre distance in units of the larger box side
+(≤ 2, with an area-ratio bound of 4), `tracks.ts` default, production from the 24 Oct provision; rows and DB tracks
+before that used the IoU gate. Deciding number, labeled movers the detector saw that got a stable track flagged
+moving: yolo26s **0.12 → 0.65** (3 → 17 of 26; fragmented 18 → 7), yolo11n 0.09 → 0.59; stills wrongly set in motion
+unchanged (1 of 24, 0 of 22). Identical for gate sizes 1 to 4 box sides, so 2 is not a tuned number (chosen on this
+set; §4.3 optimism applies only to the policy rows). Re-scored: `none` unchanged, as it must be. `require-stable`
+becomes a precision tool with a recall price: yolo26s heads person P 0.95 → **1.00** (fp 1 → 0) at R 0.87 → 0.74, all
+frames 0.88/0.85 → 0.92/0.75 (fp 9 → 5); yolo11n heads person P 0.65 → **0.93** (fp 9 → 1) at R 0.74 → 0.57, all frames
+0.79/0.72 → 0.94/0.62 (fp 15 → 3). `drop-still` still removes no false positive and still deletes parked cars. Horse
+recall under `require-stable` stays low (0.20 heads, 0.34 all): the detector sees horses intermittently and a
+consecutive-only association breaks on a missed middle frame — the 7 still-fragmented movers are the same cause, and
+allowing a one-frame gap is the next fix to measure on this set.

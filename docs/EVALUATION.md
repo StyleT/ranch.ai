@@ -124,7 +124,11 @@ trained on and never used to pick thresholds. `frames-ranch-v1` and its labels a
   per request carries an id per object and `objects[] {id, moved}`; for each labeled object, the detector track that
   overlaps its first box (same label, IoU ≥ 0.5) is found and `isMoving(track)` compared with `moved`. Reports the
   confusion counts, unmatched (detector miss) and one-frame tracks (flag undefined), and the labeled centre shift,
-  so the association gate and `MOVING_MIN` are judged against what actually moved.
+  so the association gate and `MOVING_MIN` are judged against what actually moved. Its `movers.followed_share` (of
+  labeled movers the detector saw, the share with a stable track flagged moving) is the deciding number for any
+  tracker change, with `stills.false_motion_share` as the guard; `--gate iou|dist --gate-dist k` runs alternatives on
+  the same data. 24 Oct: the IoU gate followed 0.12 of movers, the centre-distance gate 0.65, flat for k = 1–4
+  (chosen on the test set, so the policy rows that depend on it carry §4.3's optimism).
 - Latency p50/p95 and runner RSS on the Neural Engine, as already measured in `evals/detector/README.md`.
 
 ### 4.2 Confidence intervals

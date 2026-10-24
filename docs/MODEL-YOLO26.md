@@ -140,3 +140,13 @@ positives are not still tracks. The motion fields keep their other job — the e
 many bursts, a person moving) and now a labeled ground truth to validate the `moving` flag against
 (`apps/detector/src/moving-agreement.ts`). The fixture problem (one porch cell read as `horse` and `person` across 18
 bursts) is a cross-burst, per-camera phenomenon and is the untested follow-up.
+
+**Gate fixed the same day.** The association continued a track only when consecutive boxes overlapped (IoU ≥ 0.3);
+labeled movers shift a median 0.148 of the frame per burst while a person is 0.03–0.07 wide, so a walking person
+fragmented into one-frame tracks. The gate is now the centre distance in units of the larger box side (≤ 2, areas
+within ×4; `RANCH_ASSOC_GATE`, `RANCH_ASSOC_DIST`). Against the burst labels' `moved` verdicts, movers followed went
+**0.12 → 0.65** (yolo26s) and 0.09 → 0.59 (yolo11n) with no new false motion, identically for gate sizes 1–4. Re-scored,
+`require-stable` becomes a precision filter with a recall price (yolo26s heads person P 1.00 at R 0.74; yolo11n fp
+9 → 1 at R 0.57); `drop-still` remains wrong. Production tracks use the new gate from the 24 Oct provision (`moving`,
+`seen` written before it used the IoU gate). Next: allow a one-frame gap in the association, since the remaining
+fragmentation is the detector missing a middle member.

@@ -1,0 +1,3078 @@
+{
+  "ts": "2026-10-24T05:11:50.142Z",
+  "tag": "bursts-none-dist2",
+  "host": "EPUSPRIW0E2A",
+  "commit": "c1bd6ce",
+  "command": "/Users/Vladlen_Fedosov/job_hunt_2026/projects/ranch/.claude/worktrees/live-hls/apps/detector/src/bench.ts --frames evals/baseline/2026-10-24/frames.jsonl --labels evals/golden/labels-ranch-bursts-claude-v1.jsonl --predictions evals/baseline/2026-10-24/predictions.yolo26s.jsonl --predictions evals/baseline/2026-10-24/predictions.yolo11n.jsonl --taxonomy coco --min-label-conf 0.5 --bursts --policy none --gate dist --gate-dist 2 --tag bursts-none-dist2 --out /Users/Vladlen_Fedosov/.claude/jobs/5b8d7334/tmp/rescore/2026-10-24-bursts-none-dist2.json",
+  "frames": {
+    "file": "evals/baseline/2026-10-24/frames.jsonl",
+    "sha256": "85459ef56c287411935d49f4fc6631772f7efc62092090fcffb217da85a3f79c",
+    "dataset": "frames-ranch-bursts-v1",
+    "n": 156,
+    "scored": 156
+  },
+  "labels": {
+    "file": "evals/golden/labels-ranch-bursts-claude-v1.jsonl",
+    "sha256": "e11bc8f1086efddded782b9ebf60db296c635c10ce5ec41b403afc3ae1865012",
+    "dataset": "labels-ranch-bursts-claude-v1"
+  },
+  "class_mapping": {
+    "donkey": "horse",
+    "delivery_vehicle": "truck",
+    "tractor": "truck",
+    "atv": "truck",
+    "trailer": "truck",
+    "people": "person"
+  },
+  "min_label_conf": 0.5,
+  "taxonomy": {
+    "family": "coco",
+    "file": null,
+    "version_id": null,
+    "thresholds": {
+      "horse": 0.25,
+      "person": 0.6,
+      "dog": 0.4,
+      "cat": 0.6,
+      "bird": 0.5,
+      "car": 0.25,
+      "truck": 0.25,
+      "atv": 0.4,
+      "other": 0.5
+    },
+    "mapping": {
+      "bear": {
+        "class": "animal",
+        "subclass": "other",
+        "threshold": 0.5,
+        "note": "large-animal confusion, worth seeing"
+      },
+      "bird": {
+        "class": "animal",
+        "subclass": "bird",
+        "threshold": 0.5
+      },
+      "bus": {
+        "class": "vehicle",
+        "subclass": "truck",
+        "threshold": 0.25
+      },
+      "car": {
+        "class": "vehicle",
+        "subclass": "car",
+        "threshold": 0.25,
+        "note": "recall 1.00, precision 0.88"
+      },
+      "cat": {
+        "class": "animal",
+        "subclass": "cat",
+        "threshold": 0.6,
+        "note": "no verified cat yet"
+      },
+      "cow": {
+        "class": "animal",
+        "subclass": "horse",
+        "threshold": 0.5,
+        "note": "how COCO models see donkeys and dark horses; +0.20 recall; also fires on blankets"
+      },
+      "dog": {
+        "class": "animal",
+        "subclass": "dog",
+        "threshold": 0.4,
+        "note": "one gold dog; fired on a donkey at 0.74"
+      },
+      "elephant": {
+        "class": "animal",
+        "subclass": "other",
+        "threshold": 0.5
+      },
+      "giraffe": {
+        "class": "animal",
+        "subclass": "other",
+        "threshold": 0.5
+      },
+      "horse": {
+        "class": "animal",
+        "subclass": "horse",
+        "threshold": 0.25,
+        "note": "precision 1.00 at 0.25; recall is the problem"
+      },
+      "motorcycle": {
+        "class": "vehicle",
+        "subclass": "atv",
+        "threshold": 0.4
+      },
+      "person": {
+        "class": "person",
+        "subclass": "unknown",
+        "threshold": 0.6,
+        "note": "recall 1.00 at 0.25 with precision 0.42 (night horses as people)"
+      },
+      "sheep": {
+        "class": "animal",
+        "subclass": "horse",
+        "threshold": 0.5,
+        "note": "same as cow"
+      },
+      "truck": {
+        "class": "vehicle",
+        "subclass": "truck",
+        "threshold": 0.25,
+        "note": "tractors are never found as trucks (0/14)"
+      },
+      "zebra": {
+        "class": "animal",
+        "subclass": "other",
+        "threshold": 0.5
+      }
+    }
+  },
+  "bursts": {
+    "policy": "none",
+    "n_bursts": 50,
+    "frames_heads": 50,
+    "frames_all": 156,
+    "moving_min": 0.02,
+    "gate": "dist",
+    "assoc_iou": 0.3,
+    "assoc_dist": 2
+  },
+  "threshold": 0.25,
+  "iou": 0.5,
+  "results": [
+    {
+      "model": "yolo26s",
+      "tag": "bursts-none-dist2",
+      "taxonomy": "coco",
+      "policy": "none",
+      "predictions_file": "evals/baseline/2026-10-24/predictions.yolo26s.jsonl",
+      "sha256": "029af01153979b54cf3784dd2a9d2185bacd5183bd63f92c0b608ce5d3fd361e",
+      "latency": null,
+      "score": {
+        "threshold": "per-label",
+        "thresholds_by_label": {
+          "horse": 0.25,
+          "person": 0.6,
+          "dog": 0.4,
+          "cat": 0.6,
+          "bird": 0.5,
+          "car": 0.25,
+          "truck": 0.25,
+          "atv": 0.4,
+          "other": 0.5
+        },
+        "iou": 0.5,
+        "labels": [
+          "car",
+          "dog",
+          "horse",
+          "person",
+          "truck"
+        ],
+        "operating_points": {
+          "r_at_fppf01": {
+            "recall": 0.2,
+            "threshold": 0.95
+          },
+          "r_at_p90": {
+            "recall": 0.5,
+            "threshold": 0.7
+          }
+        },
+        "slices": {
+          "all": {
+            "frames": 50,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 20,
+                "tp": 20,
+                "fp": 5,
+                "fn": 0,
+                "precision": 0.8,
+                "recall": 1,
+                "f1": 0.888888888888889,
+                "ap": 0.9494564536340852
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 4,
+                "tp": 3,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.75,
+                "f1": 0.8571428571428571,
+                "ap": 0.75
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 10,
+                "tp": 5,
+                "fp": 0,
+                "fn": 5,
+                "precision": 1,
+                "recall": 0.5,
+                "f1": 0.6666666666666666,
+                "ap": 0.5
+              },
+              "person": {
+                "label": "person",
+                "gold": 23,
+                "tp": 20,
+                "fp": 1,
+                "fn": 3,
+                "precision": 0.9523809523809523,
+                "recall": 0.8695652173913043,
+                "f1": 0.909090909090909,
+                "ap": 0.8695652173913043
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 5,
+                "tp": 0,
+                "fp": 0,
+                "fn": 5,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.12,
+            "fppf_all": 0.12,
+            "horse_count": {
+              "mae": 0.1,
+              "exact": 0.92
+            },
+            "horse_recall_ci": {
+              "lo": 0.14285714285714285,
+              "hi": 0.8571428571428571
+            },
+            "horse_ap": 0.5
+          },
+          "period:day": {
+            "frames": 24,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 10,
+                "tp": 10,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.9090909090909091,
+                "recall": 1,
+                "f1": 0.9523809523809523,
+                "ap": 0.9636363636363636
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 1,
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 5,
+                "tp": 3,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.6,
+                "f1": 0.7499999999999999,
+                "ap": 0.6
+              },
+              "person": {
+                "label": "person",
+                "gold": 9,
+                "tp": 7,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.7777777777777778,
+                "f1": 0.8750000000000001,
+                "ap": 0.7777777777777778
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 2,
+                "tp": 0,
+                "fp": 0,
+                "fn": 2,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.041666666666666664,
+            "fppf_all": 0.041666666666666664,
+            "horse_count": {
+              "mae": 0.08333333333333333,
+              "exact": 0.9166666666666666
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 1
+            },
+            "horse_ap": 0.6
+          },
+          "camera:back_pasture_cam": {
+            "frames": 7,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "period:night": {
+            "frames": 26,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 10,
+                "tp": 10,
+                "fp": 4,
+                "fn": 0,
+                "precision": 0.7142857142857143,
+                "recall": 1,
+                "f1": 0.8333333333333333,
+                "ap": 0.9833333333333334
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 3,
+                "tp": 3,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 5,
+                "tp": 2,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1,
+                "recall": 0.4,
+                "f1": 0.5714285714285715,
+                "ap": 0.4
+              },
+              "person": {
+                "label": "person",
+                "gold": 14,
+                "tp": 13,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.9285714285714286,
+                "recall": 0.9285714285714286,
+                "f1": 0.9285714285714286,
+                "ap": 0.9285714285714286
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 3,
+                "tp": 0,
+                "fp": 0,
+                "fn": 3,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.19230769230769232,
+            "fppf_all": 0.19230769230769232,
+            "horse_count": {
+              "mae": 0.11538461538461539,
+              "exact": 0.9230769230769231
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 1
+            },
+            "horse_ap": 0.4
+          },
+          "camera:back_yard_cam": {
+            "frames": 10,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 20,
+                "tp": 20,
+                "fp": 2,
+                "fn": 0,
+                "precision": 0.9090909090909091,
+                "recall": 1,
+                "f1": 0.9523809523809523,
+                "ap": 0.9808080808080809
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 1,
+                "tp": 1,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 9,
+                "tp": 9,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.9,
+                "recall": 1,
+                "f1": 0.9473684210526316,
+                "ap": 1
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.3,
+            "fppf_all": 0.3,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:donkey_cam": {
+            "frames": 10,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 6,
+                "tp": 4,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "ap": 0.6666666666666666
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:front_porch_cam": {
+            "frames": 9,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 10,
+                "tp": 5,
+                "fp": 0,
+                "fn": 5,
+                "precision": 1,
+                "recall": 0.5,
+                "f1": 0.6666666666666666,
+                "ap": 0.5
+              },
+              "person": {
+                "label": "person",
+                "gold": 1,
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0.5555555555555556,
+              "exact": 0.5555555555555556
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0.5
+          },
+          "camera:mops_cam": {
+            "frames": 1,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:tractor_cam": {
+            "frames": 5,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 3,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 1,
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 5,
+                "tp": 0,
+                "fp": 0,
+                "fn": 5,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.6,
+            "fppf_all": 0.6,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:wash_stall": {
+            "frames": 8,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 2,
+                "tp": 2,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 7,
+                "tp": 7,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          }
+        }
+      },
+      "score_all_frames": {
+        "threshold": "per-label",
+        "thresholds_by_label": {
+          "horse": 0.25,
+          "person": 0.6,
+          "dog": 0.4,
+          "cat": 0.6,
+          "bird": 0.5,
+          "car": 0.25,
+          "truck": 0.25,
+          "atv": 0.4,
+          "other": 0.5
+        },
+        "iou": 0.5,
+        "labels": [
+          "car",
+          "dog",
+          "horse",
+          "person",
+          "truck"
+        ],
+        "operating_points": {
+          "r_at_fppf01": {
+            "recall": 0,
+            "threshold": null
+          },
+          "r_at_p90": {
+            "recall": 0.42857142857142855,
+            "threshold": 0.65
+          }
+        },
+        "slices": {
+          "all": {
+            "frames": 156,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 76,
+                "tp": 76,
+                "fp": 12,
+                "fn": 0,
+                "precision": 0.8636363636363636,
+                "recall": 1,
+                "f1": 0.9268292682926829,
+                "ap": 0.9760360176324694
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 18,
+                "tp": 8,
+                "fp": 0,
+                "fn": 10,
+                "precision": 1,
+                "recall": 0.4444444444444444,
+                "f1": 0.6153846153846153,
+                "ap": 0.4444444444444444
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 35,
+                "tp": 17,
+                "fp": 4,
+                "fn": 18,
+                "precision": 0.8095238095238095,
+                "recall": 0.4857142857142857,
+                "f1": 0.6071428571428571,
+                "ap": 0.4574546485260772
+              },
+              "person": {
+                "label": "person",
+                "gold": 79,
+                "tp": 67,
+                "fp": 9,
+                "fn": 12,
+                "precision": 0.881578947368421,
+                "recall": 0.8481012658227848,
+                "f1": 0.8645161290322582,
+                "ap": 0.8061535021524965
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 14,
+                "tp": 0,
+                "fp": 0,
+                "fn": 14,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.16025641025641027,
+            "fppf_all": 0.16025641025641027,
+            "horse_count": {
+              "mae": 0.14102564102564102,
+              "exact": 0.8910256410256411
+            },
+            "horse_recall_ci": {
+              "lo": 0.3055555555555556,
+              "hi": 0.6756756756756757
+            },
+            "horse_ap": 0.4574546485260772
+          },
+          "period:day": {
+            "frames": 81,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 38,
+                "tp": 38,
+                "fp": 3,
+                "fn": 0,
+                "precision": 0.926829268292683,
+                "recall": 1,
+                "f1": 0.9620253164556963,
+                "ap": 0.9800648559731897
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 6,
+                "tp": 0,
+                "fp": 0,
+                "fn": 6,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 19,
+                "tp": 14,
+                "fp": 3,
+                "fn": 5,
+                "precision": 0.8235294117647058,
+                "recall": 0.7368421052631579,
+                "f1": 0.7777777777777778,
+                "ap": 0.6964285714285715
+              },
+              "person": {
+                "label": "person",
+                "gold": 28,
+                "tp": 18,
+                "fp": 2,
+                "fn": 10,
+                "precision": 0.9,
+                "recall": 0.6428571428571429,
+                "f1": 0.75,
+                "ap": 0.6146616541353385
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 8,
+                "tp": 0,
+                "fp": 0,
+                "fn": 8,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.09876543209876543,
+            "fppf_all": 0.09876543209876543,
+            "horse_count": {
+              "mae": 0.09876543209876543,
+              "exact": 0.9012345679012346
+            },
+            "horse_recall_ci": {
+              "lo": 0.5238095238095238,
+              "hi": 0.9375
+            },
+            "horse_ap": 0.6964285714285715
+          },
+          "camera:back_pasture_cam": {
+            "frames": 15,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.06666666666666667,
+            "fppf_all": 0.06666666666666667,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "period:night": {
+            "frames": 75,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 38,
+                "tp": 38,
+                "fp": 9,
+                "fn": 0,
+                "precision": 0.8085106382978723,
+                "recall": 1,
+                "f1": 0.8941176470588235,
+                "ap": 0.9904337009600168
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 12,
+                "tp": 8,
+                "fp": 0,
+                "fn": 4,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "ap": 0.6666666666666666
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 16,
+                "tp": 3,
+                "fp": 1,
+                "fn": 13,
+                "precision": 0.75,
+                "recall": 0.1875,
+                "f1": 0.3,
+                "ap": 0.171875
+              },
+              "person": {
+                "label": "person",
+                "gold": 51,
+                "tp": 49,
+                "fp": 7,
+                "fn": 2,
+                "precision": 0.875,
+                "recall": 0.9607843137254902,
+                "f1": 0.9158878504672897,
+                "ap": 0.9292830561747452
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 6,
+                "tp": 0,
+                "fp": 0,
+                "fn": 6,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.22666666666666666,
+            "fppf_all": 0.22666666666666666,
+            "horse_count": {
+              "mae": 0.18666666666666668,
+              "exact": 0.88
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0.46153846153846156
+            },
+            "horse_ap": 0.171875
+          },
+          "camera:back_yard_cam": {
+            "frames": 38,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 76,
+                "tp": 76,
+                "fp": 6,
+                "fn": 0,
+                "precision": 0.926829268292683,
+                "recall": 1,
+                "f1": 0.9620253164556963,
+                "ap": 0.9894437685776941
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 7,
+                "tp": 4,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1,
+                "recall": 0.5714285714285714,
+                "f1": 0.7272727272727273,
+                "ap": 0.5714285714285714
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 32,
+                "tp": 29,
+                "fp": 6,
+                "fn": 3,
+                "precision": 0.8285714285714286,
+                "recall": 0.90625,
+                "f1": 0.8656716417910447,
+                "ap": 0.8538306451612897
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.34210526315789475,
+            "fppf_all": 0.34210526315789475,
+            "horse_count": {
+              "mae": 0.02631578947368421,
+              "exact": 0.9736842105263158
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          },
+          "camera:donkey_cam": {
+            "frames": 32,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 20,
+                "tp": 13,
+                "fp": 0,
+                "fn": 7,
+                "precision": 1,
+                "recall": 0.65,
+                "f1": 0.787878787878788,
+                "ap": 0.65
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          },
+          "camera:front_porch_cam": {
+            "frames": 30,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 35,
+                "tp": 17,
+                "fp": 3,
+                "fn": 18,
+                "precision": 0.85,
+                "recall": 0.4857142857142857,
+                "f1": 0.6181818181818183,
+                "ap": 0.4586111111111112
+              },
+              "person": {
+                "label": "person",
+                "gold": 3,
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "ap": 0.5555555555555556
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.13333333333333333,
+            "fppf_all": 0.13333333333333333,
+            "horse_count": {
+              "mae": 0.7,
+              "exact": 0.4666666666666667
+            },
+            "horse_recall_ci": {
+              "lo": 0.3076923076923077,
+              "hi": 0.6875
+            },
+            "horse_ap": 0.4586111111111112
+          },
+          "camera:mops_cam": {
+            "frames": 2,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:tractor_cam": {
+            "frames": 14,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 6,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 6,
+                "tp": 0,
+                "fp": 0,
+                "fn": 6,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 14,
+                "tp": 0,
+                "fp": 0,
+                "fn": 14,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.42857142857142855,
+            "fppf_all": 0.42857142857142855,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:wash_stall": {
+            "frames": 25,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 5,
+                "tp": 4,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.8,
+                "f1": 0.888888888888889,
+                "ap": 0.8
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 24,
+                "tp": 23,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.9583333333333334,
+                "recall": 0.9583333333333334,
+                "f1": 0.9583333333333334,
+                "ap": 0.9409722222222223
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.04,
+            "fppf_all": 0.04,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          }
+        }
+      }
+    },
+    {
+      "model": "yolo11n",
+      "tag": "bursts-none-dist2",
+      "taxonomy": "coco",
+      "policy": "none",
+      "predictions_file": "evals/baseline/2026-10-24/predictions.yolo11n.jsonl",
+      "sha256": "82bab32e4021ddbccba5712b562a823d29704038b69c35fde18dd2dae5248607",
+      "latency": null,
+      "score": {
+        "threshold": "per-label",
+        "thresholds_by_label": {
+          "horse": 0.25,
+          "person": 0.6,
+          "dog": 0.4,
+          "cat": 0.6,
+          "bird": 0.5,
+          "car": 0.25,
+          "truck": 0.25,
+          "atv": 0.4,
+          "other": 0.5
+        },
+        "iou": 0.5,
+        "labels": [
+          "car",
+          "dog",
+          "horse",
+          "person",
+          "truck"
+        ],
+        "operating_points": {
+          "r_at_fppf01": {
+            "recall": 0,
+            "threshold": null
+          },
+          "r_at_p90": {
+            "recall": 0.1,
+            "threshold": 0.95
+          }
+        },
+        "slices": {
+          "all": {
+            "frames": 50,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 20,
+                "tp": 20,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 4,
+                "tp": 3,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.75,
+                "f1": 0.8571428571428571,
+                "ap": 0.75
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 10,
+                "tp": 3,
+                "fp": 1,
+                "fn": 7,
+                "precision": 0.75,
+                "recall": 0.3,
+                "f1": 0.4285714285714285,
+                "ap": 0.25
+              },
+              "person": {
+                "label": "person",
+                "gold": 23,
+                "tp": 17,
+                "fp": 9,
+                "fn": 6,
+                "precision": 0.6538461538461539,
+                "recall": 0.7391304347826086,
+                "f1": 0.693877551020408,
+                "ap": 0.636385336743393
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 5,
+                "tp": 0,
+                "fp": 0,
+                "fn": 5,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.24,
+            "fppf_all": 0.24,
+            "horse_count": {
+              "mae": 0.16,
+              "exact": 0.88
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0.7142857142857143
+            },
+            "horse_ap": 0.25
+          },
+          "period:day": {
+            "frames": 24,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 10,
+                "tp": 10,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 1,
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 5,
+                "tp": 3,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.6,
+                "f1": 0.7499999999999999,
+                "ap": 0.6
+              },
+              "person": {
+                "label": "person",
+                "gold": 9,
+                "tp": 6,
+                "fp": 6,
+                "fn": 3,
+                "precision": 0.5,
+                "recall": 0.6666666666666666,
+                "f1": 0.5714285714285715,
+                "ap": 0.5555555555555556
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 2,
+                "tp": 0,
+                "fp": 0,
+                "fn": 2,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.3333333333333333,
+            "fppf_all": 0.3333333333333333,
+            "horse_count": {
+              "mae": 0.08333333333333333,
+              "exact": 0.9166666666666666
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 1
+            },
+            "horse_ap": 0.6
+          },
+          "camera:back_pasture_cam": {
+            "frames": 7,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.14285714285714285,
+            "fppf_all": 0.14285714285714285,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "period:night": {
+            "frames": 26,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 10,
+                "tp": 10,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 3,
+                "tp": 3,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 5,
+                "tp": 0,
+                "fp": 1,
+                "fn": 5,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 14,
+                "tp": 11,
+                "fp": 3,
+                "fn": 3,
+                "precision": 0.7857142857142857,
+                "recall": 0.7857142857142857,
+                "f1": 0.7857142857142857,
+                "ap": 0.7261904761904762
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 3,
+                "tp": 0,
+                "fp": 0,
+                "fn": 3,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.15384615384615385,
+            "fppf_all": 0.15384615384615385,
+            "horse_count": {
+              "mae": 0.23076923076923078,
+              "exact": 0.8461538461538461
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          },
+          "camera:back_yard_cam": {
+            "frames": 10,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 20,
+                "tp": 20,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 1,
+                "tp": 1,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 9,
+                "tp": 7,
+                "fp": 1,
+                "fn": 2,
+                "precision": 0.875,
+                "recall": 0.7777777777777778,
+                "f1": 0.823529411764706,
+                "ap": 0.7083333333333333
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.2,
+            "fppf_all": 0.2,
+            "horse_count": {
+              "mae": 0.1,
+              "exact": 0.9
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:donkey_cam": {
+            "frames": 10,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 6,
+                "tp": 2,
+                "fp": 0,
+                "fn": 4,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "ap": 0.3333333333333333
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:front_porch_cam": {
+            "frames": 9,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 10,
+                "tp": 3,
+                "fp": 0,
+                "fn": 7,
+                "precision": 1,
+                "recall": 0.3,
+                "f1": 0.4615384615384615,
+                "ap": 0.3
+              },
+              "person": {
+                "label": "person",
+                "gold": 1,
+                "tp": 1,
+                "fp": 7,
+                "fn": 0,
+                "precision": 0.125,
+                "recall": 1,
+                "f1": 0.2222222222222222,
+                "ap": 1
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.8888888888888888,
+            "fppf_all": 0.8888888888888888,
+            "horse_count": {
+              "mae": 0.7777777777777778,
+              "exact": 0.4444444444444444
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0.3
+          },
+          "camera:mops_cam": {
+            "frames": 1,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:tractor_cam": {
+            "frames": 5,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 1,
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 5,
+                "tp": 0,
+                "fp": 0,
+                "fn": 5,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:wash_stall": {
+            "frames": 8,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 2,
+                "tp": 2,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 7,
+                "tp": 7,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.875,
+                "recall": 1,
+                "f1": 0.9333333333333333,
+                "ap": 0.9821428571428572
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.125,
+            "fppf_all": 0.125,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          }
+        }
+      },
+      "score_all_frames": {
+        "threshold": "per-label",
+        "thresholds_by_label": {
+          "horse": 0.25,
+          "person": 0.6,
+          "dog": 0.4,
+          "cat": 0.6,
+          "bird": 0.5,
+          "car": 0.25,
+          "truck": 0.25,
+          "atv": 0.4,
+          "other": 0.5
+        },
+        "iou": 0.5,
+        "labels": [
+          "car",
+          "dog",
+          "horse",
+          "person",
+          "truck"
+        ],
+        "operating_points": {
+          "r_at_fppf01": {
+            "recall": 0.02857142857142857,
+            "threshold": 0.95
+          },
+          "r_at_p90": {
+            "recall": 0.02857142857142857,
+            "threshold": 0.95
+          }
+        },
+        "slices": {
+          "all": {
+            "frames": 156,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 76,
+                "tp": 76,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.987012987012987,
+                "recall": 1,
+                "f1": 0.9934640522875817,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 18,
+                "tp": 7,
+                "fp": 0,
+                "fn": 11,
+                "precision": 1,
+                "recall": 0.3888888888888889,
+                "f1": 0.56,
+                "ap": 0.3888888888888889
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 35,
+                "tp": 12,
+                "fp": 5,
+                "fn": 23,
+                "precision": 0.7058823529411765,
+                "recall": 0.34285714285714286,
+                "f1": 0.46153846153846156,
+                "ap": 0.2894557823129251
+              },
+              "person": {
+                "label": "person",
+                "gold": 79,
+                "tp": 57,
+                "fp": 15,
+                "fn": 22,
+                "precision": 0.7916666666666666,
+                "recall": 0.7215189873417721,
+                "f1": 0.7549668874172185,
+                "ap": 0.6593871337665484
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 14,
+                "tp": 1,
+                "fp": 0,
+                "fn": 13,
+                "precision": 1,
+                "recall": 0.07142857142857142,
+                "f1": 0.13333333333333333,
+                "ap": 0.07142857142857142
+              }
+            },
+            "fppf_interest": 0.15384615384615385,
+            "fppf_all": 0.15384615384615385,
+            "horse_count": {
+              "mae": 0.1794871794871795,
+              "exact": 0.8653846153846154
+            },
+            "horse_recall_ci": {
+              "lo": 0.1935483870967742,
+              "hi": 0.5416666666666666
+            },
+            "horse_ap": 0.2894557823129251
+          },
+          "period:day": {
+            "frames": 81,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 38,
+                "tp": 38,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.9743589743589743,
+                "recall": 1,
+                "f1": 0.9870129870129869,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 6,
+                "tp": 0,
+                "fp": 0,
+                "fn": 6,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 19,
+                "tp": 12,
+                "fp": 4,
+                "fn": 7,
+                "precision": 0.75,
+                "recall": 0.631578947368421,
+                "f1": 0.6857142857142857,
+                "ap": 0.5724696356275302
+              },
+              "person": {
+                "label": "person",
+                "gold": 28,
+                "tp": 13,
+                "fp": 6,
+                "fn": 15,
+                "precision": 0.6842105263157895,
+                "recall": 0.4642857142857143,
+                "f1": 0.5531914893617021,
+                "ap": 0.402389903329753
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 8,
+                "tp": 1,
+                "fp": 0,
+                "fn": 7,
+                "precision": 1,
+                "recall": 0.125,
+                "f1": 0.2222222222222222,
+                "ap": 0.125
+              }
+            },
+            "fppf_interest": 0.1728395061728395,
+            "fppf_all": 0.1728395061728395,
+            "horse_count": {
+              "mae": 0.13580246913580246,
+              "exact": 0.8641975308641975
+            },
+            "horse_recall_ci": {
+              "lo": 0.4,
+              "hi": 0.8461538461538461
+            },
+            "horse_ap": 0.5724696356275302
+          },
+          "camera:back_pasture_cam": {
+            "frames": 15,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.06666666666666667,
+            "fppf_all": 0.06666666666666667,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "period:night": {
+            "frames": 75,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 38,
+                "tp": 38,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 12,
+                "tp": 7,
+                "fp": 0,
+                "fn": 5,
+                "precision": 1,
+                "recall": 0.5833333333333334,
+                "f1": 0.7368421052631579,
+                "ap": 0.5833333333333334
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 16,
+                "tp": 0,
+                "fp": 1,
+                "fn": 16,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 51,
+                "tp": 44,
+                "fp": 9,
+                "fn": 7,
+                "precision": 0.8301886792452831,
+                "recall": 0.8627450980392157,
+                "f1": 0.8461538461538461,
+                "ap": 0.8032538611485983
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 6,
+                "tp": 0,
+                "fp": 0,
+                "fn": 6,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.13333333333333333,
+            "fppf_all": 0.13333333333333333,
+            "horse_count": {
+              "mae": 0.22666666666666666,
+              "exact": 0.8666666666666667
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          },
+          "camera:back_yard_cam": {
+            "frames": 38,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 76,
+                "tp": 76,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "ap": 1
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 7,
+                "tp": 3,
+                "fp": 0,
+                "fn": 4,
+                "precision": 1,
+                "recall": 0.42857142857142855,
+                "f1": 0.6,
+                "ap": 0.42857142857142855
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 32,
+                "tp": 25,
+                "fp": 4,
+                "fn": 7,
+                "precision": 0.8620689655172413,
+                "recall": 0.78125,
+                "f1": 0.8196721311475409,
+                "ap": 0.754807692307692
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.15789473684210525,
+            "fppf_all": 0.15789473684210525,
+            "horse_count": {
+              "mae": 0.02631578947368421,
+              "exact": 0.9736842105263158
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          },
+          "camera:donkey_cam": {
+            "frames": 32,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 20,
+                "tp": 10,
+                "fp": 0,
+                "fn": 10,
+                "precision": 1,
+                "recall": 0.5,
+                "f1": 0.6666666666666666,
+                "ap": 0.5
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          },
+          "camera:front_porch_cam": {
+            "frames": 30,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 35,
+                "tp": 12,
+                "fp": 3,
+                "fn": 23,
+                "precision": 0.8,
+                "recall": 0.34285714285714286,
+                "f1": 0.48000000000000004,
+                "ap": 0.3244897959183674
+              },
+              "person": {
+                "label": "person",
+                "gold": 3,
+                "tp": 1,
+                "fp": 10,
+                "fn": 2,
+                "precision": 0.09090909090909091,
+                "recall": 0.3333333333333333,
+                "f1": 0.14285714285714288,
+                "ap": 0.3333333333333333
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.5,
+            "fppf_all": 0.5,
+            "horse_count": {
+              "mae": 0.8666666666666667,
+              "exact": 0.36666666666666664
+            },
+            "horse_recall_ci": {
+              "lo": 0.1891891891891892,
+              "hi": 0.5333333333333333
+            },
+            "horse_ap": 0.3244897959183674
+          },
+          "camera:mops_cam": {
+            "frames": 2,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0,
+            "fppf_all": 0,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:tractor_cam": {
+            "frames": 14,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 6,
+                "tp": 0,
+                "fp": 0,
+                "fn": 6,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 14,
+                "tp": 1,
+                "fp": 0,
+                "fn": 13,
+                "precision": 1,
+                "recall": 0.07142857142857142,
+                "f1": 0.13333333333333333,
+                "ap": 0.07142857142857142
+              }
+            },
+            "fppf_interest": 0.07142857142857142,
+            "fppf_all": 0.07142857142857142,
+            "horse_count": {
+              "mae": 0.07142857142857142,
+              "exact": 0.9285714285714286
+            },
+            "horse_recall_ci": null,
+            "horse_ap": 0
+          },
+          "camera:wash_stall": {
+            "frames": 25,
+            "classes": {
+              "car": {
+                "label": "car",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "dog": {
+                "label": "dog",
+                "gold": 5,
+                "tp": 4,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.8,
+                "f1": 0.888888888888889,
+                "ap": 0.8
+              },
+              "horse": {
+                "label": "horse",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              },
+              "person": {
+                "label": "person",
+                "gold": 24,
+                "tp": 21,
+                "fp": 1,
+                "fn": 3,
+                "precision": 0.9545454545454546,
+                "recall": 0.875,
+                "f1": 0.9130434782608695,
+                "ap": 0.8674242424242424
+              },
+              "truck": {
+                "label": "truck",
+                "gold": 0,
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "precision": 0,
+                "recall": 0,
+                "f1": 0,
+                "ap": 0
+              }
+            },
+            "fppf_interest": 0.04,
+            "fppf_all": 0.04,
+            "horse_count": {
+              "mae": 0,
+              "exact": 1
+            },
+            "horse_recall_ci": {
+              "lo": 0,
+              "hi": 0
+            },
+            "horse_ap": 0
+          }
+        }
+      }
+    }
+  ]
+}
