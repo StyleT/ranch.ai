@@ -84,7 +84,8 @@
     cmd: "{{ ranch_bin_dir }}/node {{ node_path.stdout | trim | dirname }}/npm ci --no-audit --no-fund"
     chdir: "{{ ranch_app_dir }}"
   environment: { HOME: "/Users/{{ ranch_user }}", PATH: "{{ node_path.stdout | trim | dirname }}:/usr/bin:/bin" }
-  when: not nm.stat.exists or (app_sync.stdout is search('package-lock\.json'))
+  # content changes only: an attribute-only ".f..t...." line (same lockfile, another checkout's mtime) is not a reason
+  when: not nm.stat.exists or (app_sync.stdout is search('(^|\s)[<>ch*][^\s]*\s+package-lock\.json(\s|$)'))
   notify: restart app daemons
 
 - name: Detector binary present?
@@ -96,7 +97,7 @@
   ansible.builtin.command:
     cmd: "/usr/bin/swiftc -O -o {{ ranch_var_dir }}/build/detector {{ ranch_app_dir }}/apps/detector/swift/main.swift"
   environment: { HOME: "/Users/{{ ranch_user }}" }
-  when: not det_bin.stat.exists or (app_sync.stdout is search('apps/detector/swift/main\.swift'))
+  when: not det_bin.stat.exists or (app_sync.stdout is search('(^|\s)[<>ch*][^\s]*\s+apps/detector/swift/main\.swift(\s|$)'))
   register: det_build
 
 - name: Install detector
