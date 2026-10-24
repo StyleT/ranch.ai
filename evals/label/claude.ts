@@ -104,7 +104,24 @@ async function paramsBurst(members: FrameRow[]): Promise<Anthropic.MessageCreate
 }
 
 interface BatchMeta { id: string; created_at: string; model: string; mode?: 'frames' | 'bursts'; frames?: FrameRow[]; bursts?: { burst_id: number; frames: FrameRow[] }[] }
-const usd = (u: { input_tokens: number; output_tokens: number }) => (u.input_tokens * PRICE.input + u.output_tokens * PRICE.output) * PRICE.batchDiscount;
+const usd = (u: { input_tokens: number; output_tokens: number }, discount = PRICE.batchDiscount) => (u.input_tokens * PRICE.input + u.output_tokens * PRICE.output) * discount;
+
+/** A burst's structured result → one row per member, the shape bench.ts reads (path, boxes, label) plus burst_id, seq and
+ *  the burst's motion ground truth on every row. Usage and cost are booked on the head row. Returns the rows, or null
+ *  (and logs why) when the result does not parse. */
+function burstRows(b: { burst_id: number; frames: FrameRow[] }, text: string, usage: Anthropic.Usage, cost: number, common: Record<string, unknown>, tag: string): { rows: string[]; mismatched: boolean } | null {
+  const parsed = BurstLabel.safeParse(JSON.parse(text));
+  if (!parsed.success) { console.error(`${tag} burst ${b.burst_id}: schema ${parsed.error.message.slice(0, 200)}`); return null; }
+  const mismatched = parsed.data.frames.length !== b.frames.length;
+  if (mismatched) console.error(`${tag} burst ${b.burst_id}: ${parsed.data.frames.length} labeled frames for ${b.frames.length} members`);
+  const rows: string[] = [];
+  for (const [k, fl] of parsed.data.frames.entries()) {
+    const f = b.frames.find((m) => (m.seq ?? 0) === fl.seq) ?? b.frames[k]; if (!f) continue;
+    rows.push(JSON.stringify({ ...common, frame_id: f.frame_id ?? null, path: f.path, source: f.source, camera: f.camera, ts: f.ts, period: f.period, burst_id: f.burst_id, seq: f.seq,
+      boxes: toBoxes(fl), label: fl, objects: parsed.data.objects, ...(k === 0 ? { usage, cost_usd: +cost.toFixed(5) } : { cost_usd: 0 }) }));
+  }
+  return { rows, mismatched };
+}
 
 if (cmd === 'estimate') {
   if (a.bursts) {
@@ -161,17 +178,10 @@ if (cmd === 'estimate') {
     const text = msg.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
     const c = usd(msg.usage); cost += c;
     if (meta.mode === 'bursts') {
-      const b = meta.bursts![idx]!;
-      const parsed = BurstLabel.safeParse(JSON.parse(text));
-      if (!parsed.success) { failed++; console.error(`${r.custom_id} ${where}: schema ${parsed.error.message.slice(0, 200)}`); continue; }
-      if (parsed.data.frames.length !== b.frames.length) { mismatched++; console.error(`${r.custom_id} ${where}: ${parsed.data.frames.length} labeled frames for ${b.frames.length} members`); }
-      // One row per member, the same shape as single-frame rows (bench.ts reads path, boxes, label), plus the burst's
-      // motion ground truth on every row. Usage and cost are booked on the head row.
-      for (const [k, fl] of parsed.data.frames.entries()) {
-        const f = b.frames.find((m) => (m.seq ?? 0) === fl.seq) ?? b.frames[k]; if (!f) continue;
-        out.push(JSON.stringify({ ...common, frame_id: f.frame_id ?? null, path: f.path, source: f.source, camera: f.camera, ts: f.ts, period: f.period, burst_id: f.burst_id, seq: f.seq,
-          boxes: toBoxes(fl), label: fl, objects: parsed.data.objects, ...(k === 0 ? { usage: msg.usage, cost_usd: +c.toFixed(5) } : { cost_usd: 0 }) }));
-      }
+      const got = burstRows(meta.bursts![idx]!, text, msg.usage, c, common, r.custom_id);
+      if (!got) { failed++; continue; }
+      if (got.mismatched) mismatched++;
+      out.push(...got.rows);
     } else {
       const f = meta.frames![idx]!;
       const parsed = FrameLabel.safeParse(JSON.parse(text));
@@ -184,7 +194,35 @@ if (cmd === 'estimate') {
   const outPath = a.out || `evals/golden/${a.labels}.jsonl`;
   writeFileSync(outPath, out.join('\n') + '\n');
   console.log(JSON.stringify({ labeled: out.length, failed, mismatched, cost_usd: +cost.toFixed(4), out: outPath, dataset: a.labels, frames: a.dataset, mode: meta.mode ?? 'frames' }));
+} else if (cmd === 'label-bursts') {
+  // Synchronous form (24 Oct, Vlad: switch when the Batch queue shows no progress in 5 min): the same per-burst
+  // requests through the Messages API at full price, a few in flight at a time, same rows out.
+  const bs = bursts(); const CONC = Number(process.env.RANCH_LABEL_CONCURRENCY ?? 3);
+  if (!bs.length) { console.error('no rows with a burst_id in --frames'); process.exit(2); }
+  const out: string[] = []; let cost = 0; let failed = 0; let mismatched = 0; let next = 0; let done = 0;
+  const common = { dataset: a.labels, frames_dataset: a.dataset, labeler: MODEL, labeled_at: new Date().toISOString(), batch_id: null, sync: true };
+  const t0 = Date.now();
+  await Promise.all(Array.from({ length: CONC }, async () => {
+    while (next < bs.length) {
+      const k = next++; const b = bs[k]!;
+      try {
+        const msg = await client.messages.create(await paramsBurst(b));
+        if (msg.stop_reason === 'refusal') { failed++; console.error(`burst ${b[0]!.burst_id}: refusal`); continue; }
+        const text = msg.content.find((x): x is Anthropic.TextBlock => x.type === 'text')?.text ?? '';
+        const c = usd(msg.usage, 1); cost += c;
+        const got = burstRows({ burst_id: b[0]!.burst_id!, frames: b }, text, msg.usage, c, common, `b${k}`);
+        if (!got) { failed++; continue; }
+        if (got.mismatched) mismatched++;
+        out.push(...got.rows);
+      } catch (e) { failed++; console.error(`burst ${b[0]!.burst_id}: ${e instanceof Error ? e.message : String(e)}`); }
+      finally { done++; console.error(`${done}/${bs.length} bursts, $${cost.toFixed(2)}, ${Math.round((Date.now() - t0) / 1000)} s`); }
+    }
+  }));
+  out.sort();
+  const outPath = a.out || `evals/golden/${a.labels}.jsonl`;
+  writeFileSync(outPath, out.join('\n') + '\n');
+  console.log(JSON.stringify({ labeled: out.length, bursts: bs.length, failed, mismatched, cost_usd: +cost.toFixed(4), out: outPath, dataset: a.labels, frames: a.dataset, mode: 'bursts-sync' }));
 } else {
-  console.error('usage: claude.ts estimate [--bursts]|submit|submit-bursts|collect [--frames f.jsonl] [--batch id] [--out labels.jsonl] [--limit n]');
+  console.error('usage: claude.ts estimate [--bursts]|submit|submit-bursts|label-bursts|collect [--frames f.jsonl] [--batch id] [--out labels.jsonl] [--limit n]');
   process.exit(2);
 }
