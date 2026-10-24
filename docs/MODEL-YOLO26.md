@@ -126,3 +126,17 @@ one pair above 0.08 was a real animal moving 0.018. The ingest status message no
 of the metric over every grab (`motion`), so the thresholds are tuned from evidence, never by feel. The unit test
 proves a 100×60 px object (a horse at the far fence on a 2560 px frame) moving 60 px is seen by the block metric
 and invisible to the whole-frame mean.
+
+## Bursts vs no-bursts, measured (24 Oct)
+
+The first scored answer to "do bursts help tier 1" (`frames-ranch-bursts-v1`, 50 whole bursts, labels made one burst
+per request so the labeler saw the sequence; `evals/results/README.md`, LEADERBOARD rows `bursts-*`). On the head
+frame — the one a single-frame pipeline would have emitted — removing tracks that were seen twice and did not move
+(`drop-still`) removed **none** of yolo26s's false positives and deleted 5 of 23 real people, 19 of 20 real parked cars
+and a standing horse; keeping only tracks seen twice (`require-stable`) cut person recall 0.87 → 0.35 and horse
+0.50 → 0.10. The precision claim in Part B ("static false positives become `stable && !moving`") does not hold as a
+per-frame filter: in the labeled sample, still tracks are overwhelmingly real objects, and the detector's few false
+positives are not still tracks. The motion fields keep their other job — the event layer's signal (a horse still across
+many bursts, a person moving) and now a labeled ground truth to validate the `moving` flag against
+(`apps/detector/src/moving-agreement.ts`). The fixture problem (one porch cell read as `horse` and `person` across 18
+bursts) is a cross-burst, per-camera phenomenon and is the untested follow-up.

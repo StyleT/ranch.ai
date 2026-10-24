@@ -120,6 +120,11 @@ trained on and never used to pick thresholds. `frames-ranch-v1` and its labels a
   policies are reported as per-class precision/recall deltas against it, with intervals, on the heads-only slice
   (primary) and on all frames (tighter intervals). Boxes below the operating threshold are never tracked and pass
   through unchanged.
+- Motion flag vs ground truth (`apps/detector/src/moving-agreement.ts`): a bursts labels dataset labelled one burst
+  per request carries an id per object and `objects[] {id, moved}`; for each labeled object, the detector track that
+  overlaps its first box (same label, IoU ≥ 0.5) is found and `isMoving(track)` compared with `moved`. Reports the
+  confusion counts, unmatched (detector miss) and one-frame tracks (flag undefined), and the labeled centre shift,
+  so the association gate and `MOVING_MIN` are judged against what actually moved.
 - Latency p50/p95 and runner RSS on the Neural Engine, as already measured in `evals/detector/README.md`.
 
 ### 4.2 Confidence intervals

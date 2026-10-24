@@ -20,6 +20,7 @@ Rules: docs/EVALUATION.md §2. Verify a dataset by comparing its `dataset.json` 
 | preds-frames-ranch-bursts-v1-yolo11s-0b717c6c | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | ba32d48ec92c4502… | `evals/baseline/2026-10-24/predictions.yolo11s.jsonl` | same repo and tag |
 | preds-frames-ranch-bursts-v1-yolo26n-b4693414 | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 20e533b6d648f755… | `evals/baseline/2026-10-24/predictions.yolo26n.jsonl` | same repo and tag |
 | preds-frames-ranch-bursts-v1-yolo26s-01e03dff | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 029af01153979b54… | `evals/baseline/2026-10-24/predictions.yolo26s.jsonl` | same repo and tag |
+| labels-ranch-bursts-claude-v1 | labels | 2026-10-24 | 156 (50 bursts) | frames-ranch-bursts-v1 | e11bc8f1086efddd… | `evals/golden/labels-ranch-bursts-claude-v1.jsonl` | [tag labels-ranch-bursts-claude-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-bursts-claude-v1) `labels/` |
 
 Notes on `labels-ranch-claude-v1` (smoke-verified 20 Oct, see LEADERBOARD.md): reliable at labeler confidence ≥ 0.7;
 boxes at 0.25–0.45 are hedged guesses on dark blobs and include a static patch on front_porch_cam boxed as a cat in
@@ -35,5 +36,12 @@ gets 9 of the 50), then every member of each burst — 156 frames, burst sizes 2
 back_yard 10, donkey 10, front_porch 9, wash_stall 8, back_pasture 7, tractor 5, mops 1. Rows carry `burst_id` and
 `seq`; the head (seq 0) is the frame a single-frame pipeline would have emitted and is the primary scoring unit.
 Predictions at threshold 0.05 from all six models (the same package hashes as on `frames-ranch-v1`). Labels:
-`labels-ranch-bursts-claude-v1`, Claude on all 156 frames (batch `msgbatch_01CBNq9y41hnogJ7NcXKJRWh`, est. $1.63),
-registered when collected.
+`labels-ranch-bursts-claude-v1`, Claude with **one request per burst** — the members together, about a second apart,
+told to use the sequence as evidence of what an object is (`claude.ts submit-bursts`; a single-frame batch,
+`msgbatch_01CBNq9y41hnogJ7NcXKJRWh`, was cancelled unprocessed because a labeler that repeats the detector's mistake on
+the same static blob would score a false positive as a hit). Two Batch submissions sat at zero progress (the burst
+one, `msgbatch_01KktFfQdNz1j6u7ofy5M7tk`, for 5 min; Vlad's rule: switch after 5 min), both cancelled unprocessed; the
+labels were produced synchronously (`claude.ts label-bursts`, 50 requests, 3 in flight, 3.5 min, **$3.08**). 156 rows,
+236 boxes (222 at confidence ≥ 0.5): person 79, car 76, horse 40, dog 19, truck 14; heads only: person 23, car 20,
+horse 11. Each row carries the burst's `objects[] {id, kind, moved}` — 21 of 24 people moved, 6 of 8 horses, 0 of 20
+cars, 0 of 4 donkeys, 0 of 5 tractors — a motion ground truth (`apps/detector/src/moving-agreement.ts`).
