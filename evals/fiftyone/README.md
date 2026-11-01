@@ -23,7 +23,8 @@ daemons. Decision and research: `docs/EVALUATION.md` §2.1/§7, the 1 Nov plan.
 make fiftyone-install                                   # uv sync
 make frames-pull DATE=2026-10-24                        # images from the mini -> evals/baseline/2026-10-24/frames/
 make fiftyone-import SET=evals/baseline/2026-10-24 LABELS=evals/golden/labels-ranch-bursts-claude-v1.jsonl:gt_claude MODELS=yolo26s,yolo11n
-make fiftyone NAME=frames-ranch-bursts-v1               # the App, bursts grouped as sequences
+make fiftyone NAME=frames-ranch-bursts-v1               # the App, bursts grouped as sequences (browse)
+make fiftyone NAME=frames-ranch-bursts-v1 MODE=annotate # flat, sorted by burst then seq: the Annotate tab works here
 make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=claude-v1
 make fiftyone REPO=ranch-frames-bursts-v1 REV=claude-v1 # load that exact revision from the Hub, then the App
 ```
@@ -38,8 +39,21 @@ that object). A prediction carries the raw label and confidence, plus `track`, `
 file has them (production tracker output); their labels are COCO's raw vocabulary at threshold 0.05 (a `giraffe` at
 0.06 is expected), mapped through the taxonomy only when scoring. A burst is browsed with
 `group_by("burst_id", order_by="seq")`: the grid shows one card per burst, the modal pages through its frames
-(1 / 2 / 3 …) with the Explore and Annotate tabs beside the image (verified on 1.22.1, 1 Nov). Scoring runs on the
-flat dataset.
+(1 / 2 / 3 …) (verified on 1.22.1, 1 Nov). **Editing needs the flat view**: a grouped view has media type `group`
+and the Annotate tab refuses it ("no slices that support annotation"), so `MODE=annotate` opens the flat dataset
+sorted by burst then seq — frames of a burst stay consecutive, every sample is an editable image. In the Annotate
+tab, "Import your dataset schema" once to make the existing label fields and their attributes editable. Scoring runs
+on the flat dataset.
+
+## Reviewing Claude's labels
+
+1. Working copy, so the parent field stays as labeled:
+   `uv run --directory evals/fiftyone python -c "import fiftyone as fo; fo.load_dataset('frames-ranch-bursts-v1').clone_sample_field('gt_claude','gt_vlad')"`
+2. `make fiftyone NAME=frames-ranch-bursts-v1 MODE=annotate`; Annotate tab → import the dataset schema → field
+   `gt_vlad`: move/resize/delete/draw boxes, change labels; attributes (`kind`, `moved`, …) in the attribute editor
+   if the schema exposes them, otherwise label tags (`wrong`, `moved`, `still`). Edits persist immediately.
+3. `make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=revised-vlad-v1`, then the row in
+   `evals/DATASETS.md`. The revision is scored in phase 2 (`evaluate.py`).
 
 ## Store of truth
 

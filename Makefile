@@ -62,8 +62,8 @@ fiftyone-push:    ## Push a FiftyOne dataset to the Hub (private, native format)
 fiftyone-load:    ## Load a revision from the Hub into a local dataset: make fiftyone-load REPO=ranch-frames-bursts-v1 [REV=claude-v1] [NAME=<local name>]
 	$(FO_RUN) hub.py load --repo $(REPO) $(if $(REV),--revision $(REV),) $(if $(NAME),--name $(NAME),) --overwrite
 
-fiftyone:         ## Open the FiftyOne App: make fiftyone NAME=frames-ranch-bursts-v1 | make fiftyone REPO=ranch-frames-bursts-v1 [REV=claude-v1]
-	$(FO_RUN) app.py $(if $(NAME),--name $(NAME),) $(if $(REPO),--repo $(REPO),) $(if $(REV),--revision $(REV),)
+fiftyone:         ## Open the FiftyOne App: make fiftyone NAME=frames-ranch-bursts-v1 [MODE=browse|annotate|flat] | make fiftyone REPO=ranch-frames-bursts-v1 [REV=claude-v1]
+	$(FO_RUN) app.py $(if $(NAME),--name $(NAME),) $(if $(REPO),--repo $(REPO),) $(if $(REV),--revision $(REV),) --mode $(or $(MODE),browse)
 
 taxonomy-pull:    ## Bring the mini's active taxonomy version into the repo (packages/taxonomy/taxonomy.json + its score) for commit
 	@ssh $(HOST) 'cd /usr/local/ranch/app && /usr/local/ranch/bin/node --no-warnings=ExperimentalWarning packages/taxonomy/src/cli.ts export' > .scratch/taxonomy-export.json
