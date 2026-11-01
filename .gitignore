@@ -20,3 +20,4 @@ apps/web/coverage/
 apps/web/e2e/ai/runs/
 apps/web/next-env.d.ts
 apps/web/tsconfig.tsbuildinfo
+__pycache__/

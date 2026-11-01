@@ -60,7 +60,8 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
 
 ## Architecture rules (see docs/PLAN.md §4)
 - TypeScript (Node 24 via fnm) for orchestration, agent, MCP tools, CLI. Python (`uv`) only for the MLX
-  vision sidecar. MQTT (Mosquitto) + SQLite/sqlite-vec as the spine. Claude API models: `claude-opus-5-5`
+  vision sidecar and for the laptop-only eval/dataset tooling (`evals/fiftyone`, FiftyOne; `apps/detector/export`),
+  which never runs on the mini. MQTT (Mosquitto) + SQLite/sqlite-vec as the spine. Claude API models: `claude-opus-5-5`
   for escalation/labeling, `claude-haiku-5-5` as judge. Frigate is a benchmark, never the runtime.
 - Memory budget is the constraint: one ~3 GB VLM resident, nothing else large. Measure before adding.
 - Local by default, cloud by exception; events not streams; one MCP tool surface; OTel on every stage.

@@ -183,6 +183,9 @@ Order of work:
    changes when scored on human labels. Post 1b. See PLAN.md Phase 1.
 
 **Blocked on Vlad:**
+- `HF_TOKEN` for the FiftyOne-native datasets on the Hub: on the **laptop** at `~/.hf.env` (mode 600, a token scoped to
+  the dataset repos; 1 Nov), read by `evals/fiftyone/hub.py`; the mini keeps `~/.config/ranch/hf.env` for the older
+  per-file `make dataset-push`. Never in the repo.
 - ~~`ANTHROPIC_API_KEY`~~ placed 15 Oct on the **mini** at `~/.config/ranch/anthropic.env` (mode 600). The account
   has limited credits: estimate first (free), smoke-test on 2 frames, Batch API only. Labeling runs on the mini:
   `set -a; . ~/.config/ranch/anthropic.env; set +a; node evals/label/claude.ts ...` from `/usr/local/ranch/app`.

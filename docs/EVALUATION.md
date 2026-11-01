@@ -38,6 +38,14 @@ be verified against the registry.
 
 ### 2.1 The Hub is the dataset remote (like GitHub for code)
 
+**From 1 Nov 2026 the store is FiftyOne-native** (`evals/fiftyone/README.md`, DATASETS.md "FiftyOne-native store"):
+one private Hub repo per frames set in FiftyOne's own format (`fiftyone.yml`, `samples.json`, `data/`), pushed and
+loaded with `fiftyone.utils.huggingface`; every label variant and every model's predictions are fields on the same
+samples, and a version is a Hub revision named by a tag (`load --revision <tag>` reproduces it; verified 1 Nov with a
+scripted round trip, 0 differences). The JSONL files under `evals/` remain what the TypeScript tools on the mini
+produce and are imported one way. The per-file layout below is how datasets were pushed before 1 Nov and still holds
+for those tags:
+
 Every dataset is pushed to the Hugging Face Hub, versions as git tags, the same way code goes to `origin main`:
 
 - One Hub dataset repo per family: `vladlenfedosov/ranch-frames` holds every `frames-*` version with its images,
@@ -195,6 +203,11 @@ mini's self-hosted runner and fails the PR.
    is decided from the agreement numbers. → `labels-ranch-vlad-v1`.
 3. **Phase 3:** 300–500 frames, Claude first pass, human review per the protocol; stored as
    `labels.human.<date>.jsonl`, with the AI pass kept beside it.
+4. **Review surface (1 Nov):** labels are reviewed and edited in open-source FiftyOne on the laptop
+   (`evals/fiftyone/README.md`): the set is imported from the JSONL, bursts are browsed as sequences
+   (`group_by("burst_id", order_by="seq")`), boxes and attributes are edited in the App's Annotate tab, and the
+   revision is pushed to the Hub as a new field (`gt_vlad`) and revision tag — the parent field is never edited in
+   place. The JSONL labeler output stays the record of the AI pass.
 
 ## 8. What is deliberately not measured yet
 Tracking across frames, re-identification of individual horses, and anything on the SD sub-stream. They get a

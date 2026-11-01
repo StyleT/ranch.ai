@@ -2,6 +2,19 @@
 
 Rules: docs/EVALUATION.md §2. Verify a dataset by comparing its `dataset.json` sha256 with this table.
 
+## FiftyOne-native store on the Hub (from 1 Nov 2026)
+
+Datasets live on the Hub in FiftyOne's native format, one private repo per frames set, pushed and loaded with
+`fiftyone.utils.huggingface` (`evals/fiftyone/README.md`). Label variants and model predictions are fields on the
+same samples; versions are Hub revisions named by tags. The rows below map dataset ids to repo + revision; the JSONL
+rows further down remain the record of what the TypeScript tools on the mini produced and were imported.
+
+| frames set | Hub repo (private) | revision tag | fields at that revision | samples | round trip |
+|---|---|---|---|---|---|
+| frames-ranch-bursts-v1 | `vladlenfedosov/ranch-frames-bursts-v1` | `claude-v1` | `gt_claude` (= labels-ranch-bursts-claude-v1, 236 boxes), `pred_yolo26s` (248), `pred_yolo11n` (237) | 156 (50 bursts) | 1 Nov: `hub.py load --revision claude-v1` → `hub.py check`: 0 differences over every field and detection attribute |
+
+## JSONL datasets (produced on the mini; imported into FiftyOne)
+
 | id | kind | created | n | parent | sha256 (data file) | location | Hugging Face |
 |---|---|---|---|---|---|---|---|
 | frames-ranch-v1 | frames | 2026-10-20 | 300 | – | b3f7c87146018c03… (frames.jsonl) | `evals/baseline/2026-10-20/`, images `/usr/local/ranch/media/baseline/2026-10-20/` on ranch-ai | [vladlenfedosov/ranch-frames @ frames-ranch-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/frames-ranch-v1) (private) |

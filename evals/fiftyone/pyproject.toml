@@ -1,0 +1,9 @@
+[project]
+name = "ranch-fiftyone"
+version = "0.0.1"
+description = "Review and inspection surface for the eval datasets (FiftyOne, open source). Tooling only, runs on the laptop; the mini never needs it."
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fiftyone>=1.22,<2",
+  "huggingface_hub>=0.25",
+]

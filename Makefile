@@ -42,6 +42,29 @@ dataset-push:     ## Upload a dataset to the Hub and tag it: make dataset-push I
 	  hf repo tag create $(HF_REPO) $(ID) --repo-type dataset -m "$(ID)" 2>/dev/null || echo "tag $(ID) exists"'
 	@echo "https://huggingface.co/datasets/$(HF_REPO)/tree/$(ID)"
 
+# ---- FiftyOne: review, sharing (Hub) and scoring surface for the eval datasets; laptop only (evals/fiftyone/README.md) ----
+FO_DIR = $(CURDIR)/evals/fiftyone
+FO_RUN = uv run --directory $(FO_DIR) python
+fiftyone-install: ## Create evals/fiftyone/.venv (FiftyOne, open source) with uv
+	uv sync --directory $(FO_DIR)
+
+frames-pull:      ## Copy a baseline set's images from the mini into the git-ignored laptop copy: make frames-pull DATE=2026-10-24
+	@test -n "$(DATE)" || (echo "usage: make frames-pull DATE=<evals/baseline date>"; exit 2)
+	rsync -a --delete $(HOST):/usr/local/ranch/media/baseline/$(DATE)/ evals/baseline/$(DATE)/frames/
+
+fiftyone-import:  ## Import a set (+labels, +predictions) into FiftyOne: make fiftyone-import SET=evals/baseline/2026-10-24 LABELS=evals/golden/x.jsonl:gt_claude MODELS=yolo26s,yolo11n
+	@test -n "$(SET)" || (echo "usage: make fiftyone-import SET=evals/baseline/<date> [LABELS=<jsonl>:<field>] [MODELS=a,b]"; exit 2)
+	$(FO_RUN) import_jsonl.py --set $(CURDIR)/$(SET) $(if $(LABELS),--labels $(CURDIR)/$(LABELS),) $(if $(MODELS),--predictions $(MODELS),) --overwrite
+
+fiftyone-push:    ## Push a FiftyOne dataset to the Hub (private, native format) and tag the revision: make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=claude-v1
+	$(FO_RUN) hub.py push --name $(NAME) --repo $(REPO) $(if $(TAG),--tag $(TAG),)
+
+fiftyone-load:    ## Load a revision from the Hub into a local dataset: make fiftyone-load REPO=ranch-frames-bursts-v1 [REV=claude-v1] [NAME=<local name>]
+	$(FO_RUN) hub.py load --repo $(REPO) $(if $(REV),--revision $(REV),) $(if $(NAME),--name $(NAME),) --overwrite
+
+fiftyone:         ## Open the FiftyOne App: make fiftyone NAME=frames-ranch-bursts-v1 | make fiftyone REPO=ranch-frames-bursts-v1 [REV=claude-v1]
+	$(FO_RUN) app.py $(if $(NAME),--name $(NAME),) $(if $(REPO),--repo $(REPO),) $(if $(REV),--revision $(REV),)
+
 taxonomy-pull:    ## Bring the mini's active taxonomy version into the repo (packages/taxonomy/taxonomy.json + its score) for commit
 	@ssh $(HOST) 'cd /usr/local/ranch/app && /usr/local/ranch/bin/node --no-warnings=ExperimentalWarning packages/taxonomy/src/cli.ts export' > .scratch/taxonomy-export.json
 	@node -e 'const fs=require("fs");const e=JSON.parse(fs.readFileSync(".scratch/taxonomy-export.json","utf8"));fs.writeFileSync("packages/taxonomy/taxonomy.json",JSON.stringify(e.taxonomy,null,2)+"\n");if(e.version.score){const f="evals/results/taxonomy-v"+e.version.id+".json";fs.writeFileSync(f,JSON.stringify({version:e.version,taxonomy:e.taxonomy},null,2)+"\n");console.log("wrote",f)}console.log("packages/taxonomy/taxonomy.json <- v"+e.version.id+" ("+e.version.author+(e.version.note?": "+e.version.note:"")+")")'
