@@ -16,6 +16,10 @@ daemons. Decision and research: `docs/EVALUATION.md` §2.1/§7, the 1 Nov plan.
 - Hub token for pushing and for loading private repos: `~/.hf.env` on the laptop (`HF_TOKEN=…`, mode 600; a token
   scoped to the dataset repos), never in the repo. The make targets source it.
 - Uninstall: `rm -rf evals/fiftyone/.venv ~/.fiftyone`.
+- The App outlives the terminal that started it only as orphans: `app.py` dies with the shell, its server keeps
+  5151, and the bundled MongoDB stops when the last Python client exits, after which every query ends in
+  `TypeError: Failed to fetch`. Launch the App from the session that will use it; a stale server must be killed before
+  a new one can take 5151.
 
 ## Commands (from the repo root)
 
@@ -37,21 +41,32 @@ carries `kind`, `posture`, `look`, `confidence`, `object_id` (the labeler's per-
 `index` (its number, so the App colours one object consistently across a burst) and `moved` (the burst's verdict for
 that object). A prediction carries the raw label and confidence, plus `track`, `seen`, `dx`, `dy` when the predictions
 file has them (production tracker output); their labels are COCO's raw vocabulary at threshold 0.05 (a `giraffe` at
-0.06 is expected), mapped through the taxonomy only when scoring. A burst is browsed with
-`group_by("burst_id", order_by="seq")`: the grid shows one card per burst, the modal pages through its frames
-(1 / 2 / 3 …) (verified on 1.22.1, 1 Nov). **Editing needs the flat view**: a grouped view has media type `group`
-and the Annotate tab refuses it ("no slices that support annotation"), so `MODE=annotate` opens the flat dataset
-sorted by burst then seq — frames of a burst stay consecutive, every sample is an editable image. In the Annotate
-tab, "Import your dataset schema" once to make the existing label fields and their attributes editable. Scoring runs
-on the flat dataset.
+0.06 is expected), mapped through the taxonomy only when scoring.
+
+**Bursts are a grouped dataset** (1 Nov, Vlad: annotation must work on bursts): group field `burst`, one group per
+burst, one **image slice per frame named by `seq`** (`"0"` is the head, the default slice). The grid shows the head
+of every burst, the modal shows the burst's slices together, and the Annotate tab edits each slice — a dynamic
+`group_by` view, by contrast, has media type `group` with no slices and the App refuses to annotate it ("Only image
+and 3D slices can be annotated"). Scoring selects slices: `select_group_slices("0")` = heads,
+`select_group_slices(media_type="image")` = every frame; a grouped dataset iterates only its default slice, so every
+count and comparison in these scripts goes through that flat selection. In the Annotate tab, "Import your dataset
+schema" once to make the existing label fields and their attributes editable.
 
 ## Reviewing Claude's labels
 
 1. Working copy, so the parent field stays as labeled:
    `uv run --directory evals/fiftyone python -c "import fiftyone as fo; fo.load_dataset('frames-ranch-bursts-v1').clone_sample_field('gt_claude','gt_vlad')"`
-2. `make fiftyone NAME=frames-ranch-bursts-v1 MODE=annotate`; Annotate tab → import the dataset schema → field
-   `gt_vlad`: move/resize/delete/draw boxes, change labels; attributes (`kind`, `moved`, …) in the attribute editor
-   if the schema exposes them, otherwise label tags (`wrong`, `moved`, `still`). Edits persist immediately.
+2. `make fiftyone NAME=frames-ranch-bursts-v1`; open a burst, Annotate tab → import the dataset schema → field
+   `gt_vlad`: move/resize/delete/draw boxes, change labels, per slice; attributes (`kind`, `moved`, …) in the
+   attribute editor if the schema exposes them, otherwise label tags (`wrong`, `moved`, `still`). Edits persist
+   immediately, **but only when the label passes the schema's form validation** (verified 1 Nov from the database: a
+   drag that fails validation moves the box on screen, logs `Form validation failed` in the browser console, sends no
+   request, and MongoDB keeps the old box). The schema "Scan" caps each string attribute at ~23 distinct values and
+   makes it a dropdown, so a free-text attribute (`look`, 46 values) or an enum with more values than the cap
+   (`posture`, 5) fails on every label whose value was cut. Set those attributes to the Text input type in the schema
+   editor, or patch the stored schema (dataset document, `label_schemas.<field>.attributes`: `component: "text"`,
+   no `values`), then reload the App: the editor builds its form from the schema when it opens. Prove one edit from
+   Python (`fo.load_dataset(...)`, read the detection's `bounding_box`) before annotating in earnest.
 3. `make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=revised-vlad-v1`, then the row in
    `evals/DATASETS.md`. The revision is scored in phase 2 (`evaluate.py`).
 

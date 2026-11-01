@@ -36,14 +36,18 @@ def main() -> None:
         ds = fo.load_dataset(a.name)
     else:
         raise SystemExit("--name or --repo is required")
-    has_bursts = "burst_id" in ds.get_field_schema()
-    if a.mode == "browse" and has_bursts:
-        view = ds.group_by("burst_id", order_by="seq")
-    elif a.mode == "annotate" and has_bursts:
-        view = ds.sort_by(F("burst_id") * 1000 + F("seq"))   # whole bursts in sequence order, every sample an editable image
+    if ds.media_type == "group":
+        # a grouped dataset (one group per burst, image slices "0".."3"): the grid shows the default slice (the head),
+        # the modal shows the burst's slices together, and the Annotate tab works on each slice
+        ds.group_slice = "0"; view = ds   # the dataset itself, not a view: the modal's group carousel needs the group context
+        n = len(ds.select_group_slices(media_type="image"))
+    elif a.mode == "browse" and "burst_id" in ds.get_field_schema():
+        view = ds.group_by("burst_id", order_by="seq"); n = len(ds)          # a flat dataset: browse as sequences (not annotatable)
+    elif a.mode == "annotate" and "burst_id" in ds.get_field_schema():
+        view = ds.sort_by(F("burst_id") * 1000 + F("seq")); n = len(ds)       # flat, bursts consecutive, every sample editable
     else:
-        view = ds.view()
-    print(f"{ds.name}: {len(ds)} samples, mode {a.mode}, fields {[f for f in ds.get_field_schema() if f.startswith(('gt_', 'pred_'))]} -> http://localhost:{PORT}")
+        view = ds.view(); n = len(ds)
+    print(f"{ds.name}: {n} samples ({ds.media_type}), mode {a.mode}, fields {[f for f in ds.get_field_schema() if f.startswith(('gt_', 'pred_'))]} -> http://localhost:{PORT}")
     session = fo.launch_app(view, port=PORT)
     session.wait()
 

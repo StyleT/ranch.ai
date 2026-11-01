@@ -97,10 +97,19 @@ def main() -> None:
             raise SystemExit(f"dataset {name} exists; pass --overwrite")
         fo.delete_dataset(name)
     ds = fo.Dataset(name, persistent=True)
+    # Bursts become a grouped dataset: one group per burst, one image slice per frame named by seq ("0" is the head).
+    # The App annotates image slices (a dynamic group_by view has none and refuses the Annotate tab); scoring selects
+    # slices: select_group_slices("0") = heads, select_group_slices(media_type="image") = every frame.
+    grouped = any(r.get("burst_id") is not None for r in frames)
+    if grouped:
+        ds.add_group_field("burst", default="0")
+    groups: dict[int, fo.Group] = {}
 
     samples = []
     for r in frames:
         s = fo.Sample(filepath=str(local_image(set_dir, r)))
+        if grouped and r.get("burst_id") is not None:
+            s["burst"] = groups.setdefault(r["burst_id"], fo.Group()).element(str(r.get("seq") or 0))
         s["camera"] = r["camera"]; s["period"] = r.get("period"); s["reason"] = r.get("reason")
         s["ts"] = datetime.fromisoformat(r["ts"].replace("Z", "+00:00")).astimezone(timezone.utc)
         s["frame_id"] = r.get("frame_id"); s["mini_path"] = r["path"]; s["source_path"] = r.get("source")
@@ -126,11 +135,13 @@ def main() -> None:
     }
     ds.save()
 
-    summary = {"dataset": name, "samples": len(ds), "bursts": len(ds.distinct("burst_id")), "heads": ds.match({"head": True}).count() if "head" in ds.get_field_schema() else None}
+    flat = ds.select_group_slices(media_type="image") if grouped else ds.view()   # a grouped dataset iterates its default slice only
+    summary = {"dataset": name, "grouped": grouped, "slices": ds.group_slices if grouped else None, "samples": len(flat),
+               "bursts": len(flat.distinct("burst_id")), "heads": flat.match({"head": True}).count()}
     for field in labels:
-        summary[field] = ds.count(f"{field}.detections")
+        summary[field] = flat.count(f"{field}.detections")
     for m in preds:
-        summary[f"pred_{m}"] = ds.count(f"pred_{m}.detections")
+        summary[f"pred_{m}"] = flat.count(f"pred_{m}.detections")
     print(json.dumps(summary))
 
 

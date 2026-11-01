@@ -43,7 +43,8 @@ def ls(a) -> None:
 
 def push(a) -> None:
     ds = fo.load_dataset(a.name)
-    fields = [f for f in a.fields.split(",") if f] or [f for f in ds.get_field_schema() if f.startswith(("gt_", "pred_"))]
+    schema = (ds.select_group_slices(media_type="image") if ds.media_type == "group" else ds).get_field_schema()
+    fields = [f for f in a.fields.split(",") if f] or [f for f in schema if f.startswith(("gt_", "pred_"))]
     fouh.push_to_hub(
         ds, a.repo, private=True, exist_ok=True, label_field=fields,
         tags=["fiftyone", "ranch"] + [t for t in a.tags.split(",") if t],
@@ -52,25 +53,30 @@ def push(a) -> None:
     repo_id = f"{OWNER}/{a.repo}"
     if a.tag:
         HfApi().create_tag(repo_id, tag=a.tag, repo_type="dataset", exist_ok=True)
-    print(json.dumps({"repo": repo_id, "fields": fields, "samples": len(ds), "tag": a.tag}))
+    n = len(ds.select_group_slices(media_type="image")) if ds.media_type == "group" else len(ds)
+    print(json.dumps({"repo": repo_id, "media_type": ds.media_type, "fields": fields, "samples": n, "tag": a.tag}))
 
 
 def load(a) -> None:
     repo_id = a.repo if "/" in a.repo else f"{OWNER}/{a.repo}"
     ds = fouh.load_from_hub(repo_id, revision=a.revision, name=a.name, persistent=True, overwrite=a.overwrite)
-    print(json.dumps({"repo": repo_id, "revision": a.revision, "dataset": ds.name, "samples": len(ds), "fields": sorted(ds.get_field_schema())}))
+    flat = ds.select_group_slices(media_type="image") if ds.media_type == "group" else ds
+    print(json.dumps({"repo": repo_id, "revision": a.revision, "dataset": ds.name, "media_type": ds.media_type, "slices": ds.group_slices if ds.media_type == "group" else None, "samples": len(flat), "fields": sorted(flat.get_field_schema())}))
 
 
 def check(a) -> None:
     """Field-by-field, attribute-by-attribute equality of two datasets keyed by (burst_id, seq, mini_path)."""
     x, y = fo.load_dataset(a.name), fo.load_dataset(a.other)
+    flat = lambda d: d.select_group_slices(media_type="image") if d.media_type == "group" else d   # noqa: E731  (every slice, not the default one)
     key = lambda s: (s["burst_id"], s["seq"], s["mini_path"])   # noqa: E731
-    bx = {key(s): s for s in x}; by = {key(s): s for s in y}
+    bx = {key(s): s for s in flat(x)}; by = {key(s): s for s in flat(y)}
+    if x.media_type != y.media_type or (x.media_type == "group" and sorted(x.group_slices) != sorted(y.group_slices)):
+        print(json.dumps({"a": a.name, "b": a.other, "differences": 1, "first": [f"media/slices differ: {x.media_type} {getattr(x, 'group_slices', None)} vs {y.media_type} {getattr(y, 'group_slices', None)}"]})); raise SystemExit(1)
     diffs = []
     if set(bx) != set(by):
         diffs.append(f"sample keys differ: only_a={len(set(bx) - set(by))} only_b={len(set(by) - set(bx))}")
-    sample_fields = [f for f in ("camera", "period", "frame_id", "burst_id", "seq", "head", "mini_path") if f in x.get_field_schema()]
-    label_fields = [f for f in x.get_field_schema() if f.startswith(("gt_", "pred_"))]
+    sample_fields = [f for f in ("camera", "period", "frame_id", "burst_id", "seq", "head", "mini_path") if f in flat(x).get_field_schema()]
+    label_fields = [f for f in flat(x).get_field_schema() if f.startswith(("gt_", "pred_"))]
     attrs = ("label", "bounding_box", "confidence", "kind", "posture", "look", "object_id", "index", "moved", "track", "seen", "dx", "dy", "raw_label")
     for k in sorted(set(bx) & set(by)):
         sa, sb = bx[k], by[k]
