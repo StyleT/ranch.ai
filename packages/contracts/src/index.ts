@@ -54,7 +54,7 @@ export const Detection = z.looseObject({
 });
 export const Frame = z.looseObject({
   id: z.number(), ts: Iso, camera: z.string(), path: z.string(), width: NullableNum, height: NullableNum, bytes: NullableNum,
-  change: NullableNum, reason: z.string(), kept: NullableNum, burst_id: NullableNum, seq: NullableNum,
+  change: NullableNum, reason: z.string(), kept: NullableNum, burst_id: NullableNum, seq: NullableNum, clip_id: NullableNum.optional(),
 });
 export const FrameWithDetections = Frame.extend({ detections: z.array(Detection) });
 export const FrameHead = FrameWithDetections.extend({ burst: z.array(FrameWithDetections) });
@@ -112,7 +112,7 @@ export const ErrorResponse = z.looseObject({ error: z.string().optional(), error
 export const SseMqtt = z.looseObject({ topic: z.string(), payload: z.unknown() });
 export const TaxonomyMessage = z.looseObject({ version_id: z.number(), created: Iso, author: z.string() });
 export const DetectorStatus = z.looseObject({ ts: Iso, pid: z.number(), model: z.string(), family: z.string(), taxonomy_version: NullableNum, processed: z.number(), dropped: z.number(), inflight: z.number(), raw_boxes: z.number(), kept_boxes: z.number(), bursts: z.number(), rss_mb: z.number() });
-export const IngestStatus = z.looseObject({ ts: Iso, pid: z.number(), cameras: z.array(z.string()), rss_mb: z.number(), resets: z.number(), bursts: z.number(), burst_frames: z.number(), burst_throttled: z.number(), burst_budget_per_min: z.number(), motion_threshold: z.number().optional(), motion: z.record(z.string(), z.looseObject({ n: z.number(), p50: z.number(), p90: z.number(), max: z.number() })).optional() });
+export const IngestStatus = z.looseObject({ ts: Iso, pid: z.number(), cameras: z.array(z.string()), rss_mb: z.number(), resets: z.number(), bursts: z.number(), burst_frames: z.number(), burst_throttled: z.number(), burst_budget_per_min: z.number(), clips_open: z.number().optional(), clips_cut: z.number().optional(), clip_frames: z.number().optional(), motion_threshold: z.number().optional(), motion: z.record(z.string(), z.looseObject({ n: z.number(), p50: z.number(), p90: z.number(), max: z.number() })).optional() });
 // `producer` = go2rtc has the source configured (true even for a dead camera); `connected` = the producer has a remote
 // address, i.e. a live camera session (23 Oct: the hourly table showed producer 240/240 for a camera that was off).
 export const NetprobeCamera = z.looseObject({ camera: z.string(), ip: z.string().nullable().optional(), producer: z.boolean().nullable().optional(), connected: z.boolean().nullable().optional(), state: z.string().nullable().optional(), consumers: z.number().nullable().optional(), rx_bytes_delta: NullableNum.optional(), ping_ms: NullableNum.optional() });

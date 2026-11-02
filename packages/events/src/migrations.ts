@@ -167,4 +167,34 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       CREATE INDEX remediation_camera ON remediation (camera, ts);
     `,
   },
+  {
+    version: 8,
+    name: 'motion clips',
+    sql: `
+      -- A motion clip (docs/CLIPS.md, 1 Nov): native-rate video cut by ingest from the recorder's ring, one per motion
+      -- event per camera. Lifecycle is derived, not stored: end_ts NULL = open, path NULL = not cut, expired_at = the
+      -- mp4 was deleted by retention (the row stays). Frames sampled from a clip are frames rows with clip_id set,
+      -- seq = frame index, burst_id = the first sampled frame's id, so everything keyed on bursts works unchanged.
+      CREATE TABLE clips (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        camera TEXT NOT NULL,
+        trigger_ts TEXT NOT NULL,
+        start_ts TEXT NOT NULL,
+        end_ts TEXT,
+        duration_s REAL,
+        fps REAL,
+        width INTEGER,
+        height INTEGER,
+        path TEXT UNIQUE,
+        bytes INTEGER,
+        stopped TEXT CHECK (stopped IN ('quiet', 'max', 'stale')),
+        preroll_s REAL,
+        expired_at TEXT
+      );
+      CREATE INDEX clips_camera_start ON clips (camera, start_ts);
+      CREATE INDEX clips_start ON clips (start_ts);
+      ALTER TABLE frames ADD COLUMN clip_id INTEGER;
+      CREATE INDEX frames_clip ON frames (clip_id, seq);
+    `,
+  },
 ];

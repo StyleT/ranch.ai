@@ -62,3 +62,20 @@ test('a track keeps the highest confidence of its boxes and the raw label of its
   ]);
   assert.equal(tracks.length, 1); assert.equal(tracks[0]!.confidence, 0.8); assert.equal(tracks[0]!.raw_label, 'cow');
 });
+
+test('dist gate, maxAge 2: a one-frame miss keeps the track (clips sample at 2 fps, a detector miss is common); a longer gap starts a new one', () => {
+  const walk = (id: number, x: number) => box(id, 'horse', x, 0.6);
+  const frames = [
+    { id: 1, dets: [walk(1, 0.10)] },
+    { id: 2, dets: [] },                 // missed
+    { id: 3, dets: [walk(3, 0.16)] },    // 0.06 on, within the gate from the last box
+    { id: 4, dets: [] },
+    { id: 5, dets: [] },
+    { id: 6, dets: [] },                 // three misses: the track has aged out
+    { id: 7, dets: [walk(7, 0.28)] },
+  ];
+  const tracks = associate(frames, { ...DIST, maxAge: 2 });
+  assert.deepEqual(tracks.map((t) => t.ids), [[1, 3], [7]]);
+  assert.equal(tracks[0]!.seen, 2);
+  assert.deepEqual(associate(frames, { ...DIST, maxAge: 0 }).map((t) => t.ids), [[1], [3], [7]]);   // today's behaviour
+});

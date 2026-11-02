@@ -16,7 +16,7 @@ const COMPUTE = (process.env.RANCH_DETECTOR_COMPUTE ?? 'ane') as 'all' | 'ane' |
 // under which label, at which per-label threshold (docs/TAXONOMY.md). RANCH_DETECTOR_FAMILY names the mapping.
 const THRESHOLD = Number(process.env.RANCH_DETECTOR_THRESHOLD ?? 0.05);
 const FAMILY = process.env.RANCH_DETECTOR_FAMILY ?? 'coco';
-const MAX_QUEUE = 50;
+const MAX_QUEUE = 600;   // a closing clip publishes up to 120 sampled frames at once (60 s at 2 fps); at 50 the rest were dropped
 const modelName = basename(MODEL).replace(/\.(mlpackage|mlmodelc)$/, '');
 
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
@@ -54,12 +54,15 @@ async function main(): Promise<void> {
     burstsDone++;
     await bus.publish(topics.tracks(b.camera), { burst_id: burstId, camera: b.camera, frames: b.frame_ids.length, tracks: tracks.map((t) => ({ track: t.track, label: t.label, raw_label: t.raw_label, seen: t.seen, dx: t.dx, dy: t.dy, moving: isMoving(t), stable: isStable(t), confidence: t.confidence })) });
   };
-  await bus.subscribe('ranch/bursts/+', (_t, payload) => {
+  // a burst close and a clip close carry the same shape (clips: docs/CLIPS.md; frame_ids are the sampled frames)
+  const onBurstClose = (_t: string, payload: unknown) => {
     const b = payload as { burst_id: number; camera: string; frame_ids: number[] };
     pendingBursts.set(b.burst_id, { camera: b.camera, frame_ids: b.frame_ids, at: Date.now() });
     void tryCloseBurst(b.burst_id);
-    for (const [id, p] of pendingBursts) if (Date.now() - p.at > 120_000) { pendingBursts.delete(id); for (const f of p.frame_ids) frameDets.delete(f); log('burst abandoned', { burst_id: id }); }
-  });
+    for (const [id, p] of pendingBursts) if (Date.now() - p.at > 300_000) { pendingBursts.delete(id); for (const f of p.frame_ids) frameDets.delete(f); log('burst abandoned', { burst_id: id }); }   // 300 s: a 120-frame clip queues behind other cameras
+  };
+  await bus.subscribe('ranch/bursts/+', onBurstClose);
+  await bus.subscribe('ranch/clips/+', onBurstClose);
 
   await bus.subscribe('ranch/frames/+', (_t, payload) => {
     const f = payload as FrameMsg;

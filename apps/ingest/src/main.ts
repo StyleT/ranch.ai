@@ -5,13 +5,14 @@
 // RANCH_FLOOR_S has passed, so nothing is missed at night. Kept frames go to <media>/frames/<camera>/<UTC date>/
 // <ts>.jpg, a row in `frames`, and MQTT ranch/frames/<camera>. Because the sampler only reads disk, nothing it
 // does (polling, bursts, restarts) can ever cause a camera to reconnect.
-import { mkdirSync, writeFileSync, unlinkSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync, unlinkSync, readFileSync, readdirSync, statSync, statfsSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { config } from '@ranch/config';
 import { EventStore } from '@ranch/events';
 import { connectBus, topics, type Bus } from '@ranch/bus';
+import { CLIP, step, staleCheck, cutClip, sampleFrames, type ClipState, type ClipEvent } from './clips.ts';
 
 const GRAB_S = Number(process.env.RANCH_GRAB_S ?? 5);        // how often we sample the newest buffered frame
 const FLOOR_S = Number(process.env.RANCH_FLOOR_S ?? 10);
@@ -41,6 +42,10 @@ function takeBurstToken(): boolean {
   burstStats.tokens--; return true;
 }
 const THUMB_W = 128; const THUMB_H = 72; const BLOCK = 8; // 16x9 blocks of 8x8 for the local motion metric
+// Motion clips (docs/CLIPS.md, 1 Nov): the decisions are in clips.ts; counters for the status message
+const clipStats = { open: 0, cut: 0, frames: 0 };
+const iso = (ms: number) => new Date(ms).toISOString();
+const freeGb = () => { try { const s = statfsSync(config.mediaDir); return (s.bavail * s.bsize) / 2 ** 30; } catch { return Infinity; } };
 
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), svc: 'ingest', msg, ...extra }) + '\n');
@@ -143,9 +148,40 @@ export async function extendBurst(o: { headId: number; camera: string; dir: stri
   return { members: 0, frameIds, stopped };
 }
 
+/** A clip closed: cut the mp4 from the ring, sample frames for the detector, publish both. Failures close the row without media. */
+async function finishClip(store: EventStore, bus: Bus, camera: string, clipId: number, ev: Extract<ClipEvent, { type: 'close' }>): Promise<void> {
+  clipStats.open--;
+  try {
+    const cut = await cutClip({ ringDir: config.ringDir, clipsDir: config.clipsDir, camera, triggerTs: ev.triggerTs, endTs: ev.endTs });
+    if (!cut) { store.abandonClip(clipId, iso(ev.endTs), ev.stopped); log('clip abandoned: no ring segments', { camera, clip_id: clipId, stopped: ev.stopped }); return; }
+    const startIso = iso(cut.startMs); const prerollS = (ev.triggerTs - cut.startMs) / 1000;
+    store.closeClip(clipId, { end_ts: iso(ev.endTs), stopped: ev.stopped, start_ts: startIso, path: cut.path, bytes: cut.bytes, duration_s: cut.duration_s, fps: cut.fps, width: cut.width, height: cut.height, preroll_s: prerollS });
+    const dir = join(config.mediaDir, 'frames', camera, startIso.slice(0, 10));
+    const paths = await sampleFrames({ clipPath: cut.path, dir, prefix: `clip-${basename(cut.path, '.mp4')}` });
+    const width = CLIP.sampleWidth; const height = cut.width ? Math.round((cut.height * width) / cut.width / 2) * 2 : 0;
+    const ids: number[] = [];
+    for (const [i, path] of paths.entries()) {
+      const ts = iso(cut.startMs + (i * 1000) / CLIP.sampleFps);
+      const id = store.insertFrame({ ts, camera, path, reason: 'change', clip_id: clipId, width, height, bytes: statSync(path).size, ...(i > 0 ? { burst_id: ids[0], seq: i } : {}) });
+      if (i === 0) store.markBurstHead(id);   // the clip's frames are a burst: head + members, so retention, tracks and the UI need no new case
+      ids.push(id);
+      await bus.publish(topics.frames(camera), { id, ts, camera, path, reason: 'change', width, height, burst_id: ids[0], seq: i, clip_id: clipId });
+    }
+    clipStats.cut++; clipStats.frames += ids.length;
+    await bus.publish(topics.clips(camera), { clip_id: clipId, burst_id: ids[0], camera, frame_ids: ids, n: ids.length, stopped: ev.stopped, start_ts: startIso, end_ts: iso(ev.endTs), duration_s: cut.duration_s, preroll_s: prerollS, path: cut.path });
+    log('clip cut', { camera, clip_id: clipId, stopped: ev.stopped, duration_s: +cut.duration_s.toFixed(1), preroll_s: +prerollS.toFixed(1), segments: cut.segments, mb: +(cut.bytes / 1048576).toFixed(1), frames: ids.length, fps: +cut.fps.toFixed(1) });
+  } catch (e) {
+    store.abandonClip(clipId, iso(ev.endTs), ev.stopped);
+    log('clip failed', { camera, clip_id: clipId, error: String(e).slice(0, 200) });
+  }
+}
+
 async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: { v: boolean }): Promise<void> {
   let lastThumb: Buffer | undefined; let lastKept = 0; let lastBurstEnd = 0;
   let lastName = ''; let staleSince = 0;
+  // clip decisions run on consecutive keyframes (the buffer's 2 s cadence), independent of what the sampler keeps
+  const clip: ClipState = { triggerTs: null, motionLastTs: null, lastCloseTs: 0 };
+  let prevThumb: Buffer | undefined; let openClipId: number | null = null; let lastKeyTs = 0;
   while (!stop.v) {
     const t0 = Date.now();
     const f = latestBufferFrame(camera, lastName);
@@ -154,6 +190,8 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
       const cur = latestBufferFrame(camera);
       const ageS = cur ? cur.ageS : Infinity;
       if (ageS > STALE_S && !staleSince) { staleSince = Date.now(); log('camera stale', { camera, newest_age_s: Number.isFinite(ageS) ? Math.round(ageS) : null }); }
+      const sev = staleCheck(clip, Date.now(), lastKeyTs);
+      if (sev?.type === 'close' && openClipId !== null) { const id = openClipId; openClipId = null; void finishClip(store, bus, camera, id, sev); }
       await sleep(1000);
       continue;
     }
@@ -166,6 +204,12 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
     } catch { await sleep(500); continue; } // partial/corrupt jpeg mid-write; try the next
     const change = lastThumb ? meanAbsDiff(thumb, lastThumb) : 1;
     const motion = lastThumb ? blockMaxDiff(thumb, lastThumb) : 0;
+    const keyTs = bufferNameMs(f.name); lastKeyTs = keyTs;
+    const ev = step(clip, { ts: keyTs, score: prevThumb ? blockMaxDiff(thumb, prevThumb) : 0 }); prevThumb = thumb;
+    if (ev?.type === 'open') {
+      if (freeGb() < CLIP.minFreeGb) { clip.triggerTs = null; clip.motionLastTs = null; log('clip not opened: low disk', { camera, free_gb: Math.round(freeGb()) }); }
+      else { openClipId = store.insertClip({ camera, trigger_ts: iso(keyTs), start_ts: iso(keyTs - CLIP.prerollS * 1000) }); clipStats.open++; log('clip open', { camera, clip_id: openClipId }); }
+    } else if (ev?.type === 'close' && openClipId !== null) { const id = openClipId; openClipId = null; void finishClip(store, bus, camera, id, ev); }
     if (lastThumb) (motionSamples.get(camera) ?? motionSamples.set(camera, []).get(camera)!).push(motion);
     const elapsed = (Date.now() - lastKept) / 1000;
     const reason = change >= THRESHOLD || motion >= MOTION ? 'change' : elapsed >= FLOOR_S ? 'floor' : null;
@@ -191,7 +235,7 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
     } else {
       lastThumb = thumb;
     }
-    await sleep(Math.max(0, GRAB_S * 1000 - (Date.now() - t0)));
+    await sleep(Math.max(0, (openClipId !== null ? 1000 : GRAB_S * 1000) - (Date.now() - t0)));   // every keyframe while a clip is open
   }
 }
 
@@ -210,17 +254,22 @@ async function prune(store: EventStore): Promise<void> {
   removed = 0;
   for (const p of paths) { try { unlinkSync(p); removed++; } catch { /* already gone */ } }
   if (paths.length) log('pruned frames', { before, rows: paths.length, files: removed });
+  // 3. clip media (rows stay, docs/PLAN.md: events live forever)
+  const expired = store.expireClips(new Date(Date.now() - CLIP.retentionD * 86400e3).toISOString());
+  removed = 0; for (const c of expired) { try { unlinkSync(c.path); removed++; } catch { /* already gone */ } }
+  if (expired.length) log('expired clips', { rows: expired.length, files: removed });
 }
 
 async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const bus = await connectBus('ingest');
   const cameras = cameraList();
+  for (const c of store.openClips()) store.abandonClip(c.id, new Date().toISOString(), 'stale');   // left open by a previous run
   log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, motion_threshold: MOTION, retention_d: RETENTION_D, stale_s: STALE_S, buffer: config.bufferDir, burst: { max: BURST_MAX, gap_s: BURST_GAP_S, change: BURST_CHANGE, cooldown_s: BURST_COOLDOWN_S, budget_per_min: BURST_BUDGET_PER_MIN }, media: config.mediaDir, db: config.dbPath });
   const stop = { v: false };
   const status = setInterval(() => {
     const m = process.memoryUsage();
-    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN, motion_threshold: MOTION, motion: motionSummary() }, { retain: true });
+    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN, clips_open: clipStats.open, clips_cut: clipStats.cut, clip_frames: clipStats.frames, motion_threshold: MOTION, motion: motionSummary() }, { retain: true });
   }, 60_000);
   const pruner = setInterval(() => void prune(store), 3600_000);
   await prune(store);

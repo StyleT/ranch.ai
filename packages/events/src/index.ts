@@ -8,11 +8,21 @@ export type FrameReason = 'floor' | 'change' | 'seed' | 'manual';
 export interface Frame {
   id: number; ts: string; camera: string; path: string;
   width: number | null; height: number | null; bytes: number | null; change: number | null; reason: FrameReason;
-  kept: number | null; burst_id: number | null; seq: number | null;
+  kept: number | null; burst_id: number | null; seq: number | null; clip_id: number | null;
 }
 export interface NewFrame {
-  ts: string; camera: string; path: string; reason: FrameReason; burst_id?: number; seq?: number;
+  ts: string; camera: string; path: string; reason: FrameReason; burst_id?: number; seq?: number; clip_id?: number;
   width?: number; height?: number; bytes?: number; change?: number;
+}
+/** A motion clip (docs/CLIPS.md): open while end_ts is null, cut once path is set, expired once the mp4 is deleted. */
+export interface Clip {
+  id: number; camera: string; trigger_ts: string; start_ts: string; end_ts: string | null; duration_s: number | null;
+  fps: number | null; width: number | null; height: number | null; path: string | null; bytes: number | null;
+  stopped: 'quiet' | 'max' | 'stale' | null; preroll_s: number | null; expired_at: string | null;
+}
+export interface ClipCut {
+  end_ts: string; stopped: 'quiet' | 'max' | 'stale'; start_ts: string; path: string; bytes: number; duration_s: number;
+  fps: number; width: number; height: number; preroll_s: number;
 }
 export interface Detection {
   id: number; frame_id: number; model: string; label: string; confidence: number; track: number | null; seen: number | null; dx: number | null; dy: number | null;
@@ -103,9 +113,37 @@ export class EventStore {
   // ---- frames
   insertFrame(f: NewFrame): number {
     const r = this.db.prepare(
-      'INSERT INTO frames (ts, camera, path, width, height, bytes, change, reason, burst_id, seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    ).run(f.ts, f.camera, f.path, f.width ?? null, f.height ?? null, f.bytes ?? null, f.change ?? null, f.reason, f.burst_id ?? null, f.seq ?? null);
+      'INSERT INTO frames (ts, camera, path, width, height, bytes, change, reason, burst_id, seq, clip_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(f.ts, f.camera, f.path, f.width ?? null, f.height ?? null, f.bytes ?? null, f.change ?? null, f.reason, f.burst_id ?? null, f.seq ?? null, f.clip_id ?? null);
     return Number(r.lastInsertRowid);
+  }
+
+  // ---- clips (docs/CLIPS.md)
+  insertClip(c: { camera: string; trigger_ts: string; start_ts: string }): number {
+    return Number(this.db.prepare('INSERT INTO clips (camera, trigger_ts, start_ts) VALUES (?, ?, ?)').run(c.camera, c.trigger_ts, c.start_ts).lastInsertRowid);
+  }
+  closeClip(id: number, c: ClipCut): void {
+    this.db.prepare('UPDATE clips SET end_ts = ?, stopped = ?, start_ts = ?, path = ?, bytes = ?, duration_s = ?, fps = ?, width = ?, height = ?, preroll_s = ? WHERE id = ?')
+      .run(c.end_ts, c.stopped, c.start_ts, c.path, c.bytes, c.duration_s, c.fps, c.width, c.height, c.preroll_s, id);
+  }
+  /** A clip that could not be cut (no ring segments, ffmpeg failed): closed without media, so it never shows as open. */
+  abandonClip(id: number, end_ts: string, stopped: 'quiet' | 'max' | 'stale'): void {
+    this.db.prepare('UPDATE clips SET end_ts = ?, stopped = ? WHERE id = ?').run(end_ts, stopped, id);
+  }
+  clipById(id: number): Clip | undefined { return this.db.prepare('SELECT * FROM clips WHERE id = ?').get(id) as unknown as Clip | undefined; }
+  /** Cut clips since `since` (ISO), newest first; `camera` narrows. */
+  clips(q: { since: string; camera?: string; limit?: number }): Clip[] {
+    return this.db.prepare(`SELECT * FROM clips WHERE path IS NOT NULL AND start_ts >= ? ${q.camera ? 'AND camera = ?' : ''} ORDER BY start_ts DESC LIMIT ?`)
+      .all(...([q.since, ...(q.camera ? [q.camera] : []), q.limit ?? 500] as SQLInputValue[])) as unknown as Clip[];
+  }
+  clipFrames(clipId: number): Frame[] { return this.db.prepare('SELECT * FROM frames WHERE clip_id = ? ORDER BY seq').all(clipId) as unknown as Frame[]; }
+  openClips(): Clip[] { return this.db.prepare('SELECT * FROM clips WHERE end_ts IS NULL').all() as unknown as Clip[]; }
+  /** Mark clips whose mp4 is older than `before` expired; returns the paths for the caller to unlink. The rows stay. */
+  expireClips(before: string): { id: number; path: string }[] {
+    const rows = this.db.prepare('SELECT id, path FROM clips WHERE path IS NOT NULL AND expired_at IS NULL AND start_ts < ?').all(before) as { id: number; path: string }[];
+    const now = new Date().toISOString(); const mark = this.db.prepare('UPDATE clips SET expired_at = ? WHERE id = ?');
+    for (const r of rows) mark.run(now, r.id);
+    return rows;
   }
   /** Turn a kept frame into a burst head (burst_id = its own id, seq 0). */
   markBurstHead(id: number): void { this.db.prepare('UPDATE frames SET burst_id = ?, seq = 0 WHERE id = ?').run(id, id); }
