@@ -9,7 +9,10 @@ import { activityStore } from './activityStore';
 
 type Live = { conn: Conn; now: number; thumbVersion: Record<string, number> };
 const Ctx = createContext<Live>({ conn: initialConn(), now: 0, thumbVersion: {} });
-export const useConnection = () => { const l = useContext(Ctx); return { ...l.conn, ageS: ageSeconds(l.conn, l.now) }; };
+export const useConnection = () => {
+  const l = useContext(Ctx);
+  return { ...l.conn, ageS: ageSeconds(l.conn, l.now) };
+};
 export const useThumbVersion = (camera: string) => useContext(Ctx).thumbVersion[camera] ?? 0;
 
 export function LiveProvider({ children }: { children: React.ReactNode }) {
@@ -23,28 +26,68 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const apply = (e: Parameters<typeof reduceConn>[1]) => {
-      const r = reduceConn(connRef.current, e, Date.now()); connRef.current = r.conn; setConn(r.conn);
-      if (r.reconnect) open(); if (r.refetch) void qc.invalidateQueries();
+      const r = reduceConn(connRef.current, e, Date.now());
+      connRef.current = r.conn;
+      setConn(r.conn);
+      if (r.reconnect) {
+        open();
+      }
+      if (r.refetch) {
+        void qc.invalidateQueries();
+      }
     };
     const open = () => {
       es.current?.close();
-      const s = new EventSource('/api/ui/live'); es.current = s;
+      const s = new EventSource('/api/ui/live');
+      es.current = s;
       s.onopen = () => apply({ type: 'open' });
       s.onerror = () => apply({ type: 'error' });
-      s.addEventListener('status', () => { apply({ type: 'status' }); void qc.invalidateQueries({ queryKey: keys.home() }); });
-      s.addEventListener('frame', (ev) => { const d = JSON.parse((ev as MessageEvent).data) as { camera: string; frame_id: number }; setThumb((t) => ({ ...t, [d.camera]: d.frame_id })); });
-      s.addEventListener('tracks', (ev) => { activityStore.push(JSON.parse((ev as MessageEvent).data)); if (!invalidateTimer.current) invalidateTimer.current = setTimeout(() => { invalidateTimer.current = null; void qc.invalidateQueries({ queryKey: ['detections'] }); }, 10_000); });
+      s.addEventListener('status', () => {
+        apply({ type: 'status' });
+        void qc.invalidateQueries({ queryKey: keys.home() });
+      });
+      s.addEventListener('frame', (ev) => {
+        const d = JSON.parse((ev as MessageEvent).data) as { camera: string; frame_id: number };
+        setThumb((t) => ({ ...t, [d.camera]: d.frame_id }));
+      });
+      s.addEventListener('tracks', (ev) => {
+        activityStore.push(JSON.parse((ev as MessageEvent).data));
+        if (!invalidateTimer.current) {
+          invalidateTimer.current = setTimeout(() => {
+            invalidateTimer.current = null;
+            void qc.invalidateQueries({ queryKey: ['detections'] });
+          }, 10_000);
+        }
+      });
       s.addEventListener('mqtt', (ev) => activityStore.pushRaw(JSON.parse((ev as MessageEvent).data)));
       s.addEventListener('taxonomy', () => void qc.invalidateQueries({ queryKey: keys.taxonomy() }));
       s.addEventListener('daemon', () => void qc.invalidateQueries({ queryKey: keys.system() }));
     };
     open();
-    const tick = setInterval(() => { setNow(Date.now()); apply({ type: 'tick' }); }, 5000);
-    const onVis = () => { if (document.visibilityState === 'visible') apply({ type: 'visible' }); };
+    const tick = setInterval(() => {
+      setNow(Date.now());
+      apply({ type: 'tick' });
+    }, 5000);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        apply({ type: 'visible' });
+      }
+    };
     const onShow = () => apply({ type: 'visible' });
-    const onOffline = () => apply({ type: 'offline' }); const onOnline = () => apply({ type: 'online' });
-    document.addEventListener('visibilitychange', onVis); window.addEventListener('pageshow', onShow); window.addEventListener('offline', onOffline); window.addEventListener('online', onOnline);
-    return () => { clearInterval(tick); es.current?.close(); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pageshow', onShow); window.removeEventListener('offline', onOffline); window.removeEventListener('online', onOnline); };
+    const onOffline = () => apply({ type: 'offline' });
+    const onOnline = () => apply({ type: 'online' });
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pageshow', onShow);
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    return () => {
+      clearInterval(tick);
+      es.current?.close();
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pageshow', onShow);
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+    };
   }, [qc]);
 
   return <Ctx.Provider value={{ conn, now, thumbVersion }}>{children}</Ctx.Provider>;

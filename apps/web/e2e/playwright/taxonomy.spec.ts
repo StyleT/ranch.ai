@@ -6,7 +6,8 @@ test.describe('taxonomy', () => {
     await expect(page.locator('[data-dirty]')).toHaveCount(1); // editor hydrated with the draft
     const thr = page.getByTestId('tax-threshold-coco-person');
     await expect(thr).toBeVisible();
-    const current = Number(await thr.inputValue()); const next = current >= 0.9 ? '0.5' : (current + 0.1).toFixed(2);
+    const current = Number(await thr.inputValue());
+    const next = current >= 0.9 ? '0.5' : (current + 0.1).toFixed(2);
     await thr.fill(next);
     await expect(page.locator('[data-dirty="true"]')).toBeVisible();
     await page.getByTestId('tax-validate').click();
@@ -28,7 +29,10 @@ test.describe('taxonomy', () => {
     await expect(page.locator('[data-dirty="true"]')).toHaveCount(0);
     // revert to the previous version
     page.once('dialog', (d) => d.accept('back'));
-    await page.getByTestId(`tax-version-row-${applied - 1}`).getByRole('button', { name: 'revert to' }).click();
+    await page
+      .getByTestId(`tax-version-row-${applied - 1}`)
+      .getByRole('button', { name: 'revert to' })
+      .click();
     await expect(page.getByRole('status')).toHaveText(/reverted as v\d+/);
   });
 });

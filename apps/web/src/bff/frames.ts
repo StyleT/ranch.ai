@@ -5,9 +5,19 @@ import { daemonFetch } from './daemon.ts';
 export async function proxyFrame(path: string, w: string | null, cacheControl: string): Promise<Response> {
   const url = `${path}${w ? `?w=${encodeURIComponent(w)}` : ''}`;
   const up = await daemonFetch(url, { signal: AbortSignal.timeout(10_000) });
-  if (!up.ok || !up.body) return new Response('no frame', { status: up.status === 404 ? 404 : 502 });
-  const h = new Headers({ 'content-type': up.headers.get('content-type') ?? 'image/jpeg', 'cache-control': cacheControl });
-  for (const k of ['x-frame-ts', 'x-frame-id']) { const v = up.headers.get(k); if (v) h.set(k, v); }
+  if (!up.ok || !up.body) {
+    return new Response('no frame', { status: up.status === 404 ? 404 : 502 });
+  }
+  const h = new Headers({
+    'content-type': up.headers.get('content-type') ?? 'image/jpeg',
+    'cache-control': cacheControl,
+  });
+  for (const k of ['x-frame-ts', 'x-frame-id']) {
+    const v = up.headers.get(k);
+    if (v) {
+      h.set(k, v);
+    }
+  }
   return new Response(up.body, { status: 200, headers: h });
 }
 

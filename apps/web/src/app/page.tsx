@@ -9,5 +9,9 @@ export const dynamic = 'force-dynamic';
 export default async function HomePage() {
   const qc = getQueryClient();
   await qc.prefetchQuery({ queryKey: keys.home(), queryFn: getHome }).catch(() => undefined);
-  return <HydrationBoundary state={dehydrate(qc)}><HomeView /></HydrationBoundary>;
+  return (
+    <HydrationBoundary state={dehydrate(qc)}>
+      <HomeView />
+    </HydrationBoundary>
+  );
 }

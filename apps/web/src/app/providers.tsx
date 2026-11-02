@@ -9,7 +9,9 @@ export function Providers({ children, tz }: { children: React.ReactNode; tz: str
   const [client] = useState(makeQueryClient);
   return (
     <QueryClientProvider client={client}>
-      <TzContext.Provider value={tz}><LiveProvider>{children}</LiveProvider></TzContext.Provider>
+      <TzContext.Provider value={tz}>
+        <LiveProvider>{children}</LiveProvider>
+      </TzContext.Provider>
     </QueryClientProvider>
   );
 }

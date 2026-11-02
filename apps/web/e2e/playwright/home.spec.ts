@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-const status = JSON.parse(readFileSync('test/fixtures/daemon/status.json', 'utf8')) as { cameras: { name: string; online: boolean }[] };
+const status = JSON.parse(readFileSync('test/fixtures/daemon/status.json', 'utf8')) as {
+  cameras: { name: string; online: boolean }[];
+};
 
 test.describe('home', () => {
   test('renders every camera with its online state and the health strip', async ({ page }) => {
@@ -12,7 +14,9 @@ test.describe('home', () => {
       await expect(card).toHaveAttribute('data-state', c.online ? 'online' : 'offline');
     }
     const offline = status.cameras.filter((c) => !c.online);
-    for (const c of offline) await expect(page.getByTestId(`alert-camera_offline-${c.name}`)).toBeVisible();
+    for (const c of offline) {
+      await expect(page.getByTestId(`alert-camera_offline-${c.name}`)).toBeVisible();
+    }
   });
   test('goes live over SSE and shows activity', async ({ page }) => {
     await page.goto('/');

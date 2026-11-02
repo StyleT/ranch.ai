@@ -8,5 +8,9 @@ export const metadata = { title: 'System' };
 export default async function SystemPage() {
   const qc = getQueryClient();
   await qc.prefetchQuery({ queryKey: keys.system(), queryFn: getSystem }).catch(() => undefined);
-  return <HydrationBoundary state={dehydrate(qc)}><SystemView /></HydrationBoundary>;
+  return (
+    <HydrationBoundary state={dehydrate(qc)}>
+      <SystemView />
+    </HydrationBoundary>
+  );
 }

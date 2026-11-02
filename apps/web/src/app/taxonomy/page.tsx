@@ -8,5 +8,9 @@ export const metadata = { title: 'Taxonomy' };
 export default async function TaxonomyPage() {
   const qc = getQueryClient();
   await qc.prefetchQuery({ queryKey: keys.taxonomy(), queryFn: getTaxonomy }).catch(() => undefined);
-  return <HydrationBoundary state={dehydrate(qc)}><TaxonomyEditor /></HydrationBoundary>;
+  return (
+    <HydrationBoundary state={dehydrate(qc)}>
+      <TaxonomyEditor />
+    </HydrationBoundary>
+  );
 }

@@ -8,5 +8,9 @@ export const metadata = { title: 'Evals' };
 export default async function EvalsPage() {
   const qc = getQueryClient();
   await qc.prefetchQuery({ queryKey: keys.evals(), queryFn: async () => getEvals() }).catch(() => undefined);
-  return <HydrationBoundary state={dehydrate(qc)}><EvalsView /></HydrationBoundary>;
+  return (
+    <HydrationBoundary state={dehydrate(qc)}>
+      <EvalsView />
+    </HydrationBoundary>
+  );
 }

@@ -9,14 +9,19 @@ import sharp from 'sharp';
 import { jpegFromFile, firstReadableJpeg } from '../src/jpeg.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'ranch-jpeg-'));
-const full = await sharp({ create: { width: 320, height: 180, channels: 3, background: { r: 40, g: 120, b: 80 } } }).jpeg().toBuffer();
-const good = join(dir, '2026-10-23T13-00-00Z.jpg'); writeFileSync(good, full);
-const half = join(dir, '2026-10-23T13-00-02Z.jpg'); writeFileSync(half, full.subarray(0, Math.floor(full.length / 2)));
+const full = await sharp({ create: { width: 320, height: 180, channels: 3, background: { r: 40, g: 120, b: 80 } } })
+  .jpeg()
+  .toBuffer();
+const good = join(dir, '2026-10-23T13-00-00Z.jpg');
+writeFileSync(good, full);
+const half = join(dir, '2026-10-23T13-00-02Z.jpg');
+writeFileSync(half, full.subarray(0, Math.floor(full.length / 2)));
 
 test('resizes a complete file from a Buffer', async () => {
   const out = await jpegFromFile(good, 160);
   const meta = await sharp(out).metadata();
-  assert.equal(meta.width, 160); assert.equal(meta.format, 'jpeg');
+  assert.equal(meta.width, 160);
+  assert.equal(meta.format, 'jpeg');
 });
 test('returns the file verbatim when no width is asked', async () => {
   assert.deepEqual(await jpegFromFile(good, 0), full);

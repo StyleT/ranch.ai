@@ -14,10 +14,10 @@ import { EventStore } from '@ranch/events';
 import { connectBus, topics, type Bus } from '@ranch/bus';
 import { CLIP, step, staleCheck, cutClip, sampleFrames, type ClipState, type ClipEvent } from './clips.ts';
 
-const GRAB_S = Number(process.env.RANCH_GRAB_S ?? 5);        // how often we sample the newest buffered frame
+const GRAB_S = Number(process.env.RANCH_GRAB_S ?? 5); // how often we sample the newest buffered frame
 const FLOOR_S = Number(process.env.RANCH_FLOOR_S ?? 10);
-const THRESHOLD = Number(process.env.RANCH_CHANGE_THRESHOLD ?? 0.04);     // whole-frame mean diff: lighting, large changes
-const MOTION = Number(process.env.RANCH_MOTION_THRESHOLD ?? 0.08);        // block-max diff against the last kept frame: something moved
+const THRESHOLD = Number(process.env.RANCH_CHANGE_THRESHOLD ?? 0.04); // whole-frame mean diff: lighting, large changes
+const MOTION = Number(process.env.RANCH_MOTION_THRESHOLD ?? 0.08); // block-max diff against the last kept frame: something moved
 const RETENTION_D = Number(process.env.RANCH_FRAMES_RETENTION_D ?? 7);
 // A camera is "online" when its buffer has a frame newer than RANCH_STALE_S. Staleness means the recorder is not
 // getting frames (camera down / reconnecting); the sampler just waits — it never touches the camera.
@@ -27,25 +27,67 @@ const STALE_S = Number(process.env.RANCH_STALE_S ?? 30);
 // per-minute budget of member frames across all cameras keeps the cost bounded. Burst members are read from the
 // same on-disk buffer (zero camera load).
 const BURST_MAX = Number(process.env.RANCH_BURST_MAX ?? 4);
-const BURST_GAP_S = Number(process.env.RANCH_BURST_GAP_S ?? 2);           // recorder is ~1 frame / 2 s
-const BURST_CHANGE = Number(process.env.RANCH_BURST_CHANGE ?? 0.05);      // block-max diff between consecutive members: motion continues
+const BURST_GAP_S = Number(process.env.RANCH_BURST_GAP_S ?? 2); // recorder is ~1 frame / 2 s
+const BURST_CHANGE = Number(process.env.RANCH_BURST_CHANGE ?? 0.05); // block-max diff between consecutive members: motion continues
 const BURST_COOLDOWN_S = Number(process.env.RANCH_BURST_COOLDOWN_S ?? 10);
 const BURST_BUDGET_PER_MIN = Number(process.env.RANCH_BURST_BUDGET_PER_MIN ?? 60);
-const burstStats = { bursts: 0, burst_frames: 0, throttled: 0, tokens: BURST_BUDGET_PER_MIN, lastRefill: Date.now(), lastThrottleLog: 0 };
+const burstStats = {
+  bursts: 0,
+  burst_frames: 0,
+  throttled: 0,
+  tokens: BURST_BUDGET_PER_MIN,
+  lastRefill: Date.now(),
+  lastThrottleLog: 0,
+};
 // motion metric of every sample since the last status message, per camera: p50/p90/max tell whether the thresholds fit
 const motionSamples = new Map<string, number[]>();
-const motionSummary = () => { const out: Record<string, { n: number; p50: number; p90: number; max: number }> = {}; for (const [cam, xs] of motionSamples) { const s = [...xs].sort((a, b) => a - b); if (s.length) out[cam] = { n: s.length, p50: +s[Math.floor(s.length * 0.5)]!.toFixed(3), p90: +s[Math.floor(s.length * 0.9)]!.toFixed(3), max: +s[s.length - 1]!.toFixed(3) }; } motionSamples.clear(); return out; };
+const motionSummary = () => {
+  const out: Record<string, { n: number; p50: number; p90: number; max: number }> = {};
+  for (const [cam, xs] of motionSamples) {
+    const s = [...xs].sort((a, b) => a - b);
+    if (s.length) {
+      out[cam] = {
+        n: s.length,
+        p50: +s[Math.floor(s.length * 0.5)]!.toFixed(3),
+        p90: +s[Math.floor(s.length * 0.9)]!.toFixed(3),
+        max: +s[s.length - 1]!.toFixed(3),
+      };
+    }
+  }
+  motionSamples.clear();
+  return out;
+};
 function takeBurstToken(): boolean {
   const now = Date.now();
-  if (now - burstStats.lastRefill >= 60_000) { burstStats.tokens = BURST_BUDGET_PER_MIN; burstStats.lastRefill = now; }
-  if (burstStats.tokens <= 0) { burstStats.throttled++; if (now - burstStats.lastThrottleLog > 60_000) { burstStats.lastThrottleLog = now; log('burst throttled', { budget_per_min: BURST_BUDGET_PER_MIN }); } return false; }
-  burstStats.tokens--; return true;
+  if (now - burstStats.lastRefill >= 60_000) {
+    burstStats.tokens = BURST_BUDGET_PER_MIN;
+    burstStats.lastRefill = now;
+  }
+  if (burstStats.tokens <= 0) {
+    burstStats.throttled++;
+    if (now - burstStats.lastThrottleLog > 60_000) {
+      burstStats.lastThrottleLog = now;
+      log('burst throttled', { budget_per_min: BURST_BUDGET_PER_MIN });
+    }
+    return false;
+  }
+  burstStats.tokens--;
+  return true;
 }
-const THUMB_W = 128; const THUMB_H = 72; const BLOCK = 8; // 16x9 blocks of 8x8 for the local motion metric
+const THUMB_W = 128;
+const THUMB_H = 72;
+const BLOCK = 8; // 16x9 blocks of 8x8 for the local motion metric
 // Motion clips (docs/CLIPS.md, 1 Nov): the decisions are in clips.ts; counters for the status message
 const clipStats = { open: 0, cut: 0, frames: 0 };
 const iso = (ms: number) => new Date(ms).toISOString();
-const freeGb = () => { try { const s = statfsSync(config.mediaDir); return (s.bavail * s.bsize) / 2 ** 30; } catch { return Infinity; } };
+const freeGb = () => {
+  try {
+    const s = statfsSync(config.mediaDir);
+    return (s.bavail * s.bsize) / 2 ** 30;
+  } catch {
+    return Infinity;
+  }
+};
 
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), svc: 'ingest', msg, ...extra }) + '\n');
@@ -53,12 +95,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Cameras to sample: RANCH_CAMERAS if set, else the recorder's per-camera buffer subdirs. No camera/bridge call. */
 function cameraList(): string[] {
-  if (config.cameras.length) return config.cameras;
+  if (config.cameras.length) {
+    return config.cameras;
+  }
   try {
     return readdirSync(config.bufferDir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && !config.camerasExclude.includes(d.name))
-      .map((d) => d.name).sort();
-  } catch { return []; }
+      .map((d) => d.name)
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 /** Buffer filename `2026-10-22T12-45-23Z.jpg` -> epoch ms. */
@@ -72,31 +119,55 @@ function bufferNameMs(name: string): number {
 function latestBufferFrame(camera: string, afterName?: string): { name: string; buf: Buffer; ageS: number } | null {
   const dir = join(config.bufferDir, camera);
   let names: string[];
-  try { names = readdirSync(dir).filter((n) => n.endsWith('.jpg')); } catch { return null; }
-  if (afterName) names = names.filter((n) => n > afterName);
-  if (!names.length) return null;
+  try {
+    names = readdirSync(dir).filter((n) => n.endsWith('.jpg'));
+  } catch {
+    return null;
+  }
+  if (afterName) {
+    names = names.filter((n) => n > afterName);
+  }
+  if (!names.length) {
+    return null;
+  }
   names.sort();
   const name = names[names.length - 1]!;
   let buf: Buffer;
-  try { buf = readFileSync(join(dir, name)); } catch { return null; }
-  if (buf.length < 1024) return null; // ffmpeg may be mid-write; skip a partial file, we'll catch it next poll
+  try {
+    buf = readFileSync(join(dir, name));
+  } catch {
+    return null;
+  }
+  if (buf.length < 1024) {
+    return null;
+  } // ffmpeg may be mid-write; skip a partial file, we'll catch it next poll
   return { name, buf, ageS: (Date.now() - bufferNameMs(name)) / 1000 };
 }
 
 /** Wait up to `timeoutMs` for a buffered frame newer than `afterName` (used by bursts to read consecutive frames). */
-async function nextBufferFrame(camera: string, afterName: string, timeoutMs: number): Promise<{ name: string; buf: Buffer } | null> {
+async function nextBufferFrame(
+  camera: string,
+  afterName: string,
+  timeoutMs: number,
+): Promise<{ name: string; buf: Buffer } | null> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const f = latestBufferFrame(camera, afterName);
-    if (f) return f;
-    if (Date.now() >= deadline) return null;
+    if (f) {
+      return f;
+    }
+    if (Date.now() >= deadline) {
+      return null;
+    }
     await sleep(200);
   }
 }
 
 function meanAbsDiff(a: Buffer, b: Buffer): number {
   let sum = 0;
-  for (let i = 0; i < a.length; i++) sum += Math.abs(a[i]! - b[i]!);
+  for (let i = 0; i < a.length; i++) {
+    sum += Math.abs(a[i]! - b[i]!);
+  }
   return sum / a.length / 255;
 }
 /**
@@ -107,10 +178,20 @@ function meanAbsDiff(a: Buffer, b: Buffer): number {
  */
 export function blockMaxDiff(a: Buffer, b: Buffer): number {
   let best = 0;
-  for (let by = 0; by < THUMB_H / BLOCK; by++) for (let bx = 0; bx < THUMB_W / BLOCK; bx++) {
-    let s = 0;
-    for (let y = 0; y < BLOCK; y++) for (let x = 0; x < BLOCK; x++) { const i = (by * BLOCK + y) * THUMB_W + bx * BLOCK + x; s += Math.abs(a[i]! - b[i]!); }
-    const m = s / (BLOCK * BLOCK) / 255; if (m > best) best = m;
+  for (let by = 0; by < THUMB_H / BLOCK; by++) {
+    for (let bx = 0; bx < THUMB_W / BLOCK; bx++) {
+      let s = 0;
+      for (let y = 0; y < BLOCK; y++) {
+        for (let x = 0; x < BLOCK; x++) {
+          const i = (by * BLOCK + y) * THUMB_W + bx * BLOCK + x;
+          s += Math.abs(a[i]! - b[i]!);
+        }
+      }
+      const m = s / (BLOCK * BLOCK) / 255;
+      if (m > best) {
+        best = m;
+      }
+    }
   }
   return best;
 }
@@ -121,55 +202,201 @@ export function blockMaxDiff(a: Buffer, b: Buffer): number {
  * the burst; at most BURST_MAX frames; every member costs one token of the global per-minute budget. `grab` returns
  * the next buffered frame (the caller threads the buffer cursor through it). Exported for the unit test.
  */
-export async function extendBurst(o: { headId: number; camera: string; dir: string; headThumb: Buffer; grab: () => Promise<Buffer>; store: EventStore; bus: Bus; gapMs?: number }): Promise<{ members: number; frameIds: number[]; lastThumb?: Buffer; stopped: 'still' | 'max' | 'budget' | 'error' }> {
-  const frameIds = [o.headId]; let prevThumb = o.headThumb; let seq = 1; let stopped: 'still' | 'max' | 'budget' | 'error' = 'max';
+export async function extendBurst(o: {
+  headId: number;
+  camera: string;
+  dir: string;
+  headThumb: Buffer;
+  grab: () => Promise<Buffer>;
+  store: EventStore;
+  bus: Bus;
+  gapMs?: number;
+}): Promise<{
+  members: number;
+  frameIds: number[];
+  lastThumb?: Buffer;
+  stopped: 'still' | 'max' | 'budget' | 'error';
+}> {
+  const frameIds = [o.headId];
+  let prevThumb = o.headThumb;
+  let seq = 1;
+  let stopped: 'still' | 'max' | 'budget' | 'error' = 'max';
   while (seq < BURST_MAX) {
     await sleep(o.gapMs ?? BURST_GAP_S * 1000);
-    if (!takeBurstToken()) { stopped = 'budget'; break; }
-    let jpeg: Buffer; try { jpeg = await o.grab(); } catch { stopped = 'error'; break; }
+    if (!takeBurstToken()) {
+      stopped = 'budget';
+      break;
+    }
+    let jpeg: Buffer;
+    try {
+      jpeg = await o.grab();
+    } catch {
+      stopped = 'error';
+      break;
+    }
     const img = sharp(jpeg);
-    let meta: sharp.Metadata; let thumb: Buffer;
-    try { [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]); }
-    catch { stopped = 'error'; break; }
+    let meta: sharp.Metadata;
+    let thumb: Buffer;
+    try {
+      [meta, thumb] = await Promise.all([
+        img.metadata(),
+        img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer(),
+      ]);
+    } catch {
+      stopped = 'error';
+      break;
+    }
     const change = blockMaxDiff(thumb, prevThumb);
-    if (change < BURST_CHANGE) { stopped = 'still'; break; }
-    if (seq === 1) o.store.markBurstHead(o.headId);
-    const ts = new Date().toISOString(); const path = join(o.dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
+    if (change < BURST_CHANGE) {
+      stopped = 'still';
+      break;
+    }
+    if (seq === 1) {
+      o.store.markBurstHead(o.headId);
+    }
+    const ts = new Date().toISOString();
+    const path = join(o.dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
     writeFileSync(path, jpeg);
-    const id = o.store.insertFrame({ ts, camera: o.camera, path, reason: 'change', change, bytes: jpeg.length, burst_id: o.headId, seq, ...(meta.width ? { width: meta.width } : {}), ...(meta.height ? { height: meta.height } : {}) });
-    await o.bus.publish(topics.frames(o.camera), { id, ts, camera: o.camera, path, reason: 'change', change, width: meta.width, height: meta.height, burst_id: o.headId, seq });
-    frameIds.push(id); prevThumb = thumb; seq++;
+    const id = o.store.insertFrame({
+      ts,
+      camera: o.camera,
+      path,
+      reason: 'change',
+      change,
+      bytes: jpeg.length,
+      burst_id: o.headId,
+      seq,
+      ...(meta.width ? { width: meta.width } : {}),
+      ...(meta.height ? { height: meta.height } : {}),
+    });
+    await o.bus.publish(topics.frames(o.camera), {
+      id,
+      ts,
+      camera: o.camera,
+      path,
+      reason: 'change',
+      change,
+      width: meta.width,
+      height: meta.height,
+      burst_id: o.headId,
+      seq,
+    });
+    frameIds.push(id);
+    prevThumb = thumb;
+    seq++;
   }
   if (frameIds.length > 1) {
-    burstStats.bursts++; burstStats.burst_frames += frameIds.length - 1;
-    await o.bus.publish(topics.bursts(o.camera), { burst_id: o.headId, camera: o.camera, frame_ids: frameIds, n: frameIds.length, stopped });
+    burstStats.bursts++;
+    burstStats.burst_frames += frameIds.length - 1;
+    await o.bus.publish(topics.bursts(o.camera), {
+      burst_id: o.headId,
+      camera: o.camera,
+      frame_ids: frameIds,
+      n: frameIds.length,
+      stopped,
+    });
     return { members: frameIds.length - 1, frameIds, lastThumb: prevThumb, stopped };
   }
   return { members: 0, frameIds, stopped };
 }
 
 /** A clip closed: cut the mp4 from the ring, sample frames for the detector, publish both. Failures close the row without media. */
-async function finishClip(store: EventStore, bus: Bus, camera: string, clipId: number, ev: Extract<ClipEvent, { type: 'close' }>): Promise<void> {
+async function finishClip(
+  store: EventStore,
+  bus: Bus,
+  camera: string,
+  clipId: number,
+  ev: Extract<ClipEvent, { type: 'close' }>,
+): Promise<void> {
   clipStats.open--;
   try {
-    const cut = await cutClip({ ringDir: config.ringDir, clipsDir: config.clipsDir, camera, triggerTs: ev.triggerTs, endTs: ev.endTs });
-    if (!cut) { store.abandonClip(clipId, iso(ev.endTs), ev.stopped); log('clip abandoned: no ring segments', { camera, clip_id: clipId, stopped: ev.stopped }); return; }
-    const startIso = iso(cut.startMs); const prerollS = (ev.triggerTs - cut.startMs) / 1000;
-    store.closeClip(clipId, { end_ts: iso(ev.endTs), stopped: ev.stopped, start_ts: startIso, path: cut.path, bytes: cut.bytes, duration_s: cut.duration_s, fps: cut.fps, width: cut.width, height: cut.height, preroll_s: prerollS });
+    const cut = await cutClip({
+      ringDir: config.ringDir,
+      clipsDir: config.clipsDir,
+      camera,
+      triggerTs: ev.triggerTs,
+      endTs: ev.endTs,
+    });
+    if (!cut) {
+      store.abandonClip(clipId, iso(ev.endTs), ev.stopped);
+      log('clip abandoned: no ring segments', { camera, clip_id: clipId, stopped: ev.stopped });
+      return;
+    }
+    const startIso = iso(cut.startMs);
+    const prerollS = (ev.triggerTs - cut.startMs) / 1000;
+    store.closeClip(clipId, {
+      end_ts: iso(ev.endTs),
+      stopped: ev.stopped,
+      start_ts: startIso,
+      path: cut.path,
+      bytes: cut.bytes,
+      duration_s: cut.duration_s,
+      fps: cut.fps,
+      width: cut.width,
+      height: cut.height,
+      preroll_s: prerollS,
+    });
     const dir = join(config.mediaDir, 'frames', camera, startIso.slice(0, 10));
     const paths = await sampleFrames({ clipPath: cut.path, dir, prefix: `clip-${basename(cut.path, '.mp4')}` });
-    const width = CLIP.sampleWidth; const height = cut.width ? Math.round((cut.height * width) / cut.width / 2) * 2 : 0;
+    const width = CLIP.sampleWidth;
+    const height = cut.width ? Math.round((cut.height * width) / cut.width / 2) * 2 : 0;
     const ids: number[] = [];
     for (const [i, path] of paths.entries()) {
       const ts = iso(cut.startMs + (i * 1000) / CLIP.sampleFps);
-      const id = store.insertFrame({ ts, camera, path, reason: 'change', clip_id: clipId, width, height, bytes: statSync(path).size, ...(i > 0 ? { burst_id: ids[0], seq: i } : {}) });
-      if (i === 0) store.markBurstHead(id);   // the clip's frames are a burst: head + members, so retention, tracks and the UI need no new case
+      const id = store.insertFrame({
+        ts,
+        camera,
+        path,
+        reason: 'change',
+        clip_id: clipId,
+        width,
+        height,
+        bytes: statSync(path).size,
+        ...(i > 0 ? { burst_id: ids[0], seq: i } : {}),
+      });
+      if (i === 0) {
+        store.markBurstHead(id);
+      } // the clip's frames are a burst: head + members, so retention, tracks and the UI need no new case
       ids.push(id);
-      await bus.publish(topics.frames(camera), { id, ts, camera, path, reason: 'change', width, height, burst_id: ids[0], seq: i, clip_id: clipId });
+      await bus.publish(topics.frames(camera), {
+        id,
+        ts,
+        camera,
+        path,
+        reason: 'change',
+        width,
+        height,
+        burst_id: ids[0],
+        seq: i,
+        clip_id: clipId,
+      });
     }
-    clipStats.cut++; clipStats.frames += ids.length;
-    await bus.publish(topics.clips(camera), { clip_id: clipId, burst_id: ids[0], camera, frame_ids: ids, n: ids.length, stopped: ev.stopped, start_ts: startIso, end_ts: iso(ev.endTs), duration_s: cut.duration_s, preroll_s: prerollS, path: cut.path });
-    log('clip cut', { camera, clip_id: clipId, stopped: ev.stopped, duration_s: +cut.duration_s.toFixed(1), preroll_s: +prerollS.toFixed(1), segments: cut.segments, mb: +(cut.bytes / 1048576).toFixed(1), frames: ids.length, fps: +cut.fps.toFixed(1) });
+    clipStats.cut++;
+    clipStats.frames += ids.length;
+    await bus.publish(topics.clips(camera), {
+      clip_id: clipId,
+      burst_id: ids[0],
+      camera,
+      frame_ids: ids,
+      n: ids.length,
+      stopped: ev.stopped,
+      start_ts: startIso,
+      end_ts: iso(ev.endTs),
+      duration_s: cut.duration_s,
+      preroll_s: prerollS,
+      path: cut.path,
+    });
+    log('clip cut', {
+      camera,
+      clip_id: clipId,
+      stopped: ev.stopped,
+      duration_s: +cut.duration_s.toFixed(1),
+      preroll_s: +prerollS.toFixed(1),
+      segments: cut.segments,
+      mb: +(cut.bytes / 1048576).toFixed(1),
+      frames: ids.length,
+      fps: +cut.fps.toFixed(1),
+    });
   } catch (e) {
     store.abandonClip(clipId, iso(ev.endTs), ev.stopped);
     log('clip failed', { camera, clip_id: clipId, error: String(e).slice(0, 200) });
@@ -177,11 +404,16 @@ async function finishClip(store: EventStore, bus: Bus, camera: string, clipId: n
 }
 
 async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: { v: boolean }): Promise<void> {
-  let lastThumb: Buffer | undefined; let lastKept = 0; let lastBurstEnd = 0;
-  let lastName = ''; let staleSince = 0;
+  let lastThumb: Buffer | undefined;
+  let lastKept = 0;
+  let lastBurstEnd = 0;
+  let lastName = '';
+  let staleSince = 0;
   // clip decisions run on consecutive keyframes (the buffer's 2 s cadence), independent of what the sampler keeps
   const clip: ClipState = { triggerTs: null, motionLastTs: null, lastCloseTs: 0 };
-  let prevThumb: Buffer | undefined; let openClipId: number | null = null; let lastKeyTs = 0;
+  let prevThumb: Buffer | undefined;
+  let openClipId: number | null = null;
+  let lastKeyTs = 0;
   while (!stop.v) {
     const t0 = Date.now();
     const f = latestBufferFrame(camera, lastName);
@@ -189,28 +421,60 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
       // no frame newer than the last we processed; report the camera down if the whole buffer is stale
       const cur = latestBufferFrame(camera);
       const ageS = cur ? cur.ageS : Infinity;
-      if (ageS > STALE_S && !staleSince) { staleSince = Date.now(); log('camera stale', { camera, newest_age_s: Number.isFinite(ageS) ? Math.round(ageS) : null }); }
+      if (ageS > STALE_S && !staleSince) {
+        staleSince = Date.now();
+        log('camera stale', { camera, newest_age_s: Number.isFinite(ageS) ? Math.round(ageS) : null });
+      }
       const sev = staleCheck(clip, Date.now(), lastKeyTs);
-      if (sev?.type === 'close' && openClipId !== null) { const id = openClipId; openClipId = null; void finishClip(store, bus, camera, id, sev); }
+      if (sev?.type === 'close' && openClipId !== null) {
+        const id = openClipId;
+        openClipId = null;
+        void finishClip(store, bus, camera, id, sev);
+      }
       await sleep(1000);
       continue;
     }
-    if (staleSince) { log('camera recovered', { camera, down_s: Math.round((Date.now() - staleSince) / 1000) }); staleSince = 0; }
+    if (staleSince) {
+      log('camera recovered', { camera, down_s: Math.round((Date.now() - staleSince) / 1000) });
+      staleSince = 0;
+    }
     lastName = f.name;
-    let meta: sharp.Metadata; let thumb: Buffer;
+    let meta: sharp.Metadata;
+    let thumb: Buffer;
     try {
       const img = sharp(f.buf);
-      [meta, thumb] = await Promise.all([img.metadata(), img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer()]);
-    } catch { await sleep(500); continue; } // partial/corrupt jpeg mid-write; try the next
+      [meta, thumb] = await Promise.all([
+        img.metadata(),
+        img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer(),
+      ]);
+    } catch {
+      await sleep(500);
+      continue;
+    } // partial/corrupt jpeg mid-write; try the next
     const change = lastThumb ? meanAbsDiff(thumb, lastThumb) : 1;
     const motion = lastThumb ? blockMaxDiff(thumb, lastThumb) : 0;
-    const keyTs = bufferNameMs(f.name); lastKeyTs = keyTs;
-    const ev = step(clip, { ts: keyTs, score: prevThumb ? blockMaxDiff(thumb, prevThumb) : 0 }); prevThumb = thumb;
+    const keyTs = bufferNameMs(f.name);
+    lastKeyTs = keyTs;
+    const ev = step(clip, { ts: keyTs, score: prevThumb ? blockMaxDiff(thumb, prevThumb) : 0 });
+    prevThumb = thumb;
     if (ev?.type === 'open') {
-      if (freeGb() < CLIP.minFreeGb) { clip.triggerTs = null; clip.motionLastTs = null; log('clip not opened: low disk', { camera, free_gb: Math.round(freeGb()) }); }
-      else { openClipId = store.insertClip({ camera, trigger_ts: iso(keyTs), start_ts: iso(keyTs - CLIP.prerollS * 1000) }); clipStats.open++; log('clip open', { camera, clip_id: openClipId }); }
-    } else if (ev?.type === 'close' && openClipId !== null) { const id = openClipId; openClipId = null; void finishClip(store, bus, camera, id, ev); }
-    if (lastThumb) (motionSamples.get(camera) ?? motionSamples.set(camera, []).get(camera)!).push(motion);
+      if (freeGb() < CLIP.minFreeGb) {
+        clip.triggerTs = null;
+        clip.motionLastTs = null;
+        log('clip not opened: low disk', { camera, free_gb: Math.round(freeGb()) });
+      } else {
+        openClipId = store.insertClip({ camera, trigger_ts: iso(keyTs), start_ts: iso(keyTs - CLIP.prerollS * 1000) });
+        clipStats.open++;
+        log('clip open', { camera, clip_id: openClipId });
+      }
+    } else if (ev?.type === 'close' && openClipId !== null) {
+      const id = openClipId;
+      openClipId = null;
+      void finishClip(store, bus, camera, id, ev);
+    }
+    if (lastThumb) {
+      (motionSamples.get(camera) ?? motionSamples.set(camera, []).get(camera)!).push(motion);
+    }
     const elapsed = (Date.now() - lastKept) / 1000;
     const reason = change >= THRESHOLD || motion >= MOTION ? 'change' : elapsed >= FLOOR_S ? 'floor' : null;
     if (reason) {
@@ -220,22 +484,56 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
       mkdirSync(dir, { recursive: true });
       const path = join(dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
       writeFileSync(path, f.buf);
-      const id = store.insertFrame({ ts, camera, path, reason, change, bytes: f.buf.length, ...(meta.width ? { width: meta.width } : {}), ...(meta.height ? { height: meta.height } : {}) });
-      await bus.publish(topics.frames(camera), { id, ts, camera, path, reason, change, width: meta.width, height: meta.height });
-      lastThumb = thumb; lastKept = now.getTime();
+      const id = store.insertFrame({
+        ts,
+        camera,
+        path,
+        reason,
+        change,
+        bytes: f.buf.length,
+        ...(meta.width ? { width: meta.width } : {}),
+        ...(meta.height ? { height: meta.height } : {}),
+      });
+      await bus.publish(topics.frames(camera), {
+        id,
+        ts,
+        camera,
+        path,
+        reason,
+        change,
+        width: meta.width,
+        height: meta.height,
+      });
+      lastThumb = thumb;
+      lastKept = now.getTime();
       if (reason === 'change' && BURST_MAX > 1 && now.getTime() - lastBurstEnd > BURST_COOLDOWN_S * 1000) {
         const cursor = { name: f.name };
-        const b = await extendBurst({ headId: id, camera, dir, headThumb: thumb, store, bus, grab: async () => {
-          const nf = await nextBufferFrame(camera, cursor.name, BURST_GAP_S * 1000 + 2500);
-          if (!nf) throw new Error('no buffered frame');
-          cursor.name = nf.name; return nf.buf;
-        } });
-        if (b.members > 0) { lastThumb = b.lastThumb!; lastKept = Date.now(); lastBurstEnd = Date.now(); }
+        const b = await extendBurst({
+          headId: id,
+          camera,
+          dir,
+          headThumb: thumb,
+          store,
+          bus,
+          grab: async () => {
+            const nf = await nextBufferFrame(camera, cursor.name, BURST_GAP_S * 1000 + 2500);
+            if (!nf) {
+              throw new Error('no buffered frame');
+            }
+            cursor.name = nf.name;
+            return nf.buf;
+          },
+        });
+        if (b.members > 0) {
+          lastThumb = b.lastThumb!;
+          lastKept = Date.now();
+          lastBurstEnd = Date.now();
+        }
       }
     } else {
       lastThumb = thumb;
     }
-    await sleep(Math.max(0, (openClipId !== null ? 1000 : GRAB_S * 1000) - (Date.now() - t0)));   // every keyframe while a clip is open
+    await sleep(Math.max(0, (openClipId !== null ? 1000 : GRAB_S * 1000) - (Date.now() - t0))); // every keyframe while a clip is open
   }
 }
 
@@ -246,39 +544,122 @@ async function prune(store: EventStore): Promise<void> {
   const t0 = Date.now();
   const r = store.applyRetention({ olderThanMs: RETAIN_AFTER_S * 1000 });
   let removed = 0;
-  for (const p of r.paths) { try { unlinkSync(p); removed++; } catch { /* already gone */ } }
-  if (r.kept || r.deleted) log('retention applied', { kept: r.kept, deleted: r.deleted, files: removed, ms: Date.now() - t0 });
+  for (const p of r.paths) {
+    try {
+      unlinkSync(p);
+      removed++;
+    } catch {
+      /* already gone */
+    }
+  }
+  if (r.kept || r.deleted) {
+    log('retention applied', { kept: r.kept, deleted: r.deleted, files: removed, ms: Date.now() - t0 });
+  }
   // 2. age limit for everything else
   const before = new Date(Date.now() - RETENTION_D * 86400e3).toISOString();
   const paths = store.pruneFrames(before);
   removed = 0;
-  for (const p of paths) { try { unlinkSync(p); removed++; } catch { /* already gone */ } }
-  if (paths.length) log('pruned frames', { before, rows: paths.length, files: removed });
+  for (const p of paths) {
+    try {
+      unlinkSync(p);
+      removed++;
+    } catch {
+      /* already gone */
+    }
+  }
+  if (paths.length) {
+    log('pruned frames', { before, rows: paths.length, files: removed });
+  }
   // 3. clip media (rows stay, docs/PLAN.md: events live forever)
   const expired = store.expireClips(new Date(Date.now() - CLIP.retentionD * 86400e3).toISOString());
-  removed = 0; for (const c of expired) { try { unlinkSync(c.path); removed++; } catch { /* already gone */ } }
-  if (expired.length) log('expired clips', { rows: expired.length, files: removed });
+  removed = 0;
+  for (const c of expired) {
+    try {
+      unlinkSync(c.path);
+      removed++;
+    } catch {
+      /* already gone */
+    }
+  }
+  if (expired.length) {
+    log('expired clips', { rows: expired.length, files: removed });
+  }
 }
 
 async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const bus = await connectBus('ingest');
   const cameras = cameraList();
-  for (const c of store.openClips()) store.abandonClip(c.id, new Date().toISOString(), 'stale');   // left open by a previous run
-  log('starting', { cameras, grab_s: GRAB_S, floor_s: FLOOR_S, threshold: THRESHOLD, motion_threshold: MOTION, retention_d: RETENTION_D, stale_s: STALE_S, buffer: config.bufferDir, burst: { max: BURST_MAX, gap_s: BURST_GAP_S, change: BURST_CHANGE, cooldown_s: BURST_COOLDOWN_S, budget_per_min: BURST_BUDGET_PER_MIN }, media: config.mediaDir, db: config.dbPath });
+  for (const c of store.openClips()) {
+    store.abandonClip(c.id, new Date().toISOString(), 'stale');
+  } // left open by a previous run
+  log('starting', {
+    cameras,
+    grab_s: GRAB_S,
+    floor_s: FLOOR_S,
+    threshold: THRESHOLD,
+    motion_threshold: MOTION,
+    retention_d: RETENTION_D,
+    stale_s: STALE_S,
+    buffer: config.bufferDir,
+    burst: {
+      max: BURST_MAX,
+      gap_s: BURST_GAP_S,
+      change: BURST_CHANGE,
+      cooldown_s: BURST_COOLDOWN_S,
+      budget_per_min: BURST_BUDGET_PER_MIN,
+    },
+    media: config.mediaDir,
+    db: config.dbPath,
+  });
   const stop = { v: false };
   const status = setInterval(() => {
     const m = process.memoryUsage();
-    void bus.publish(topics.status('ingest'), { ts: new Date().toISOString(), pid: process.pid, cameras, rss_mb: Math.round(m.rss / 1048576), bursts: burstStats.bursts, burst_frames: burstStats.burst_frames, burst_throttled: burstStats.throttled, burst_budget_per_min: BURST_BUDGET_PER_MIN, clips_open: clipStats.open, clips_cut: clipStats.cut, clip_frames: clipStats.frames, motion_threshold: MOTION, motion: motionSummary() }, { retain: true });
+    void bus.publish(
+      topics.status('ingest'),
+      {
+        ts: new Date().toISOString(),
+        pid: process.pid,
+        cameras,
+        rss_mb: Math.round(m.rss / 1048576),
+        bursts: burstStats.bursts,
+        burst_frames: burstStats.burst_frames,
+        burst_throttled: burstStats.throttled,
+        burst_budget_per_min: BURST_BUDGET_PER_MIN,
+        clips_open: clipStats.open,
+        clips_cut: clipStats.cut,
+        clip_frames: clipStats.frames,
+        motion_threshold: MOTION,
+        motion: motionSummary(),
+      },
+      { retain: true },
+    );
   }, 60_000);
   const pruner = setInterval(() => void prune(store), 3600_000);
   await prune(store);
-  const shutdown = async () => { stop.v = true; clearInterval(status); clearInterval(pruner); await bus.close(); store.close(); process.exit(0); };
-  process.on('SIGTERM', () => void shutdown()); process.on('SIGINT', () => void shutdown());
+  const shutdown = async () => {
+    stop.v = true;
+    clearInterval(status);
+    clearInterval(pruner);
+    await bus.close();
+    store.close();
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => void shutdown());
+  process.on('SIGINT', () => void shutdown());
   // A per-camera loop never throws out (read/decode errors are caught inside), so one bad camera can't exit the
   // process; guard anyway so an unexpected error is logged and that camera restarts instead of killing the daemon.
-  await Promise.all(cameras.map((c) => sampleCamera(c, store, bus, stop).catch((e) => log('camera loop crashed', { camera: c, error: String(e) }))));
+  await Promise.all(
+    cameras.map((c) =>
+      sampleCamera(c, store, bus, stop).catch((e) => log('camera loop crashed', { camera: c, error: String(e) })),
+    ),
+  );
 }
 
 // Run the daemon only when this file is the entry point (the burst test imports extendBurst).
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch((e) => { log('fatal', { error: String(e) }); process.exit(1); });
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((e) => {
+    log('fatal', { error: String(e) });
+    process.exit(1);
+  });
+}

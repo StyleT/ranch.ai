@@ -9,5 +9,11 @@ export const metadata = { title: 'Detections' };
 export default async function DetectionsPage() {
   const qc = getQueryClient();
   await qc.prefetchQuery({ queryKey: keys.home(), queryFn: getHome }).catch(() => undefined);
-  return <HydrationBoundary state={dehydrate(qc)}><Suspense fallback={null}><DetectionsView /></Suspense></HydrationBoundary>;
+  return (
+    <HydrationBoundary state={dehydrate(qc)}>
+      <Suspense fallback={null}>
+        <DetectionsView />
+      </Suspense>
+    </HydrationBoundary>
+  );
 }

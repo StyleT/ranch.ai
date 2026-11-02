@@ -1,6 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getTaxonomy, validateTaxonomy, mapDetection, interestLabels, thresholdFor, scoringLabel, storedLabel, classOf, canonical, horseIsEquine, loadTaxonomyFile, REPO_TAXONOMY_FILE } from '../src/index.ts';
+import {
+  getTaxonomy,
+  validateTaxonomy,
+  mapDetection,
+  interestLabels,
+  thresholdFor,
+  scoringLabel,
+  storedLabel,
+  classOf,
+  canonical,
+  horseIsEquine,
+  loadTaxonomyFile,
+  REPO_TAXONOMY_FILE,
+} from '../src/index.ts';
 
 test('repo taxonomy.json is valid and loads', () => {
   const t = loadTaxonomyFile(REPO_TAXONOMY_FILE);
@@ -15,8 +28,17 @@ test('validator rejects inconsistent taxonomies with named paths', () => {
   (t.scoring_map.coco as Record<string, string>)['deer'] = 'bench';
   const r = validateTaxonomy(t);
   assert.ok(!r.ok);
-  if (!r.ok) { assert.ok(r.errors.some((e) => e.includes('unicorn'))); assert.ok(r.errors.some((e) => e.includes('tractor_beam'))); assert.ok(r.errors.some((e) => e.includes('bench'))); }
-  assert.ok(!validateTaxonomy({ ...getTaxonomy(), mappings: { coco: { horse: { class: 'animal', subclass: 'horse', threshold: 1.5 } } } }).ok);
+  if (!r.ok) {
+    assert.ok(r.errors.some((e) => e.includes('unicorn')));
+    assert.ok(r.errors.some((e) => e.includes('tractor_beam')));
+    assert.ok(r.errors.some((e) => e.includes('bench')));
+  }
+  assert.ok(
+    !validateTaxonomy({
+      ...getTaxonomy(),
+      mappings: { coco: { horse: { class: 'animal', subclass: 'horse', threshold: 1.5 } } },
+    }).ok,
+  );
 });
 
 test('mapping, thresholds, stored labels', () => {
@@ -36,6 +58,7 @@ test('mapping, thresholds, stored labels', () => {
   assert.equal(scoringLabel('coco', 'animal', 'deer'), 'deer');
   assert.ok(horseIsEquine('coco'));
   // a taxonomy passed explicitly is used instead of the active one
-  const t = structuredClone(getTaxonomy()); delete (t.mappings.coco as Record<string, unknown>)['cow'];
+  const t = structuredClone(getTaxonomy());
+  delete (t.mappings.coco as Record<string, unknown>)['cow'];
   assert.equal(mapDetection('coco', 'cow', 0.9, true, t), null);
 });

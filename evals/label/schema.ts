@@ -5,7 +5,10 @@ const T = getTaxonomy();
 const en = (xs: readonly string[]) => z.enum(xs as [string, ...string[]]);
 
 export const Box = z.object({
-  x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().min(0).max(1),
+  h: z.number().min(0).max(1),
 });
 // Insects and spiders (including on the lens) are deliberately not animals: never boxed, never counted.
 const AnimalEntry = z.object({
@@ -36,38 +39,80 @@ const SceneFields = {
 };
 
 export const FrameLabel = z.object({
-  scene: SceneFields.scene, lighting: SceneFields.lighting,
-  animals: z.array(AnimalEntry), people: z.array(PersonEntry), vehicles: z.array(VehicleEntry),
-  gate: SceneFields.gate, trough: SceneFields.trough, notes: SceneFields.notes,
+  scene: SceneFields.scene,
+  lighting: SceneFields.lighting,
+  animals: z.array(AnimalEntry),
+  people: z.array(PersonEntry),
+  vehicles: z.array(VehicleEntry),
+  gate: SceneFields.gate,
+  trough: SceneFields.trough,
+  notes: SceneFields.notes,
 });
 export type FrameLabel = z.infer<typeof FrameLabel>;
 
 // One request per burst (24 Oct, Vlad): the labeler sees the members together, so a living thing that moves or holds its
 // shape can be told from IR noise, a shadow or a fixture, which a single night still cannot. Each object carries an
 // id that is the same in every frame it appears in; `objects` says per id whether it moved: a motion ground truth.
-const Id = z.string().describe('Short id for this object, the same in every frame of the burst where it appears (a1, a2, p1, v1 ...).');
+const Id = z
+  .string()
+  .describe('Short id for this object, the same in every frame of the burst where it appears (a1, a2, p1, v1 ...).');
 export const BurstFrameLabel = z.object({
   seq: z.number().int().min(0).describe('The frame index in the burst, as given.'),
-  scene: SceneFields.scene, lighting: SceneFields.lighting,
-  animals: z.array(AnimalEntry.extend({ id: Id })), people: z.array(PersonEntry.extend({ id: Id })), vehicles: z.array(VehicleEntry.extend({ id: Id })),
-  gate: SceneFields.gate, trough: SceneFields.trough, notes: SceneFields.notes,
+  scene: SceneFields.scene,
+  lighting: SceneFields.lighting,
+  animals: z.array(AnimalEntry.extend({ id: Id })),
+  people: z.array(PersonEntry.extend({ id: Id })),
+  vehicles: z.array(VehicleEntry.extend({ id: Id })),
+  gate: SceneFields.gate,
+  trough: SceneFields.trough,
+  notes: SceneFields.notes,
 });
 export const BurstLabel = z.object({
   frames: z.array(BurstFrameLabel).describe('One entry per frame, in the order given.'),
-  objects: z.array(z.object({
-    id: Id, kind: z.string().describe('The kind you gave it.'),
-    moved: z.boolean().describe('Did it change position between the first and the last frame it appears in?'),
-  })).describe('Every id used above, once.'),
+  objects: z
+    .array(
+      z.object({
+        id: Id,
+        kind: z.string().describe('The kind you gave it.'),
+        moved: z.boolean().describe('Did it change position between the first and the last frame it appears in?'),
+      }),
+    )
+    .describe('Every id used above, once.'),
 });
 export type BurstLabel = z.infer<typeof BurstLabel>;
 
 /** Flatten to the benchmark's box list in a model family's label space (docs/TAXONOMY.md, SCORING_MAP): for COCO,
  *  donkey → horse; delivery_vehicle, tractor, atv, trailer → truck; every person kind → person. The kind is kept. */
-export function toBoxes(l: FrameLabel, family = 'coco'): { label: string; x: number; y: number; w: number; h: number; posture?: string; kind?: string; look?: string; id?: string }[] {
+export function toBoxes(
+  l: FrameLabel,
+  family = 'coco',
+): {
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  posture?: string;
+  kind?: string;
+  look?: string;
+  id?: string;
+}[] {
   const id = (o: object) => ('id' in o ? { id: (o as { id: string }).id } : {});
   return [
-    ...l.animals.map((a) => ({ label: scoringLabel(family, 'animal', a.kind), kind: a.kind, posture: a.posture, ...a.box, ...id(a) })),
-    ...l.people.map((p) => ({ label: scoringLabel(family, 'person', p.kind), kind: p.kind, look: p.look, ...p.box, ...id(p) })),
+    ...l.animals.map((a) => ({
+      label: scoringLabel(family, 'animal', a.kind),
+      kind: a.kind,
+      posture: a.posture,
+      ...a.box,
+      ...id(a),
+    })),
+    ...l.people.map((p) => ({
+      label: scoringLabel(family, 'person', p.kind),
+      kind: p.kind,
+      look: p.look,
+      ...p.box,
+      ...id(p),
+    })),
     ...l.vehicles.map((v) => ({ label: scoringLabel(family, 'vehicle', v.kind), kind: v.kind, ...v.box, ...id(v) })),
   ];
 }

@@ -14,9 +14,9 @@ export const topics = {
   events: (camera: string, type: string) => `ranch/events/${camera}/${type}`,
   status: (service: string) => `ranch/status/${service}`,
   taxonomy: 'ranch/taxonomy',
-  bursts: (camera: string) => `ranch/bursts/${camera}`,   // sampler: a burst closed {burst_id, frame_ids}
-  tracks: (camera: string) => `ranch/tracks/${camera}`,   // detector: tracks across a burst
-  clips: (camera: string) => `ranch/clips/${camera}`,     // ingest: a motion clip was cut and sampled {clip_id, burst_id, frame_ids, ...} (docs/CLIPS.md)
+  bursts: (camera: string) => `ranch/bursts/${camera}`, // sampler: a burst closed {burst_id, frame_ids}
+  tracks: (camera: string) => `ranch/tracks/${camera}`, // detector: tracks across a burst
+  clips: (camera: string) => `ranch/clips/${camera}`, // ingest: a motion clip was cut and sampled {clip_id, burst_id, frame_ids, ...} (docs/CLIPS.md)
 } as const;
 
 export interface Bus {
@@ -28,24 +28,41 @@ export interface Bus {
 
 export function connectBus(clientId: string, url: string = config.mqttUrl): Promise<Bus> {
   return new Promise((resolve, reject) => {
-    const client = mqtt.connect(url, { clientId: `${clientId}-${process.pid}`, reconnectPeriod: 2000, connectTimeout: 10_000 });
+    const client = mqtt.connect(url, {
+      clientId: `${clientId}-${process.pid}`,
+      reconnectPeriod: 2000,
+      connectTimeout: 10_000,
+    });
     const handlers = new Map<string, (topic: string, payload: unknown) => void>();
     client.on('message', (topic, buf) => {
       let payload: unknown = buf.toString('utf8');
-      try { payload = JSON.parse(payload as string); } catch { /* raw string */ }
-      for (const [pattern, h] of handlers) if (topicMatches(pattern, topic)) h(topic, payload);
+      try {
+        payload = JSON.parse(payload as string);
+      } catch {
+        /* raw string */
+      }
+      for (const [pattern, h] of handlers) {
+        if (topicMatches(pattern, topic)) {
+          h(topic, payload);
+        }
+      }
     });
     client.once('error', reject);
     client.once('connect', () => {
       client.off('error', reject);
       resolve({
         client,
-        publish: (topic, payload, opts = {}) => new Promise((res, rej) =>
-          client.publish(topic, JSON.stringify(payload), { qos: 0, retain: opts.retain ?? false }, (err) => (err ? rej(err) : res()))),
-        subscribe: (topic, handler) => new Promise((res, rej) => {
-          handlers.set(topic, handler);
-          client.subscribe(topic, { qos: 0 }, (err) => (err ? rej(err) : res()));
-        }),
+        publish: (topic, payload, opts = {}) =>
+          new Promise((res, rej) =>
+            client.publish(topic, JSON.stringify(payload), { qos: 0, retain: opts.retain ?? false }, (err) =>
+              err ? rej(err) : res(),
+            ),
+          ),
+        subscribe: (topic, handler) =>
+          new Promise((res, rej) => {
+            handlers.set(topic, handler);
+            client.subscribe(topic, { qos: 0 }, (err) => (err ? rej(err) : res()));
+          }),
         close: () => new Promise((res) => client.end(false, {}, () => res())),
       });
     });
@@ -54,10 +71,15 @@ export function connectBus(clientId: string, url: string = config.mqttUrl): Prom
 
 /** MQTT wildcard match: + for one level, # for the rest. */
 export function topicMatches(pattern: string, topic: string): boolean {
-  const p = pattern.split('/'); const t = topic.split('/');
+  const p = pattern.split('/');
+  const t = topic.split('/');
   for (let i = 0; i < p.length; i++) {
-    if (p[i] === '#') return true;
-    if (p[i] !== '+' && p[i] !== t[i]) return false;
+    if (p[i] === '#') {
+      return true;
+    }
+    if (p[i] !== '+' && p[i] !== t[i]) {
+      return false;
+    }
   }
   return p.length === t.length;
 }

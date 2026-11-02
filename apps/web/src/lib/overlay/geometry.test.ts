@@ -1,7 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import { pctBox, arrow, caption, labelKind, describe as describeFrame, isMoving } from './geometry';
-const box = (o: Partial<{ label: string; raw_label: string | null; confidence: number; x: number; y: number; w: number; h: number; seen: number | null; dx: number | null; dy: number | null; gold: boolean }> = {}) =>
-  ({ label: 'horse', raw_label: null, confidence: 0.9, x: 0.1, y: 0.2, w: 0.3, h: 0.4, seen: null, dx: null, dy: null, gold: false, ...o });
+const box = (
+  o: Partial<{
+    label: string;
+    raw_label: string | null;
+    confidence: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    seen: number | null;
+    dx: number | null;
+    dy: number | null;
+    gold: boolean;
+  }> = {},
+) => ({
+  label: 'horse',
+  raw_label: null,
+  confidence: 0.9,
+  x: 0.1,
+  y: 0.2,
+  w: 0.3,
+  h: 0.4,
+  seen: null,
+  dx: null,
+  dy: null,
+  gold: false,
+  ...o,
+});
 
 describe('geometry', () => {
   it('converts normalized boxes to percentages and clamps overflow', () => {
@@ -20,8 +46,13 @@ describe('geometry', () => {
     expect(caption(box({ gold: true, label: 'donkey/standing' }))).toBe('donkey/standing');
   });
   it('classifies labels for colour and describes frames', () => {
-    expect(labelKind(box())).toBe('horse'); expect(labelKind(box({ label: 'tractor' }))).toBe('vehicle'); expect(labelKind(box({ label: 'bench' }))).toBe('other'); expect(labelKind(box({ gold: true }))).toBe('gold');
-    expect(describeFrame('donkey_cam', '14:02:11', [box(), box(), box({ label: 'person' })])).toBe('donkey_cam 14:02:11, horse ×2, person');
+    expect(labelKind(box())).toBe('horse');
+    expect(labelKind(box({ label: 'tractor' }))).toBe('vehicle');
+    expect(labelKind(box({ label: 'bench' }))).toBe('other');
+    expect(labelKind(box({ gold: true }))).toBe('gold');
+    expect(describeFrame('donkey_cam', '14:02:11', [box(), box(), box({ label: 'person' })])).toBe(
+      'donkey_cam 14:02:11, horse ×2, person',
+    );
     expect(describeFrame('cam', 't', [])).toBe('cam t, no detections');
   });
 });

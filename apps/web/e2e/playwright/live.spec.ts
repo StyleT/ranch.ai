@@ -11,21 +11,25 @@ test('the camera page plays the recorder HLS and says LIVE with a latency', asyn
   await expect(player).toHaveAttribute('data-mode', 'live', { timeout: 20_000 });
   await expect(player).toHaveAttribute('data-latency-s', /^\d+(\.\d+)?$/);
   // playback is real: the clock advances (readyState dips to 1 between segments of the looping fixture, so poll currentTime)
-  await expect.poll(() => player.locator('video').evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 10_000 }).toBeGreaterThan(1);
+  await expect
+    .poll(() => player.locator('video').evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 10_000 })
+    .toBeGreaterThan(1);
   await expect(player.getByText(/^LIVE · \d+(\.\d+)? s$/)).toBeVisible();
 });
 
 test('the camera page shows the probe-derived session state and the 24 h availability strip', async ({ page }) => {
   await page.goto('/cameras/donkey_cam');
   await expect(page.getByTestId('camera-state')).toHaveAttribute('data-state', /^(connected|degraded|down|unknown)$/);
-  const avail = page.getByTestId('availability'); await avail.scrollIntoViewIfNeeded();
+  const avail = page.getByTestId('availability');
+  await avail.scrollIntoViewIfNeeded();
   await expect(avail).toContainText(/% connected/);
   await expect(avail.locator('[data-testid=chart-timeline]')).toBeVisible();
 });
 
 test('a camera with an outage shows the supervisor ledger under the stream', async ({ page }) => {
   await page.goto('/cameras/tractor_cam');
-  const row = page.getByTestId('remediation-row-2'); await row.scrollIntoViewIfNeeded();
+  const row = page.getByTestId('remediation-row-2');
+  await row.scrollIntoViewIfNeeded();
   await expect(row).toHaveAttribute('data-action', 'camera_reboot');
   await expect(row).toContainText(/dry run/);
   await expect(row).toContainText(/recovered after 3 min/);
@@ -40,8 +44,13 @@ test('unmute toggles the audio track', async ({ page }) => {
   await expect(page.getByTestId('stream-mute')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('a playlist the recorder stopped writing is shown as the camera reconnecting, never as LIVE', async ({ page, context }) => {
-  await context.route('**/api/ui/hls/**/index.m3u8*', (route) => route.continue({ url: route.request().url().split('?')[0] + '?scenario=live-stall' }));
+test('a playlist the recorder stopped writing is shown as the camera reconnecting, never as LIVE', async ({
+  page,
+  context,
+}) => {
+  await context.route('**/api/ui/hls/**/index.m3u8*', (route) =>
+    route.continue({ url: route.request().url().split('?')[0] + '?scenario=live-stall' }),
+  );
   await page.goto('/cameras/donkey_cam');
   const player = page.getByTestId('stream-player');
   await expect(player).toHaveAttribute('data-mode', 'offline', { timeout: 20_000 });

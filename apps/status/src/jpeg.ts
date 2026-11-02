@@ -11,14 +11,20 @@ export const MAX_WIDTH = 4000;
 /** The file as a JPEG Buffer, resized to `w` pixels wide when 0 < w < MAX_WIDTH (never enlarged), verbatim otherwise. */
 export async function jpegFromFile(path: string, w: number, quality = 82): Promise<Buffer> {
   const buf = await readFile(path);
-  if (!(w > 0 && w < MAX_WIDTH)) return buf;
+  if (!(w > 0 && w < MAX_WIDTH)) {
+    return buf;
+  }
   return sharp(buf).resize({ width: w, withoutEnlargement: true }).jpeg({ quality }).toBuffer();
 }
 
 /** First candidate that decodes; `null` when none does (the caller answers 503 `frame_not_ready`). */
 export async function firstReadableJpeg(paths: string[], w: number): Promise<{ path: string; buf: Buffer } | null> {
   for (const path of paths) {
-    try { return { path, buf: await jpegFromFile(path, w) }; } catch { /* half-written, rotated away, or not a JPEG: try the previous one */ }
+    try {
+      return { path, buf: await jpegFromFile(path, w) };
+    } catch {
+      /* half-written, rotated away, or not a JPEG: try the previous one */
+    }
   }
   return null;
 }

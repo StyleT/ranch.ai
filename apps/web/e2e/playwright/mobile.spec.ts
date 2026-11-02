@@ -10,9 +10,16 @@ test.describe('phone gestures', () => {
     await expect(dialog).toBeVisible();
     const box = (await dialog.boundingBox())!;
     const cdp = await page.context().newCDPSession(page);
-    const y = box.y + box.height / 2; const x0 = box.x + box.width * 0.8, x1 = box.x + box.width * 0.2;
+    const y = box.y + box.height / 2;
+    const x0 = box.x + box.width * 0.8,
+      x1 = box.x + box.width * 0.2;
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }] });
-    for (let i = 1; i <= 5; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + (x1 - x0) * (i / 5), y }] });
+    for (let i = 1; i <= 5; i++) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: x0 + (x1 - x0) * (i / 5), y }],
+      });
+    }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await expect(page).toHaveURL(new RegExp(`frame=${frames[1]!.id}`));
   });
