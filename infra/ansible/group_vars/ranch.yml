@@ -197,7 +197,8 @@ camsup_blind_reboot_after_s: 3600            # rung 2b: off the LAN this long ->
 camsup_blind_reboot_cooldown_s: 21600
 camsup_reboot_after_s: 600                   # rung 2: camera down this long while answering ping -> reboot via the Wyze cloud
 camsup_reboot_cooldown_s: 1800               # per camera
-camsup_fleet_reboots_per_h: 2
+camsup_fleet_reboots_per_h: 2                # fleet-wide: this many reboots per camsup_fleet_window_s (1 Nov: 2 per 5 min, was per hour)
+camsup_fleet_window_s: 300
 camsup_go2rtc_restart_after_s: 900           # rung 3: this many cameras down this long after a reboot each -> go2rtc restart
 camsup_go2rtc_min_cameras: 3
 # netprobe sweeps the cameras' /24 every this many probes (x 15 s) and reads the neighbor table, so `mac_seen_at` says

@@ -29,14 +29,17 @@ test('rung 1b: a reachable camera gets one bridge stream restart after streamRes
   assert.match(later[0]!.reason, /stream restart did not help/);
 });
 
-test('rung 2 fires after rebootAfterS when the camera pings, respects cooldown and the fleet budget', () => {
+test('rung 2 fires after rebootAfterS when the camera pings, respects cooldown and the fleet budget (2 per 5 min)', () => {
   const states = new Map<string, CamState>([['a', tried()], ['b', tried()], ['c', tried()]]);
   const fs = [facts(false, true, 'a'), facts(false, true, 'b'), facts(false, true, 'c')];
   assert.deepEqual(decide(T0 + 599e3, fs, states, [], null), []);                       // not yet
   const d = decide(T0 + 600e3, fs, states, [], null);
   assert.deepEqual(d.map((x) => [x.rung, x.camera]), [[2, 'a'], [2, 'b']]);            // fleet budget 2/h: c waits
   assert.deepEqual(decide(T0 + 601e3, fs, states, [T0 + 600e3, T0 + 600e3], null), []);  // budget spent, a/b cooling
-  const later = decide(T0 + 600e3 + 3600e3 + 1, fs, states, [], null);                  // an hour later: a and b cooled, budget back
+  const five = decide(T0 + 600e3 + 300e3 + 1, fs, states, [T0 + 600e3, T0 + 600e3], null); // five minutes later the window has passed: c gets its reboot
+  assert.deepEqual(five.map((x) => [x.rung, x.camera]), [[2, 'c'], [3, 'a']]);        // and with three cameras down 900 s after a reboot each, rung 3 escalates
+  assert.match(five[0]!.reason, /fleet 1\/2 per 5 min/);
+  const later = decide(T0 + 600e3 + 3600e3 + 1, fs, states, [], null);                  // an hour later: a and b cooled too
   assert.equal(later.filter((x) => x.rung === 2).length, 2);
 });
 
@@ -89,7 +92,7 @@ test('rung 3 needs three cameras down past go2rtcRestartAfterS with a reboot eac
 });
 
 test('defaults are the documented ladder', () => {
-  assert.deepEqual(DEFAULTS, { rebootAfterS: 600, rebootCooldownS: 1800, fleetRebootsPerHour: 2, go2rtcRestartAfterS: 900, go2rtcMinCamerasDown: 3, go2rtcCooldownS: 3600, reattachCooldownS: 120, streamRestartAfterS: 120, blindRebootAfterS: 3600, blindRebootCooldownS: 21600 });
+  assert.deepEqual(DEFAULTS, { rebootAfterS: 600, rebootCooldownS: 1800, fleetRebootsPerHour: 2, go2rtcRestartAfterS: 900, go2rtcMinCamerasDown: 3, go2rtcCooldownS: 3600, reattachCooldownS: 120, streamRestartAfterS: 120, blindRebootAfterS: 3600, blindRebootCooldownS: 21600, fleetWindowS: 300 });
 });
 
 test('rung 1 re-attaches an orphaned consumer after two ticks and cools for two minutes', () => {

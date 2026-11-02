@@ -30,6 +30,7 @@ const cfg: LadderConfig = {
   rebootAfterS: Number(process.env.RANCH_CAMSUP_REBOOT_AFTER_S ?? DEFAULTS.rebootAfterS),
   rebootCooldownS: Number(process.env.RANCH_CAMSUP_REBOOT_COOLDOWN_S ?? DEFAULTS.rebootCooldownS),
   fleetRebootsPerHour: Number(process.env.RANCH_CAMSUP_FLEET_REBOOTS_PER_H ?? DEFAULTS.fleetRebootsPerHour),
+  fleetWindowS: Number(process.env.RANCH_CAMSUP_FLEET_WINDOW_S ?? DEFAULTS.fleetWindowS),
   go2rtcRestartAfterS: Number(process.env.RANCH_CAMSUP_GO2RTC_RESTART_AFTER_S ?? DEFAULTS.go2rtcRestartAfterS),
   go2rtcMinCamerasDown: Number(process.env.RANCH_CAMSUP_GO2RTC_MIN_CAMERAS ?? DEFAULTS.go2rtcMinCamerasDown),
   go2rtcCooldownS: Number(process.env.RANCH_CAMSUP_GO2RTC_COOLDOWN_S ?? DEFAULTS.go2rtcCooldownS),
@@ -152,7 +153,7 @@ async function main(): Promise<void> {
     try {
       await bus.publish(topics.status('camsup'), { ts: new Date().toISOString(), pid: process.pid, dry_run: DRY_RUN, rss_mb: Math.round(process.memoryUsage().rss / 1048576), ...cfg,
         cameras: Object.fromEntries([...states].map(([c, s]) => [c, { down_since: s.downSinceMs === null ? null : new Date(s.downSinceMs).toISOString(), reboots_this_outage: s.rebootsThisOutage, last_reboot: s.lastRebootMs === null ? null : new Date(s.lastRebootMs).toISOString() }])),
-        fleet_reboots_last_h: fleetReboots.filter((t) => now - t < 3600e3).length, last_go2rtc_restart: lastGo2rtcRestartMs === null ? null : new Date(lastGo2rtcRestartMs).toISOString(), pending: pending.map((p) => ({ at: new Date(p.at).toISOString(), what: p.what })) }, { retain: true });
+        fleet_reboots_in_window: fleetReboots.filter((t) => now - t < (cfg.fleetWindowS ?? 300) * 1000).length, fleet_reboots_last_h: fleetReboots.filter((t) => now - t < 3600e3).length, last_go2rtc_restart: lastGo2rtcRestartMs === null ? null : new Date(lastGo2rtcRestartMs).toISOString(), pending: pending.map((p) => ({ at: new Date(p.at).toISOString(), what: p.what })) }, { retain: true });
     } catch { /* broker hiccup */ }
     await new Promise((r) => setTimeout(r, TICK_S * 1000));
   }

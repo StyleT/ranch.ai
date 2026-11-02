@@ -17,7 +17,7 @@
 //                                                     (the cloud reports the address a camera had when it last booted; a DHCP
 //                                                     re-lease while it runs leaves the cloud, the bridge and go2rtc dialing
 //                                                     a dead address, and only a reboot makes the camera report the new one);
-//                                                     cooldown + fleet budget ok
+//                                                     cooldown + fleet budget ok (fleetRebootsPerHour per fleetWindowS)
 //   rung 2b  blind reboot                             off the LAN (no ping, MAC seen nowhere) for ≥ blindRebootAfterS: one
 //                                                     reboot through the cloud in case the camera is cloud-connected on
 //                                                     another AP or band and rejoins; once per blindRebootCooldownS
@@ -39,7 +39,7 @@ export interface CamState {
   orphanTicks?: number; lastReattachMs?: number | null; streamRestartTried?: boolean; lastBlindRebootMs?: number | null;
 }
 export interface LadderConfig {
-  rebootAfterS: number; rebootCooldownS: number; fleetRebootsPerHour: number;
+  rebootAfterS: number; rebootCooldownS: number; fleetRebootsPerHour: number; fleetWindowS?: number;   // fleetRebootsPerHour reboots per fleetWindowS (name kept; 1 Nov: 2 per 300 s)
   go2rtcRestartAfterS: number; go2rtcMinCamerasDown: number; go2rtcCooldownS: number;
   reattachCooldownS?: number; streamRestartAfterS?: number; blindRebootAfterS?: number; blindRebootCooldownS?: number;
 }
@@ -52,7 +52,7 @@ export type Decision =
 
 export const DEFAULTS: LadderConfig = {
   rebootAfterS: 600, rebootCooldownS: 1800, fleetRebootsPerHour: 2, go2rtcRestartAfterS: 900, go2rtcMinCamerasDown: 3, go2rtcCooldownS: 3600,
-  reattachCooldownS: 120, streamRestartAfterS: 120, blindRebootAfterS: 3600, blindRebootCooldownS: 21600,
+  reattachCooldownS: 120, streamRestartAfterS: 120, blindRebootAfterS: 3600, blindRebootCooldownS: 21600, fleetWindowS: 300,
 };
 
 /** Advance a camera's state with a new fact. Returns the transition, if any. */
@@ -67,12 +67,13 @@ export function advance(state: CamState, f: CamFacts, nowMs: number): 'went_down
 
 export function decide(nowMs: number, facts: CamFacts[], states: Map<string, CamState>, fleetRebootTimesMs: number[], lastGo2rtcRestartMs: number | null, cfg: LadderConfig = DEFAULTS): Decision[] {
   const out: Decision[] = [];
-  const recentReboots = fleetRebootTimesMs.filter((t) => nowMs - t < 3600e3).length;
+  const windowS = cfg.fleetWindowS ?? 300;
+  const recentReboots = fleetRebootTimesMs.filter((t) => nowMs - t < windowS * 1000).length;
   let budget = Math.max(0, cfg.fleetRebootsPerHour - recentReboots);
   const downLong: string[] = [];
   const reboot = (f: CamFacts, s: CamState, reason: string, moved: boolean, blind: boolean) => {
     budget--; s.lastRebootMs = nowMs; s.rebootsThisOutage++;
-    out.push({ rung: 2, action: 'camera_reboot', camera: f.camera, reason: `${reason} (${s.rebootsThisOutage} this outage, fleet ${recentReboots + 1}/${cfg.fleetRebootsPerHour} per hour)`, moved, blind });
+    out.push({ rung: 2, action: 'camera_reboot', camera: f.camera, reason: `${reason} (${s.rebootsThisOutage} this outage, fleet ${recentReboots + 1}/${cfg.fleetRebootsPerHour} per ${windowS >= 3600 ? `${Math.round(windowS / 3600)} h` : `${Math.round(windowS / 60)} min`})`, moved, blind });
   };
   for (const f of facts) {
     const s = states.get(f.camera); if (!s) continue;
