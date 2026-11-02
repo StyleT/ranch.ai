@@ -14,6 +14,10 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   passwordless sudo with `sudo -n`).
 
 ## How work is done
+- **Always work on `main`, in this checkout. DO NOT USE WORKTREES.** No feature branches, no `.claude/worktrees/`,
+  no `EnterWorktree`, unless Vlad asks for one by name. Edit, commit and provision from `main`; push to `origin main`.
+  If a session finds itself inside a worktree, say so and move to the main checkout before touching anything.
+  (Vlad, 1 Nov 2026, after a day's work landed on a worktree branch while the App, the mini and his terminal were on main.)
 - **A question is answered, never acted on.** When Vlad asks something ("why is X like this?", "am I right that...?",
   "how do I...?"), the deliverable is the answer: no edits, no scripts against the data, no commits, no fixes on the
   side. Answer, propose in one line if there is something to do, and wait for his decision. Work already running in the
