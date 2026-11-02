@@ -40,7 +40,8 @@ export const handlers = [
   }),
   http.get(`${DAEMON}/api/frames`, ({ request }) => {
     const u = new URL(request.url);
-    return HttpResponse.json(fixture(u.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames'));
+    const rows = fixture<{ clip: unknown }[]>(u.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames');
+    return HttpResponse.json(u.searchParams.get('clip') === '1' ? rows.filter((f) => f.clip) : rows);
   }),
   http.get(`${DAEMON}/api/frames/:id`, ({ params }) =>
     params.id === '999999'

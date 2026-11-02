@@ -21,7 +21,9 @@ export function FilterBar({
   const sets = useBaselineSets();
   const set = sets.data?.find((s) => s.date === f.set);
   const [more, setMore] = useState(false);
-  const extraCount = [f.min_conf !== null, f.reason !== null, f.with_detections, f.moving].filter(Boolean).length;
+  const extraCount = [f.min_conf !== null, f.reason !== null, f.with_detections, f.moving, f.clip].filter(
+    Boolean,
+  ).length;
   return (
     <form role="search" aria-label="Detection filters" onSubmit={(e) => e.preventDefault()} className="grid gap-2">
       <div className="flex flex-wrap gap-2">
@@ -160,6 +162,17 @@ export function FilterBar({
               onChange={(e) => onChange({ moving: e.target.checked })}
             />{' '}
             moving only
+          </label>
+        )}
+        {!set && (
+          <label className="min-h-touch flex items-center gap-1.5 text-sm">
+            <input
+              data-testid={tid.filter('clip')}
+              type="checkbox"
+              checked={f.clip}
+              onChange={(e) => onChange({ clip: e.target.checked })}
+            />{' '}
+            clips only
           </label>
         )}
       </div>

@@ -20,6 +20,10 @@ describe('urlState', () => {
     expect(s).toBe('camera=donkey_cam&frame=48213&label=horse&min_conf=0.5&seq=1&since=6h&with_detections=1');
     expect(parseFilters(new URLSearchParams(s))).toEqual(f);
     expect(serializeFilters(DEFAULTS)).toBe('');
+    const c = parseFilters(new URLSearchParams('clip=1&moving=1'));
+    expect(c.clip).toBe(true);
+    expect(serializeFilters(c)).toBe('clip=1&moving=1');
+    expect(apiQuery(c)).toBe('clip=1&moving=1&since=1h');
   });
   it('builds the api query without viewer state and with the baseline set', () => {
     const f = parseFilters(new URLSearchParams('set=2026-10-20&model=yolo26s&frame=1&seq=2&label=horse'));

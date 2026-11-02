@@ -439,6 +439,7 @@ export class EventStore {
       reason?: FrameReason;
       withDetections?: boolean;
       moving?: boolean;
+      clip?: boolean; // heads sampled from a motion clip (docs/CLIPS.md)
       limit?: number;
       before?: number;
     } = {},
@@ -466,6 +467,9 @@ export class EventStore {
       args.push(q.before);
     }
     where.push('(f.seq IS NULL OR f.seq = 0)'); // burst members ride with their head
+    if (q.clip) {
+      where.push('f.clip_id IS NOT NULL');
+    }
     if (q.moving) {
       where.push(
         'EXISTS (SELECT 1 FROM detections d JOIN frames m ON m.id = d.frame_id WHERE (m.id = f.id OR m.burst_id = f.id) AND d.dx IS NOT NULL AND (d.dx*d.dx + d.dy*d.dy) >= ?)',

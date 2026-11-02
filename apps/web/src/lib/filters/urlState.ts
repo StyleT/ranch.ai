@@ -11,6 +11,7 @@ export interface FilterState {
   reason: 'change' | 'floor' | null;
   with_detections: boolean;
   moving: boolean;
+  clip: boolean; // only heads sampled from a motion clip
   frame: number | null;
   seq: number;
 }
@@ -24,6 +25,7 @@ export const DEFAULTS: FilterState = {
   reason: null,
   with_detections: false,
   moving: false,
+  clip: false,
   frame: null,
   seq: 0,
 };
@@ -55,6 +57,7 @@ export function parseFilters(sp: URLSearchParams | Record<string, string | strin
     reason: reason === 'change' || reason === 'floor' ? reason : null,
     with_detections: get('with_detections') === '1',
     moving: get('moving') === '1',
+    clip: get('clip') === '1',
     frame: num('frame') !== null && Number.isInteger(num('frame')) ? num('frame') : null,
     seq: Math.max(0, Math.floor(num('seq') ?? 0)),
   };
@@ -63,6 +66,9 @@ export function serializeFilters(f: FilterState): string {
   const p = new URLSearchParams();
   if (f.camera) {
     p.set('camera', f.camera);
+  }
+  if (f.clip) {
+    p.set('clip', '1');
   }
   if (f.frame !== null) {
     p.set('frame', String(f.frame));
@@ -124,6 +130,9 @@ export function apiQuery(f: FilterState, extra: Record<string, string> = {}): st
   }
   if (f.moving) {
     p.set('moving', '1');
+  }
+  if (f.clip) {
+    p.set('clip', '1');
   }
   p.sort();
   return p.toString();

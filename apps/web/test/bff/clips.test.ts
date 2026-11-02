@@ -54,5 +54,7 @@ describe('/api/ui/clips and the clip ref on frame cards', () => {
     const page = await getDetections({ since: '24h', limit: 60 });
     expect(page.items[0]!.clip).toEqual({ id: 31, duration_s: 18, stopped: 'quiet', video: '/api/ui/clip/31' });
     expect(page.items[1]!.clip).toBeNull();
+    const only = await getDetections({ since: '24h', limit: 60, clip: '1' });
+    expect(only.items.map((f) => f.clip?.id)).toEqual([31]);
   });
 });

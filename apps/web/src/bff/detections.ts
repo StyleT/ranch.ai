@@ -28,6 +28,7 @@ export const DetectionsQuery = z.object({
   reason: z.enum(['floor', 'change', 'seed', 'manual']).optional(),
   with_detections: z.enum(['0', '1']).optional(),
   moving: z.enum(['0', '1']).optional(),
+  clip: z.enum(['0', '1']).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(60),
   before: z.coerce.number().int().optional(),
 });
@@ -122,6 +123,9 @@ export async function getDetections(q: DetectionsQuery): Promise<DetectionsPage>
   }
   if (q.moving === '1') {
     p.set('moving', '1');
+  }
+  if (q.clip === '1') {
+    p.set('clip', '1');
   }
   if (q.before) {
     p.set('before', String(q.before));

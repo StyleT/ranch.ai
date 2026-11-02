@@ -649,6 +649,7 @@ const server = createServer(async (req, res) => {
         ...(p.get('reason') ? { reason: p.get('reason') as FrameReason } : {}),
         withDetections: p.get('with_detections') === '1',
         moving: p.get('moving') === '1',
+        clip: p.get('clip') === '1',
         ...(num('limit') !== undefined ? { limit: num('limit')! } : {}),
         ...(num('before') !== undefined ? { before: num('before')! } : {}),
       });

@@ -87,7 +87,8 @@ createServer(async (req, res) => {
     return json(res, 200, { ...status, ts: new Date().toISOString() });
   }
   if (p === '/api/frames') {
-    return json(res, 200, fx(url.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames'));
+    const rows = fx<{ clip: unknown }[]>(url.searchParams.get('moving') === '1' ? 'frames-moving' : 'frames');
+    return json(res, 200, url.searchParams.get('clip') === '1' ? rows.filter((f) => f.clip) : rows);
   }
   if (/^\/api\/frames\/\d+$/.test(p)) {
     const id = Number(p.split('/').pop());
