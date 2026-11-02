@@ -20,6 +20,13 @@ set -u
 : "${RECORDER_CAMERAS:?space-separated stream names}"
 RECORDER_DIR="${RECORDER_DIR:-/usr/local/ranch/media/buffer}"
 RECORDER_LIVE_DIR="${RECORDER_LIVE_DIR:-/usr/local/ranch/media/live}"
+RECORDER_RING_DIR="${RECORDER_RING_DIR:-/usr/local/ranch/media/ring}"
+# Clip ring (1 Nov, docs/CLIPS.md): the always-on ffmpeg also stream-copies the camera's H.264 into short MPEG-TS segments
+# so ingest can cut a motion clip after the fact without a second camera consumer or any decode. A copied segment can only
+# cut on a keyframe, so with a 2 s target every segment is exactly one GOP (2-18 s on these cameras) and its name is the
+# keyframe's UTC second, the same as the JPEG's. 3 min of ring covers pre-roll 5 s + a 60 s clip + 8 s quiet + one GOP, twice.
+RING_SEG_S=2
+RING_MIN=3
 RECORDER_JPEG_Q="${RECORDER_JPEG_Q:-4}"
 RECORDER_BUFFER_MIN="${RECORDER_BUFFER_MIN:-5}"
 RECORDER_MIN_FREE_GB="${RECORDER_MIN_FREE_GB:-20}"
@@ -38,13 +45,14 @@ want_live() { local m=$1; [ -f "$m" ] && [ $(( $(date +%s) - $(stat -f %m "$m") 
 
 # Always-on JPEG buffer: decode keyframes only (light, real-time). Holds the go2rtc producer up so cameras never churn.
 pull_jpeg() {
-  local cam=$1 dir="$RECORDER_DIR/$1" errf attempt=0 t0 rc delay pipe ffpid
-  mkdir -p "$dir"; errf=$(mktemp -t "recorder-jpeg-$1")
+  local cam=$1 dir="$RECORDER_DIR/$1" ring="$RECORDER_RING_DIR/$1" errf attempt=0 t0 rc delay pipe ffpid
+  mkdir -p "$dir" "$ring"; errf=$(mktemp -t "recorder-jpeg-$1")
   while true; do
     if [ "$(free_gb)" -lt "$RECORDER_MIN_FREE_GB" ]; then log "$cam: free disk $(free_gb) GB < $RECORDER_MIN_FREE_GB GB, paused"; sleep 120; continue; fi
     t0=$(date +%s); log "$cam: start (jpeg)"
     ffmpeg -nostdin -loglevel error -rtsp_transport tcp -timeout 10000000 -use_wallclock_as_timestamps 1 -skip_frame nokey \
-      -i "$RTSP/$cam" -map 0:v -q:v "$RECORDER_JPEG_Q" -f image2 -strftime 1 -atomic_writing 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" 2>&1 \
+      -i "$RTSP/$cam" -map 0:v -q:v "$RECORDER_JPEG_Q" -f image2 -strftime 1 -atomic_writing 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" \
+      -map 0:v -c:v copy -an -f segment -segment_format mpegts -segment_time "$RING_SEG_S" -reset_timestamps 1 -strftime 1 "$ring/%Y-%m-%dT%H-%M-%SZ.ts" 2>&1 \
       | { last=""; while IFS= read -r l; do echo "$cam: ffmpeg: $l"; last=$l; done; printf '%s' "$last" > "$errf"; } &
     pipe=$!
     # Stall watchdog: go2rtc's wyze dial can hang with no error; re-attaching made it redial within 5 s (23 Oct).
@@ -115,6 +123,7 @@ prune() {
     find "$RECORDER_DIR" -type f -name '*.jpg' -mmin +"$RECORDER_BUFFER_MIN" -delete 2>/dev/null
     find "$RECORDER_DIR" -type f -name '*.jpg.tmp' -mmin +1 -delete 2>/dev/null
     find "$RECORDER_LIVE_DIR" -type f \( -name 'seg*.m4s' -o -name '*.tmp' \) -mmin +2 -delete 2>/dev/null
+    find "$RECORDER_RING_DIR" -type f -name '*.ts' -mmin +"$RING_MIN" -delete 2>/dev/null
     sleep 60
   done
 }

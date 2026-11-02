@@ -19,6 +19,10 @@ export const config = {
   /** The recorder's rolling HLS output per camera (<liveDir>/<camera>/index.m3u8 + init.mp4 + seg*.m4s), written from
    *  the same single connection as the JPEG buffer. The dashboard's live view (docs/WEB-DASHBOARD.md). */
   liveDir: env('RANCH_LIVE', '/usr/local/ranch/media/live'),
+  /** The recorder's rolling stream-copied H.264 segments per camera (<ringDir>/<camera>/<UTC ts>.ts, one GOP each, ~3 min
+   *  kept); ingest cuts motion clips from them into <clipsDir>/<camera>/<UTC ts>.mp4 (docs/CLIPS.md). */
+  ringDir: env('RANCH_RING', '/usr/local/ranch/media/ring'),
+  clipsDir: env('RANCH_CLIPS', '/usr/local/ranch/media/clips'),
   /** Space-separated stream names; empty = discover from the buffer directory's per-camera subdirs. */
   cameras: env('RANCH_CAMERAS', '').split(/\s+/).filter(Boolean),
   camerasExclude: env('RANCH_CAMERAS_EXCLUDE', 'living_room_cam').split(/\s+/).filter(Boolean),

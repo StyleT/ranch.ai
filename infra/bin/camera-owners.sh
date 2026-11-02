@@ -11,10 +11,11 @@
 #      one producer and are not camera dials, so they are listed but not capped.
 #   4. No established connection to the loopback-only ports (1984, 8554) has a non-loopback peer. 8889 (WebRTC media)
 #      is tailnet-reachable by design (pf allows it from the tailnet only), so its peers are expected to be remote.
-#   5. Only the recorder's process group has files open under the buffer directory for writing.
+#   5. Only the recorder's process group has files open under the buffer and ring directories for writing.
 set -u
 GO2RTC=${GO2RTC_URL:-http://127.0.0.1:1984}
 BUFFER=${RECORDER_DIR:-/usr/local/ranch/media/buffer}
+RING=${RECORDER_RING_DIR:-/usr/local/ranch/media/ring}
 SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo -n"
 violations=0
 fail() { echo "VIOLATION: $*"; violations=$((violations + 1)); }
@@ -66,12 +67,12 @@ for name,s in sorted(d.items()):
     if len(rec)>2: print(f"VIOLATION: {name} has {len(rec)} recorder consumers (expected <= 2: jpeg + hls)"); bad+=1
 sys.exit(1 if bad else 0)' || violations=$((violations + 1))
 
-# 5. writers under the buffer directory (shallow per camera dir; -F gives pid/command/access mode)
-for d in "$BUFFER"/*/; do
+# 5. writers under the buffer and ring directories (shallow per camera dir; -F gives pid/command/access mode)
+for d in "$BUFFER"/*/ "$RING"/*/; do
   [ -d "$d" ] || continue
   $SUDO lsof -nP -F pca +d "$d" 2>/dev/null | awk '
     /^p/ {pid=substr($0,2)} /^c/ {cmd=substr($0,2)} /^a/ {if (substr($0,2) ~ /[wu]/) print pid, cmd}' | sort -u | while read -r pid cmd; do
-    if in_recorder_group "$pid"; then echo "buffer writer ok: $cmd[$pid] $(basename "$d")"; else fail "buffer writer outside the recorder: $cmd[$pid] in $d"; fi
+    if in_recorder_group "$pid"; then echo "writer ok: $cmd[$pid] $d"; else fail "writer outside the recorder: $cmd[$pid] in $d"; fi
   done
 done
 
