@@ -1,8 +1,7 @@
 # Web dashboard (`apps/web`, `com.ranch.web`)
 
-*Plan approved 22 Oct 2026 (`~/.claude/plans/…bubbly-puddle.md` in the session; summarized here). Built the same day
-through milestone 3. Replaces the hand-written pages of `apps/status` once the cut-over (milestone 4) moves it to
-port 5090.*
+The Next.js app on port 5090 that replaced the hand-written pages of `apps/status`; the status daemon on
+127.0.0.1:5091 is its JSON/SSE API and serves no HTML.
 
 ## What it is
 
@@ -27,7 +26,7 @@ browser (tailnet) ──:5090──> com.ranch.web   Next standalone (pf accepts
 ## Pages
 
 `/system` also carries the Wyze bridge's metrics (bridge state, per-camera state, Wyze API call counters) via the
-daemon's `/api/bridge`: the bridge's own UI on 5080 is loopback-only since 23 Oct because opening it attached a go2rtc
+daemon's `/api/bridge`: the bridge's own UI on 5080 is loopback-only because opening it attached a go2rtc
 consumer per camera. Reach that UI with `make tunnel` → `http://127.0.0.1:5080` (Prometheus text at `/metrics.prom`).
 
 
@@ -35,7 +34,8 @@ consumer per camera. Reach that UI with `make tunnel` → `http://127.0.0.1:5080
 |---|---|
 | `/` | health strip, derived alerts (camera offline, daemon down, detector stale, taxonomy drift, disk, burst throttling, no frames), camera cards with live thumbnails and the equine count, activity feed (bursts/tracks, live over SSE), detections per camera × label with raw-label tooltips, events placeholder |
 | `/cameras/[name]` | live view (WebRTC primary, sub-second; on-demand HLS fallback; muted autoplay with an unmute button; paused when hidden), 24 h availability strip and supervisor remediation history, online timeline and equine count chart over 1h/6h/24h/7d, motion, network and buffer signal, recent bursts, and the detections browser locked to the camera |
-| `/detections` | the frames browser: live frames or a baseline set with any model's or labels' overlay, filters in the URL (canonical), infinite paging, box overlays with raw-label captions and motion arrows, burst cards with hover playback, full-screen viewer with ←/→ ↑/↓ Space Esc, swipe and long-press on touch |
+| `/detections` | the frames browser: live frames or a baseline set with any model's or labels' overlay, filters in the URL (canonical), infinite paging, box overlays with raw-label captions and motion arrows, burst cards with hover playback, a play badge on frames sampled from a motion clip, full-screen viewer with ←/→ ↑/↓ Space Esc, swipe and long-press on touch; a clip head opens on its video (`<video>` over `/api/ui/clip/<id>`, byte ranges passed through to the daemon so Safari and seeking work), the sampled frames with boxes one tap away |
+| `/clips` | motion clips (docs/CLIPS.md) of the last 6h/24h/7d per camera: poster from the first sampled frame, the mp4 loads only when played, duration, why it ended, detector labels |
 | `/taxonomy` | the editor: draft in session storage, validate, score with the gate table (active vs draft, per-class deltas), apply with the write token, history with load-as-draft and revert, drift banner |
 | `/system` | daemons with RSS, exit, parsed retained status (nested motion and netprobe tables), last log line; load, disk, totals; network probe per camera; wifi; pausable MQTT ticker |
 | `/evals`, `/evals/[file]` | leaderboard parsed from `evals/LEADERBOARD.md` (prod marked), result files with per-slice per-class metrics, datasets from `evals/DATASETS.md` |
@@ -44,17 +44,17 @@ Phone: bottom tab bar, cards and accordions. Tablet: icon rail. Desktop: sidebar
 light theme with validated contrast. `data-testid` vocabulary in `src/lib/testids.ts` with ids from data; state as
 `data-state`, `data-connection`, `data-dirty`, `data-gate`, `data-loaded`; every timestamp a `<time dateTime>`.
 
-## Live view (23 Oct: real video)
+## Live view
 
 The camera page plays **the recorder's HLS output**: the same single ffmpeg that writes the JPEG buffer also writes
 `<media>/live/<cam>/index.m3u8` + `init-<run>.mp4` + `seg<run>-NNNNNN.m4s`, `recorder_hls_list × recorder_hls_seg_s`
 seconds kept (8 × 1 s). Every ffmpeg run empties the directory and uses its own names: a restart means a new init
-segment, and a playlist mixing old segments with a new init made Chrome's demuxer fail (23 Oct).
+segment, and a playlist mixing old segments with a new init made Chrome's demuxer fail.
 The daemon serves the files (`/api/live/<cam>/<file>`, playlist `no-store` with `x-live-age-s`), the BFF proxies them
 (`/api/ui/hls/<cam>/<file>`, allowlisted names), the browser plays them: Safari/iOS natively, everything else with
 hls.js (pinned). Any number of viewers reads the same files; the camera and go2rtc see nothing (docs/CAMERA-ARCHITECTURE.md).
 
-**Why the video is re-encoded.** The plan was `-c:v copy`. Measured on 23 Oct the cameras' keyframes come 2–18 s apart
+**Why the video is re-encoded.** The plan was `-c:v copy`. Measured, the cameras' keyframes come 2–18 s apart
 (segment durations 2, 6, 10.8, 18 s), an HLS segment can only start at a keyframe, and hls.js syncs 2–3 target
 durations behind the edge: 20–50 s of latency. So the recorder's on-demand HLS role (`pull_hls` in
 `infra/bin/recorder.sh`, running only while a viewer's `.demand` marker is fresh) decodes in software, re-encodes with
@@ -71,7 +71,7 @@ not grown for 30 s (the camera dropped), `PAUSED` when the page is hidden (the p
 (browser policy; the element is muted imperatively before `play()`, because React's `muted` prop is not a server-rendered
 attribute and Chrome decided "blocked" before hydration); the speaker button unmutes. The MJPEG-of-keyframes view is gone.
 
-## Live view latency (23 Oct)
+## Live view latency
 
 The recorder transcodes to HLS only while a camera is being watched (docs/CAMERA-ARCHITECTURE.md): the always-on path
 re-encoding all seven cameras saturated the media engine and the picture froze minutes behind. On-demand, one encoder
@@ -80,7 +80,7 @@ clock vs screenshot wall time): **~4 s**, moving, reliable. That is the standard
 duration, >= 3 s, plus a segment). The badge reports latency from the playhead's distance to the buffered edge plus the
 newest segment's age (capped at one segment so a stale poll does not inflate it).
 
-**WebRTC is now the primary transport (23 Oct), so the common path is sub-second**, not ~4 s: the StreamPlayer opens a
+**WebRTC is the primary transport, so the common path is sub-second**, not ~4 s: the StreamPlayer opens a
 go2rtc WHEP session first (native H.264, no transcode; `transport=webrtc`, measured 2560×1440 with the picture
 advancing) and only falls back to the ~4 s on-demand HLS above if WebRTC does not connect within 6 s. The HLS badge
 math still governs the fallback. See `docs/CAMERA-ARCHITECTURE.md` for the transport details.
@@ -88,8 +88,8 @@ math still governs the fallback. See `docs/CAMERA-ARCHITECTURE.md` for the trans
 ## Live data
 
 One `EventSource('/api/ui/live')` per app (`features/live/LiveProvider`). `status` events invalidate the home
-query, `frame` events bump thumbnails, `tracks` feed the activity feed and invalidate lists (throttled). The 16 Oct
-lessons are a pure state machine (`features/live/connection.ts`): poll every 30 s regardless, reopen after 45 s of
+query, `frame` events bump thumbnails, `tracks` feed the activity feed and invalidate lists (throttled). The reconnect
+rules are a pure state machine (`features/live/connection.ts`): poll every 30 s regardless, reopen after 45 s of
 silence, refresh on `visibilitychange`, `pageshow` and `online`; the badge shows live / reconnecting / stale / offline.
 
 ## Build and deployment
@@ -101,7 +101,7 @@ in check mode; standalone output served by `com.ranch.web` (`infra/launchd/com.r
 `npm ci` on the mini keeps dev dependencies (Next needs TypeScript and Tailwind to build). `.next` and test outputs
 are excluded from the rsync so the mini's build survives `--delete`.
 
-Measured 22 Oct on the mini: build ~60 s; server 100 MB RSS idle, 171 MB after rendering every page; home 92 ms,
+Measured on the mini: build ~60 s; server 100 MB RSS idle, 171 MB after rendering every page; home 92 ms,
 camera page 104 ms, taxonomy 30 ms (server render). Status daemon ~150 MB alongside.
 
 ## Working on it
@@ -115,44 +115,35 @@ make web-health       # RSS and daemon reachability of com.ranch.web
 ```
 Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/web run lint`.
 
-## Status
+## What the pages are built on
 
-- M1 (22 Oct): daemon endpoints `/api/ping`, `/api/counts/series`, `/api/frames/series`, `/api/tracks`,
-  `/api/frames/<id>`, per-daemon `rss_mb`, `packages/contracts`.
-- M2 (22 Oct): scaffold, BFF, fixtures, integration tests.
-- M3 (22 Oct): all six pages, built and running on the mini's loopback port 5092.
-- Regroup (22 Oct, after the camera-architecture merge): the web app reads the recorder buffer through the daemon;
-  go2rtc removed from it; `seed` fields became `buffer` fields in the status contract.
-- M4 (22 Oct): cut-over. Status daemon on 127.0.0.1:5091 (API only, HTML pages deleted), web app on 5090.
-- M5 (22 Oct): deterministic e2e and hardening, below.
-- M6 (22 Oct): agentic e2e, below.
-- 23 Oct: live-view crash fixed (Incidents, below); the Wyze bridge's metrics page moved to `/system`; bridge UI and
-  go2rtc ports loopback-only; player retry backoff.
-- 23 Oct, evening: **real video.** The recorder writes HLS (hardware re-encode, 1 s segments, AAC audio), the camera
-  page plays it with `<video>` + hls.js / native HLS, the MJPEG view is deleted. Measured over the tailnet in Chrome,
-  six cameras up (mops_cam was down): time to first frame 1.1–2.8 s, player latency 5.8–8.4 s (recorder write age +
-  playhead distance to the buffered edge, read 8 s after the first frame; hls.js set to a 2 s live-sync target and a 5 s
-  maximum, so part of that is start-up buffer it is still catching up on; LL-HLS is the follow-up if ≤ 3 s matters),
-  1440p + audio on every V4, 1080p on the V3, segment fetch 17–140 ms over the tailnet.
-  Recorder cost for seven cameras: software keyframe decode before 194–215 % CPU / load average 42–65; hardware pipeline
-  15–22 % CPU / load average 2.3; RSS 2.1 → 2.4–3.0 GB. Daemon crash reports unchanged (25). `camera-owners.sh` OK.
-- 23 Oct, night: **availability on the pages.** Camera page: probe-derived session state badge and a 24 h availability
-  strip with outage statistics; `/system`: fleet availability table. Source: netprobe samples in SQLite via the daemon's
+- The daemon's web endpoints: `/api/ping`, `/api/counts/series`, `/api/frames/series`, `/api/tracks`,
+  `/api/frames/<id>`, `/api/clips`, `/api/clip/<id>.mp4`, per-daemon `rss_mb`; schemas in `packages/contracts`. The app
+  reads the recorder buffer through the daemon and never dials go2rtc except to relay a WHEP offer.
+- 5090 is **tailnet-only**: the dashboard is for the phone and laptop over Tailscale, never for the shared Wi-Fi. pf
+  passes 5090 only from `100.64.0.0/10` / `fd7a:115c:a1e0::/48` to the node's tailnet addresses and refuses it on every
+  other interface; loopback stays open for `ssh -L`. The agentic e2e `live` target uses the MagicDNS name. The Wyze
+  bridge's UI and go2rtc's ports are loopback-only; the bridge's metrics page is re-homed on `/system`.
+- Availability on the pages: the camera page shows a probe-derived session state badge and a 24 h availability strip
+  with outage statistics, `/system` the fleet table. Source: netprobe samples in SQLite via the daemon's
   `/api/availability` (docs/CAMERA-ARCHITECTURE.md).
-- 23 Oct, later: 5090 is **tailnet-only** (Vlad: the dashboard is for the phone and laptop over Tailscale, never for the
-  shared Wi-Fi). pf passes 5090 only from `100.64.0.0/10` / `fd7a:115c:a1e0::/48` to the node's tailnet addresses and
-  refuses it on every other interface; loopback stays open for `ssh -L`. The agentic e2e `live` target uses the MagicDNS name.
+- The HLS path measured over the tailnet in Chrome with six cameras up: time to first frame 1.1–2.8 s, player latency
+  5.8–8.4 s (recorder write age + playhead distance to the buffered edge, read 8 s after the first frame; hls.js set to
+  a 2 s live-sync target and a 5 s maximum, so part of that is start-up buffer it is still catching up on; LL-HLS is the
+  follow-up if ≤ 3 s matters), 1440p + audio on every V4, 1080p on the V3, segment fetch 17–140 ms. Recorder cost for
+  seven cameras: a software keyframe decode costs 194–215 % CPU at a load average of 42–65, the hardware pipeline
+  15–22 % at 2.3; RSS 2.1 → 2.4–3.0 GB.
 
-## Incidents
+## Why the daemon reads a JPEG into memory before sharp
 
-**23 Oct, live view crashed the status daemon.** 16 `SIGBUS` crash reports in two days (`/Library/Logs/DiagnosticReports/node-*.ips`,
-"FS pagein error", libvips worker in `jpeg_read_scanlines`), each 2–17 s after a buffer stream opened: `sharp(path)`
-memory-mapped the buffer JPEG that ffmpeg was still writing. The player's fixed 10 s retry re-crashed the daemon for as
-long as the page stayed open; each crash took the API, SSE and MQTT down for ~1 s. Fix: the daemon reads every JPEG into
-memory before sharp (`apps/status/src/jpeg.ts`), the recorder writes atomically, the player backs off 10 → 60 s. The
-full timeline, including why the camera drops were not the dashboard's doing, is in docs/CAMERA-ARCHITECTURE.md.
-Measured after the fix (10-minute soak, one viewer, 300 thumbnail requests at 5/s): 398 live frames delivered, 300/300
-thumbnails 200, crash reports 25 → 25, daemon restarts 0, web socket errors 0, daemon RSS 175 → 205 MB.
+`sharp(path)` memory-maps its file, and a buffer JPEG that ffmpeg is still writing kills the process with `SIGBUS`
+("FS pagein error", libvips worker in `jpeg_read_scanlines`, `/Library/Logs/DiagnosticReports/node-*.ips`): 16 crash
+reports in two days, each 2–17 s after a buffer stream opened. A fixed 10 s player retry re-crashed the daemon for as
+long as the page stayed open, and each crash took the API, SSE and MQTT down for ~1 s. So the daemon reads every JPEG
+into memory before sharp (`apps/status/src/jpeg.ts`), the recorder writes atomically, and the player backs off
+10 → 60 s. Why the camera drops were not the dashboard's doing: docs/CAMERA-ARCHITECTURE.md. Measured after the change
+(10-minute soak, one viewer, 300 thumbnail requests at 5/s): 398 live frames delivered, 300/300 thumbnails 200, no new
+crash reports, daemon restarts 0, web socket errors 0, daemon RSS 175 → 205 MB.
 
 ## Agentic e2e (M6)
 
@@ -172,7 +163,7 @@ current equine count; the offline cameras; the daemon using the most memory; the
 time); and, with Sonnet, change the coco person threshold to 0.7 in the taxonomy draft, score it and report the
 gate (no token, so it cannot apply). Reports go to `e2e/ai/runs/<ts>.json` (git-ignored).
 
-First results, 22 Oct: fixtures 6/6 and live (tunnel) 6/6 after two oracle fixes; haiku tasks take 4–8 turns and
+Results: fixtures 6/6 and live (tunnel) 6/6 after two oracle fixes; haiku tasks take 4–8 turns and
 10–25 s each at a ~$0.002–0.005 client-side cost estimate, the Sonnet taxonomy task 9–11 turns and 30–50 s at
 ~$0.12–0.15; usage counts against the subscription's windows. Lessons: the oracle must mirror the page's own query
 (the label filter applies to the head frame, "moving" to the whole burst); the set judge extracts camera names from
@@ -186,12 +177,13 @@ the Agent SDK terms do not allow offering claude.ai login to third parties.
 endpoints, taxonomy writes that need `x-ranch-token: test-token` and keep per-version contents, and a
 `?scenario=sse-stall` stream for the watchdog test). Projects: iPhone 13, iPad Mini, desktop Chromium. Specs:
 home (cards, online states, offline alerts, live badge, card → camera page), detections (filters → URL, deep link
-opens the viewer on a burst member, keyboard navigation, baseline sets), phone gestures (swipe advances, bottom
+opens the viewer on a burst member, keyboard navigation, baseline sets), clips (the list page, byte-range serving of
+the mp4, the viewer opening a clip head on its video with the frames one tap away), phone gestures (swipe advances, bottom
 tabs), taxonomy (edit → validate → score → gate table → apply refused without a token, applied with it → new
 active version → revert), system (daemons, parsed ingest status, probe table), evals (prod row, result file),
 axe on every page (no serious or critical violations; colour contrast checked separately), and the reconnect
-watchdog (after 45 s of silence the client reopens the stream). 22 Oct: 52 passed, 2 skipped (touch tests on
-desktop), ~20 s, two consecutive runs clean.
+watchdog (after 45 s of silence the client reopens the stream): about 80 tests across the three projects in ~1.5 min;
+the HLS playback spec needs Google Chrome (`PW_CHANNEL` unset) because the bundled Chromium cannot decode H.264.
 
 Hardening: detection overlay colours re-chosen with the dataviz palette validator (CVD separation ≥ 8.6 ΔE
 deutan, normal-vision ≥ 17, contrast ≥ 3:1): horse `#34c47f`, person `#f28c3a`, vehicle `#3f8fe6`, gold

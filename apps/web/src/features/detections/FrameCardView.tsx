@@ -18,6 +18,8 @@ export function FrameCardView({ f, onOpen }: { f: FrameCard; onOpen: () => void 
     tally.set(b.label, (tally.get(b.label) ?? 0) + 1);
   }
   const tracked = f.detections.some((b) => (b.seen ?? 0) > 1);
+  // The badge text is part of the button's accessible name (axe label-content-name-mismatch); the glyph is CSS.
+  const clipText = f.clip ? `clip${f.clip.duration_s !== null ? ` ${Math.round(f.clip.duration_s)} s` : ''}` : '';
   const start = () => {
     if (seqs.length < 2 || timer.current || !window.matchMedia('(pointer: fine)').matches) {
       return;
@@ -50,7 +52,7 @@ export function FrameCardView({ f, onOpen }: { f: FrameCard; onOpen: () => void 
         onClick={onOpen}
         onMouseEnter={start}
         onMouseLeave={stop}
-        aria-label={`Open ${describe(f.camera, localTime(f.ts, tz), f.detections)}`}
+        aria-label={`Open ${describe(f.camera, localTime(f.ts, tz), f.detections)}${clipText ? `, ${clipText}` : ''}`}
         className="block w-full text-left"
       >
         <BoxOverlay
@@ -61,6 +63,14 @@ export function FrameCardView({ f, onOpen }: { f: FrameCard; onOpen: () => void 
           boxes={cur.detections}
           showCaptions={false}
         >
+          {f.clip && (
+            <span
+              data-testid={tid.clipBadge(f.id)}
+              className="absolute bottom-1.5 left-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] text-white before:content-['▶_']"
+            >
+              {clipText}
+            </span>
+          )}
           {seqs.length > 1 && (
             <span className="absolute right-1.5 bottom-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] text-white">
               burst ×{seqs.length}

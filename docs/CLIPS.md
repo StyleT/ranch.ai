@@ -2,8 +2,8 @@
 
 A clip is one motion event on one camera as native-rate H.264 video, 5 s of pre-roll, ended when the scene has been
 quiet for 8 s or at 60 s. It replaces the burst (2 to 4 keyframe JPEGs, docs/MODEL-YOLO26.md Part B) as the unit that
-tiers 2/3 receive and as the eval set's unit (docs/EVALUATION.md). Decided 1 Nov 2026: the burst set was too sparse to
-show motion and too small for narrow intervals.
+tiers 2/3 receive and as the eval set's unit (docs/EVALUATION.md): the burst set was too sparse to show motion and too
+small for narrow intervals.
 
 ## How it works
 
@@ -40,9 +40,20 @@ closed without media, `expired_at` = mp4 deleted at 7 days (the row stays). `fra
 
 **Detector**: subscribes `ranch/clips/+` with the burst handler; queue 600 (a closing clip publishes up to 120 frames
 at once); a burst is abandoned after 300 s; the tracker keeps an unmatched track alive for 2 frames (`ASSOC_MAX_AGE`),
-so a detector miss in one 2 fps sample no longer fragments a walking track.
+so a detector miss in one 2 fps sample does not fragment a walking track.
 
-## Measured, 1 Nov 2026 (R1, R2 first minutes)
+## Dashboard
+
+The status daemon serves `GET /api/clips?camera=&since=&limit=` (rows plus the detector's labels and the first sampled
+frame id) and `GET /api/clip/<id>.mp4` with byte ranges (206, `Content-Range`, `Accept-Ranges: bytes`): Safari and iOS
+refuse an mp4 whose server ignores Range, and every player seeks. A frame card whose head was sampled from a clip
+carries `clip: {id, duration_s, stopped}` and only every 4th member (the video is the way to watch it; a 60 s clip has
+120 sampled frames). The web app proxies both (`/api/ui/clips`, `/api/ui/clip/<id>`, Range and the 206 passed
+through), shows a play badge on such cards, opens the viewer on the video with the frames and boxes one tap away, and
+lists the clips on `/clips` (poster from the first sampled frame, `preload="none"` so a page of 100 clips costs the mini
+100 thumbnails and no video bytes until a play).
+
+## Measured (the ring's and the clips' first hour)
 
 - **Copy completeness (U1)**: every 2 s segment holds 30 frames at 15 fps, 40 at 20 fps, on all seven cameras: the
   copy output gets every packet while the JPEG output decodes keyframes only.

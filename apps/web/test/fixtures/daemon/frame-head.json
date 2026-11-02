@@ -12,5 +12,11 @@
   "burst_id": null,
   "seq": null,
   "detections": [],
-  "burst": []
+  "burst": [],
+  "clip": {
+    "id": 31,
+    "duration_s": 18.0,
+    "stopped": "quiet"
+  },
+  "clip_id": 31
 }

@@ -9,6 +9,7 @@ import {
 } from '@ranch/contracts';
 import type { DetectionsPage, FrameCard, Box } from '@/lib/types';
 import { daemonJson, cached } from './daemon.ts';
+import { clipVideo } from './clips.ts';
 
 export const DetectionsQuery = z.object({
   set: z
@@ -56,8 +57,13 @@ const cardOf = (f: FrameWithDetections): FrameCard => ({
   height: f.height,
   detections: f.detections.map(box),
   burst: [],
+  clip: null,
 });
-export const frameCardFromHead = (f: FrameHeadT): FrameCard => ({ ...cardOf(f), burst: f.burst.map(cardOf) });
+export const frameCardFromHead = (f: FrameHeadT): FrameCard => ({
+  ...cardOf(f),
+  burst: f.burst.map(cardOf),
+  clip: f.clip ? { ...f.clip, video: clipVideo(f.clip.id) } : null,
+});
 
 export async function getDetections(q: DetectionsQuery): Promise<DetectionsPage> {
   if (q.set) {
@@ -92,6 +98,7 @@ export async function getDetections(q: DetectionsQuery): Promise<DetectionsPage>
         gold: d.model.startsWith('labels:'),
       })),
       burst: [],
+      clip: null,
     }));
     if (q.label) {
       items = items.filter((f) => f.detections.some((d) => d.label.split('/')[0] === q.label || d.label === q.label));

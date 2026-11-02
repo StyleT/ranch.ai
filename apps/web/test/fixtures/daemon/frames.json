@@ -13,7 +13,13 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": {
+      "id": 31,
+      "duration_s": 18.0,
+      "stopped": "quiet"
+    },
+    "clip_id": 31
   },
   {
     "id": 173197,
@@ -29,7 +35,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173196,
@@ -97,7 +104,8 @@
         "dy": null
       }
     ],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173195,
@@ -113,7 +121,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173194,
@@ -129,7 +138,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173193,
@@ -197,7 +207,8 @@
         "dy": null
       }
     ],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173192,
@@ -213,7 +224,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173191,
@@ -229,7 +241,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173190,
@@ -245,7 +258,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173189,
@@ -261,7 +275,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173188,
@@ -277,7 +292,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173187,
@@ -345,7 +361,8 @@
         "dy": null
       }
     ],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173186,
@@ -361,7 +378,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173185,
@@ -377,7 +395,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173184,
@@ -393,7 +412,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173183,
@@ -409,7 +429,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173182,
@@ -425,7 +446,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173181,
@@ -493,7 +515,8 @@
         "dy": null
       }
     ],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173180,
@@ -509,7 +532,8 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   },
   {
     "id": 173179,
@@ -525,6 +549,7 @@
     "burst_id": null,
     "seq": null,
     "detections": [],
-    "burst": []
+    "burst": [],
+    "clip": null
   }
 ]

@@ -287,6 +287,16 @@ export class EventStore {
       )
       .all(...([q.since, ...(q.camera ? [q.camera] : []), q.limit ?? 500] as SQLInputValue[])) as unknown as Clip[];
   }
+  /** Distinct detection labels on a clip's sampled frames, for the dashboard's clip list. */
+  clipLabels(clipId: number): string[] {
+    return (
+      this.db
+        .prepare(
+          'SELECT DISTINCT d.label FROM detections d JOIN frames f ON f.id = d.frame_id WHERE f.clip_id = ? ORDER BY d.label',
+        )
+        .all(clipId) as { label: string }[]
+    ).map((r) => r.label);
+  }
   clipFrames(clipId: number): Frame[] {
     return this.db.prepare('SELECT * FROM frames WHERE clip_id = ? ORDER BY seq').all(clipId) as unknown as Frame[];
   }

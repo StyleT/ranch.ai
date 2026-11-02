@@ -43,6 +43,14 @@ export function Viewer({
   const seqs = [frame, ...frame.burst];
   const cur = seqs[Math.min(seq, seqs.length - 1)] ?? frame;
   const [playing, setPlaying] = useState(false);
+  // A clip head opens on the video (the real motion); the sampled frames with their boxes stay one tap away, and any
+  // member step switches to them.
+  const [framesFor, setFramesFor] = useState<number | null>(null); // the frame whose video was swapped for its frames
+  const showVideo = frame.clip !== null && framesFor !== frame.id;
+  const pickSeq = (s: number) => {
+    setFramesFor(frame.id);
+    onSeq(s);
+  };
   const g = useRef<GestureState>(initialGesture());
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -76,10 +84,10 @@ export function Viewer({
       onNext();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      onSeq(Math.min(seqs.length - 1, seq + 1));
+      pickSeq(Math.min(seqs.length - 1, seq + 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      onSeq(Math.max(0, seq - 1));
+      pickSeq(Math.max(0, seq - 1));
     } else if (e.key === ' ') {
       e.preventDefault();
       setPlaying((p) => !p);
@@ -95,9 +103,9 @@ export function Viewer({
       } else if (a === 'next') {
         onNext();
       } else if (a === 'member-next') {
-        onSeq(Math.min(seqs.length - 1, seq + 1));
+        pickSeq(Math.min(seqs.length - 1, seq + 1));
       } else if (a === 'member-prev') {
-        onSeq(Math.max(0, seq - 1));
+        pickSeq(Math.max(0, seq - 1));
       } else if (a === 'autoplay-start') {
         setPlaying(true);
       } else if (a === 'autoplay-stop') {
@@ -168,17 +176,47 @@ export function Viewer({
           onPointerUp={pu}
           onPointerCancel={pu}
         >
-          <BoxOverlay
-            src={cur.img}
-            alt={describe(cur.camera, time, cur.detections)}
-            width={frame.width}
-            height={frame.height}
-            boxes={cur.detections}
-            sizes="92vw"
-            priority
-            className="mx-auto max-h-full"
-          />
+          {frame.clip && showVideo ? (
+            <video
+              key={frame.clip.id}
+              data-testid={tid.viewerVideo}
+              src={frame.clip.video}
+              poster={`${frame.img}?w=1280`}
+              controls
+              playsInline
+              preload="metadata"
+              className="mx-auto h-full max-h-full w-full bg-black object-contain"
+            />
+          ) : (
+            <BoxOverlay
+              src={cur.img}
+              alt={describe(cur.camera, time, cur.detections)}
+              width={frame.width}
+              height={frame.height}
+              boxes={cur.detections}
+              sizes="92vw"
+              priority
+              className="mx-auto max-h-full"
+            />
+          )}
         </div>
+        {frame.clip && (
+          <div className="flex items-center gap-2 px-3 py-1 text-xs">
+            <Button
+              onClick={() => setFramesFor(showVideo ? frame.id : null)}
+              aria-pressed={!showVideo}
+              data-testid={tid.viewerFrames}
+              aria-label={showVideo ? 'Show sampled frames with boxes' : 'Show clip video'}
+            >
+              {showVideo ? 'frames + boxes' : '▶ video'}
+            </Button>
+            <span className="text-dim">
+              clip #{frame.clip.id}
+              {frame.clip.duration_s !== null ? ` · ${Math.round(frame.clip.duration_s)} s` : ''}
+              {frame.clip.stopped ? ` · ended: ${frame.clip.stopped}` : ''}
+            </span>
+          </div>
+        )}
         {seqs.length > 1 && (
           <div className="flex items-center gap-2 px-3 py-1">
             <div role="tablist" aria-label="Burst frames" className="flex gap-1">
@@ -188,7 +226,7 @@ export function Viewer({
                   role="tab"
                   aria-selected={i === seq}
                   data-testid={tid.viewerMember(i)}
-                  onClick={() => onSeq(i)}
+                  onClick={() => pickSeq(i)}
                   className={`h-10 w-16 overflow-hidden rounded-sm border-2 ${i === seq ? 'border-accent' : 'border-transparent'}`}
                 >
                   <img src={`${m.img}?w=320`} alt={`frame ${i + 1}`} className="h-full w-full object-cover" />
@@ -201,7 +239,7 @@ export function Viewer({
               min={0}
               max={seqs.length - 1}
               value={Math.min(seq, seqs.length - 1)}
-              onChange={(e) => onSeq(Number(e.target.value))}
+              onChange={(e) => pickSeq(Number(e.target.value))}
               className="min-h-touch flex-1"
             />
             <Button

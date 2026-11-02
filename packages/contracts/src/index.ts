@@ -135,7 +135,35 @@ export const Frame = z.looseObject({
   clip_id: NullableNum.optional(),
 });
 export const FrameWithDetections = Frame.extend({ detections: z.array(Detection) });
-export const FrameHead = FrameWithDetections.extend({ burst: z.array(FrameWithDetections) });
+/** A motion clip (docs/CLIPS.md): native-rate video cut by ingest; `labels` = distinct detection labels on its sampled frames. */
+export const Clip = z.looseObject({
+  id: z.number(),
+  camera: z.string(),
+  trigger_ts: Iso,
+  start_ts: Iso,
+  end_ts: Iso.nullable(),
+  duration_s: NullableNum,
+  fps: NullableNum,
+  width: NullableNum,
+  height: NullableNum,
+  bytes: NullableNum,
+  stopped: z.enum(['quiet', 'max', 'stale']).nullable(),
+  preroll_s: NullableNum,
+  expired_at: Iso.nullable(),
+  labels: z.array(z.string()).optional(),
+  frame_id: NullableNum.optional(), // the first sampled frame: the list's poster
+});
+export const ClipsResponse = z.array(Clip);
+/** On a card whose head frame was sampled from a clip: enough to show a badge and fetch /api/clip/<id>.mp4. */
+export const ClipRef = z.object({
+  id: z.number(),
+  duration_s: NullableNum,
+  stopped: z.enum(['quiet', 'max', 'stale']).nullable(),
+});
+export const FrameHead = FrameWithDetections.extend({
+  burst: z.array(FrameWithDetections),
+  clip: ClipRef.nullable().optional(),
+});
 export const FramesResponse = z.array(FrameHead);
 
 export const BaselineSet = z.looseObject({ date: z.string(), n: z.number(), models: z.array(z.string()) });

@@ -9,6 +9,7 @@
 //   GET /api/taxonomy[/versions[/<id>]]; POST /api/taxonomy/{validate,score,apply,revert}  the taxonomy editor (docs/TAXONOMY-UI.md)
 //   GET /api/buffer/<cam>?w=   newest frame of the recorder's buffer (thumbnails, posters)
 //   GET /api/live/<cam>/{index.m3u8,init.mp4,segNNNNNN.m4s}   the recorder's HLS output: the live view (docs/WEB-DASHBOARD.md); files only, no camera is touched
+//   GET /api/clips?camera=&since=&limit=   cut motion clips (docs/CLIPS.md); GET /api/clip/<id>.mp4 the file, with Range (Safari needs 206)
 //   GET /api/bridge            the Wyze bridge's own metrics (:5080/api/metrics), proxied because 5080 is loopback-only since 23 Oct
 // Every JPEG goes through jpeg.ts (read into memory, then sharp): sharp(path) memory-maps and a file still being written
 // killed this process with SIGBUS 16 times on 22-23 Oct.
@@ -391,6 +392,20 @@ async function applyTaxonomy(
   return { id };
 }
 
+/** A card whose head was sampled from a clip (docs/CLIPS.md) carries the clip ref and only every 4th member: the
+ *  video is the way to watch it, and a 60 s clip has 120 sampled frames. */
+const CLIP_MEMBER_STRIDE = 4;
+const withClip = <T extends { clip_id: number | null; burst: { seq: number | null }[] }>(f: T) => {
+  const c = f.clip_id ? store.clipById(f.clip_id) : undefined;
+  return c
+    ? {
+        ...f,
+        clip: { id: c.id, duration_s: c.duration_s, stopped: c.stopped },
+        burst: f.burst.filter((m) => (m.seq ?? 0) % CLIP_MEMBER_STRIDE === 0),
+      }
+    : { ...f, clip: null };
+};
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
   try {
@@ -573,8 +588,54 @@ const server = createServer(async (req, res) => {
         json(res, 404, { error: 'no such frame' });
         return;
       }
-      json(res, 200, f);
+      json(res, 200, withClip(f));
       return;
+    } else if (url.pathname === '/api/clips') {
+      const p = url.searchParams;
+      const rows = store
+        .clips({
+          since: clampSince(parseSince(p.get('since') ?? '24h')),
+          ...(p.get('camera') ? { camera: p.get('camera')! } : {}),
+          limit: Math.min(Number(p.get('limit') ?? 100), 500),
+        })
+        .map((c) => ({ ...c, labels: store.clipLabels(c.id), frame_id: store.clipFrames(c.id)[0]?.id ?? null }));
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(rows));
+    } else if (/^\/api\/clip\/\d+\.mp4$/.test(url.pathname)) {
+      // The clip file with byte ranges: Safari and iOS refuse an mp4 whose server ignores Range, and every player seeks.
+      const c = store.clipById(Number(url.pathname.slice('/api/clip/'.length, -'.mp4'.length)));
+      if (!c?.path || !existsSync(c.path)) {
+        res.writeHead(404);
+        res.end('no clip');
+        return;
+      }
+      const size = statSync(c.path).size;
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+      let start = 0;
+      let end = size - 1;
+      if (m) {
+        if (m[1]) {
+          start = Number(m[1]);
+          end = m[2] ? Math.min(Number(m[2]), end) : end;
+        } else if (m[2]) {
+          start = Math.max(0, size - Number(m[2]));
+        }
+        if (start > end) {
+          res.writeHead(416, { 'content-range': `bytes */${size}` });
+          res.end();
+          return;
+        }
+      }
+      res.writeHead(m ? 206 : 200, {
+        'content-type': 'video/mp4',
+        'accept-ranges': 'bytes',
+        'content-length': String(end - start + 1),
+        'cache-control': 'max-age=3600',
+        ...(m ? { 'content-range': `bytes ${start}-${end}/${size}` } : {}),
+      });
+      createReadStream(c.path, { start, end })
+        .on('error', () => res.destroy())
+        .pipe(res);
     } else if (url.pathname === '/api/frames') {
       const p = url.searchParams;
       const num = (k: string) => (p.get(k) ? Number(p.get(k)) : undefined);
@@ -592,7 +653,7 @@ const server = createServer(async (req, res) => {
         ...(num('before') !== undefined ? { before: num('before')! } : {}),
       });
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-      res.end(JSON.stringify(rows));
+      res.end(JSON.stringify(rows.map(withClip)));
     } else if (url.pathname === '/api/baseline') {
       const sets = existsSync(BASELINE_DIR)
         ? readdirSync(BASELINE_DIR)

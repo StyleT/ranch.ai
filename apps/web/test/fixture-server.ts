@@ -20,6 +20,8 @@ const hlsSegs = readdirSync(HLS)
   .filter((f) => /^seg\d{6}\.m4s$/.test(f))
   .sort();
 const hlsInit = readFileSync(join(HLS, 'init.mp4'));
+// A playable clip for /api/clip/<id>.mp4: the HLS init segment followed by its media segments is a progressive fMP4.
+const clipMp4 = Buffer.concat([hlsInit, ...hlsSegs.map((f) => readFileSync(join(HLS, f)))]);
 const PORT = Number(process.argv[2] ?? process.env.FIXTURE_PORT ?? 5095);
 const TOKEN = 'test-token';
 
@@ -209,6 +211,30 @@ createServer(async (req, res) => {
     }
     res.writeHead(200, { 'content-type': 'video/mp4', 'cache-control': 'max-age=60' });
     return res.end(seg);
+  }
+  if (p === '/api/clips') {
+    const cam = url.searchParams.get('camera');
+    return json(
+      res,
+      200,
+      fx<{ camera: string }[]>('clips').filter((c) => !cam || c.camera === cam),
+    );
+  }
+  if (/^\/api\/clip\/\d+\.mp4$/.test(p)) {
+    if (!fx<{ id: number }[]>('clips').some((c) => `/api/clip/${c.id}.mp4` === p)) {
+      return json(res, 404, { error: 'no clip' });
+    }
+    const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? '');
+    const start = m ? Number(m[1]) : 0;
+    const end = m && m[2] ? Math.min(Number(m[2]), clipMp4.length - 1) : clipMp4.length - 1;
+    res.writeHead(m ? 206 : 200, {
+      'content-type': 'video/mp4',
+      'accept-ranges': 'bytes',
+      'content-length': String(end - start + 1),
+      'cache-control': 'max-age=3600',
+      ...(m ? { 'content-range': `bytes ${start}-${end}/${clipMp4.length}` } : {}),
+    });
+    return res.end(clipMp4.subarray(start, end + 1));
   }
   if (/^\/api\/buffer\/[a-z0-9_]+$/.test(p) || p.startsWith('/api/frame/') || p.startsWith('/api/baseline-frame/')) {
     const w = Number(url.searchParams.get('w') ?? 640);

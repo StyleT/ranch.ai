@@ -167,7 +167,26 @@ export type FrameCard = {
   height: number | null;
   detections: Box[];
   burst: FrameCard[];
+  clip: ClipRef | null; // the head was sampled from a motion clip (docs/CLIPS.md): play it instead of stepping frames
   period?: string;
+};
+export type ClipRef = {
+  id: number;
+  duration_s: number | null;
+  stopped: 'quiet' | 'max' | 'stale' | null;
+  video: string;
+};
+/** One row of /clips: a cut motion clip with what the detector saw on its sampled frames. */
+export type ClipRow = {
+  id: number;
+  camera: string;
+  start_ts: string;
+  duration_s: number | null;
+  stopped: 'quiet' | 'max' | 'stale' | null;
+  bytes: number | null;
+  labels: string[];
+  video: string;
+  poster: string | null;
 };
 export type DetectionsPage = {
   source: 'live' | 'baseline';

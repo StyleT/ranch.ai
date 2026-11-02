@@ -65,6 +65,30 @@ export const handlers = [
       ? HttpResponse.json({ ok: true, id: 100 })
       : HttpResponse.json({ error: 'bad or missing x-ranch-token' }, { status: 403 }),
   ),
+  http.get(`${DAEMON}/api/clips`, ({ request }) => {
+    const cam = new URL(request.url).searchParams.get('camera');
+    return HttpResponse.json(fixture<{ camera: string }[]>('clips').filter((c) => !cam || c.camera === cam));
+  }),
+  // The clip file: the HLS init segment stands in for an mp4; Range answered like the daemon (206 + content-range).
+  http.get(`${DAEMON}/api/clip/:file`, ({ params, request }) => {
+    if (params.file !== '31.mp4') {
+      return HttpResponse.text('no clip', { status: 404 });
+    }
+    const body = readFileSync(join(FX, 'hls', 'init.mp4'));
+    const m = /^bytes=(\d+)-(\d*)$/.exec(request.headers.get('range') ?? '');
+    const start = m ? Number(m[1]) : 0;
+    const end = m && m[2] ? Math.min(Number(m[2]), body.length - 1) : body.length - 1;
+    return new HttpResponse(body.subarray(start, end + 1), {
+      status: m ? 206 : 200,
+      headers: {
+        'content-type': 'video/mp4',
+        'accept-ranges': 'bytes',
+        'content-length': String(end - start + 1),
+        'cache-control': 'max-age=3600',
+        ...(m ? { 'content-range': `bytes ${start}-${end}/${body.length}` } : {}),
+      },
+    });
+  }),
   http.get(`${DAEMON}/api/baseline`, () => HttpResponse.json(fixture('baseline'))),
   http.get(`${DAEMON}/api/baseline/:date`, () => HttpResponse.json(fixture('baseline-set'))),
   http.get(`${DAEMON}/api/live/:cam/:file`, ({ params }) => {
