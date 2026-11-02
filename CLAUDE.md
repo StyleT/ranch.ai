@@ -14,6 +14,11 @@ measured number and an architecture decision. Read `docs/HANDOFF.md` first, then
   passwordless sudo with `sudo -n`).
 
 ## How work is done
+- **A question is answered, never acted on.** When Vlad asks something ("why is X like this?", "am I right that...?",
+  "how do I...?"), the deliverable is the answer: no edits, no scripts against the data, no commits, no fixes on the
+  side. Answer, propose in one line if there is something to do, and wait for his decision. Work already running in the
+  background continues; nothing new starts. Only an explicit request ("fix it", "do it", "revert") triggers action.
+  (1 Nov 2026: a "why only truck?" question was answered with a rewritten schema and 27 relabeled boxes; all reverted.)
 - All configuration goes through Ansible in `infra/ansible/`; never hand-edit the mini and leave it.
   `make provision` (apply), `make check` (drift, `--check --diff`), `make verify` (post-reboot asserts),
   `make snapshot` (dump state to `infra/snapshots/<date>/`, commit it).
