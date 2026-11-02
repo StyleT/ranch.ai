@@ -10,7 +10,6 @@ export type Alert = {
     | 'detector_stale'
     | 'taxonomy_drift'
     | 'disk_low'
-    | 'burst_throttled'
     | 'no_frames';
   text: string;
   href: string;

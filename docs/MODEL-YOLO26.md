@@ -28,6 +28,10 @@ no runner work is needed. The NMS-free head (`nms=False`) would need a new decod
 
 ## Part B: bursts, so movement is visible
 
+> **Superseded 1 Nov 2026.** Bursts (2 to 4 keyframes) were replaced by motion clips: native-rate video cut from the
+> recorder's ring, sampled at 2 fps for the detector (`docs/CLIPS.md`). The burst code was removed; the measurements
+> below stand as the record of why clips were needed.
+
 **Today** the sampler grabs one JPEG per camera every 5 s and keeps it when the scene changed ≥ 4 % or 10 s passed;
 the detector sees single frames. A static tractor and a standing person look the same to a per-frame model, and
 a horse that is lying flat and one that is rolling look the same.

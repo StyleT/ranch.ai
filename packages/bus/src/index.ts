@@ -14,7 +14,7 @@ export const topics = {
   events: (camera: string, type: string) => `ranch/events/${camera}/${type}`,
   status: (service: string) => `ranch/status/${service}`,
   taxonomy: 'ranch/taxonomy',
-  bursts: (camera: string) => `ranch/bursts/${camera}`, // sampler: a burst closed {burst_id, frame_ids}
+  bursts: (camera: string) => `ranch/bursts/${camera}`, // deprecated 1 Nov: nothing publishes it since clips replaced bursts; the detector still accepts the shape
   tracks: (camera: string) => `ranch/tracks/${camera}`, // detector: tracks across a burst
   clips: (camera: string) => `ranch/clips/${camera}`, // ingest: a motion clip was cut and sampled {clip_id, burst_id, frame_ids, ...} (docs/CLIPS.md)
 } as const;

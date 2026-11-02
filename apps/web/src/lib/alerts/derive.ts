@@ -76,15 +76,6 @@ export function deriveAlerts(i: {
   if (i.status.disk_free_gb !== null && i.status.disk_free_gb < 20) {
     out.push({ kind: 'disk_low', text: `disk ${i.status.disk_free_gb} GB free`, href: '/system', severity: 'warn' });
   }
-  const ingest = i.daemons.find((d) => d.name === 'ingest')?.status as { burst_throttled?: number } | null | undefined;
-  if (ingest?.burst_throttled) {
-    out.push({
-      kind: 'burst_throttled',
-      text: `bursts throttled ${ingest.burst_throttled}× (budget)`,
-      href: '/system',
-      severity: 'warn',
-    });
-  }
   if (i.cameras.length && i.cameras.every((c) => c.frames_per_min === 0)) {
     out.push({ kind: 'no_frames', text: 'no frames from any camera in 10 min', href: '/system', severity: 'bad' });
   }

@@ -104,7 +104,7 @@ trained on and never used to pick thresholds. `frames-ranch-v1` and its labels a
 |---|---|---|
 | 1 detector (Core ML) | boxes per frame | golden boxes |
 | 1 counter | horse count per frame, per minute | count of golden horse boxes |
-| 1 bursts (track policy) | the burst's head frame after a track policy (`none`, `drop-still`, `require-stable`, `drop-still-person`) | golden boxes on the head frame; members scored too as a second slice |
+| 1 bursts (track policy) | since 1 Nov the unit is a motion clip's sampled frames (2 fps, `docs/CLIPS.md`), stored as a burst (head + members) so the policies (`none`, `drop-still`, `require-stable`, `drop-still-person`) apply unchanged; scored on the head frame, members as a second slice | golden boxes on the sampled frames |
 | 2 VLM (Phase 2) | structured JSON per frame or crop | golden posture / gate / trough fields |
 | 3 escalation (Phase 2) | Claude verdict per event | human verdict on the event |
 | events (Phase 2–3) | event rows with type and time | human verdicts (`events.verdict`) and the event set |

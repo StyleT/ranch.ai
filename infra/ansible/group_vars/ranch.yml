@@ -139,9 +139,6 @@ ranch_cameras:
 recorder_jpeg_q: 4
 recorder_buffer_min: 5
 recorder_min_free_gb: 20
-# Bursts off since 1 Nov (RANCH_BURST_MAX 1 = a change keep opens no burst): motion clips (apps/ingest/src/clips.ts,
-# docs/CLIPS.md) are the unit now; the burst code stays until the clip eval set is cut (plan Part 2.4).
-ingest_burst_max: 1
 # HLS live view (23 Oct, docs/WEB-DASHBOARD.md). The same ffmpeg also writes <media>/live/<cam>/ (fMP4, 1 s segments,
 # AAC audio) but ONLY while a camera is being watched: re-encoding all seven cameras at once saturated the M2's single
 # video-encode engine and the picture fell minutes behind. On-demand, normally 0-1 encoders run and keep real-time at

@@ -13,7 +13,7 @@ export const KNOWN_STATUS: Record<string, string[]> = {
     'kept_boxes',
     'rss_mb',
   ],
-  ingest: ['bursts', 'burst_frames', 'burst_throttled', 'burst_budget_per_min', 'motion_threshold', 'resets', 'rss_mb'],
+  ingest: ['clips_open', 'clips_cut', 'clip_frames', 'motion_threshold', 'resets', 'rss_mb'],
   netprobe: [],
   status: ['rss_mb'],
 };

@@ -22,23 +22,6 @@ const RETENTION_D = Number(process.env.RANCH_FRAMES_RETENTION_D ?? 7);
 // A camera is "online" when its buffer has a frame newer than RANCH_STALE_S. Staleness means the recorder is not
 // getting frames (camera down / reconnecting); the sampler just waits — it never touches the camera.
 const STALE_S = Number(process.env.RANCH_STALE_S ?? 30);
-// Bursts (docs/MODEL-YOLO26.md part B): only a change keep opens one; it extends while consecutive buffered frames
-// keep differing, stops at the first still frame or at BURST_MAX; one burst per camera per cooldown; and a global
-// per-minute budget of member frames across all cameras keeps the cost bounded. Burst members are read from the
-// same on-disk buffer (zero camera load).
-const BURST_MAX = Number(process.env.RANCH_BURST_MAX ?? 4);
-const BURST_GAP_S = Number(process.env.RANCH_BURST_GAP_S ?? 2); // recorder is ~1 frame / 2 s
-const BURST_CHANGE = Number(process.env.RANCH_BURST_CHANGE ?? 0.05); // block-max diff between consecutive members: motion continues
-const BURST_COOLDOWN_S = Number(process.env.RANCH_BURST_COOLDOWN_S ?? 10);
-const BURST_BUDGET_PER_MIN = Number(process.env.RANCH_BURST_BUDGET_PER_MIN ?? 60);
-const burstStats = {
-  bursts: 0,
-  burst_frames: 0,
-  throttled: 0,
-  tokens: BURST_BUDGET_PER_MIN,
-  lastRefill: Date.now(),
-  lastThrottleLog: 0,
-};
 // motion metric of every sample since the last status message, per camera: p50/p90/max tell whether the thresholds fit
 const motionSamples = new Map<string, number[]>();
 const motionSummary = () => {
@@ -57,23 +40,6 @@ const motionSummary = () => {
   motionSamples.clear();
   return out;
 };
-function takeBurstToken(): boolean {
-  const now = Date.now();
-  if (now - burstStats.lastRefill >= 60_000) {
-    burstStats.tokens = BURST_BUDGET_PER_MIN;
-    burstStats.lastRefill = now;
-  }
-  if (burstStats.tokens <= 0) {
-    burstStats.throttled++;
-    if (now - burstStats.lastThrottleLog > 60_000) {
-      burstStats.lastThrottleLog = now;
-      log('burst throttled', { budget_per_min: BURST_BUDGET_PER_MIN });
-    }
-    return false;
-  }
-  burstStats.tokens--;
-  return true;
-}
 const THUMB_W = 128;
 const THUMB_H = 72;
 const BLOCK = 8; // 16x9 blocks of 8x8 for the local motion metric
@@ -144,25 +110,6 @@ function latestBufferFrame(camera: string, afterName?: string): { name: string; 
   return { name, buf, ageS: (Date.now() - bufferNameMs(name)) / 1000 };
 }
 
-/** Wait up to `timeoutMs` for a buffered frame newer than `afterName` (used by bursts to read consecutive frames). */
-async function nextBufferFrame(
-  camera: string,
-  afterName: string,
-  timeoutMs: number,
-): Promise<{ name: string; buf: Buffer } | null> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const f = latestBufferFrame(camera, afterName);
-    if (f) {
-      return f;
-    }
-    if (Date.now() >= deadline) {
-      return null;
-    }
-    await sleep(200);
-  }
-}
-
 function meanAbsDiff(a: Buffer, b: Buffer): number {
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
@@ -194,110 +141,6 @@ export function blockMaxDiff(a: Buffer, b: Buffer): number {
     }
   }
   return best;
-}
-
-/**
- * Extend a change keep into a burst (docs/MODEL-YOLO26.md part B): read another buffered frame every BURST_GAP_S; a
- * frame becomes a member only if it differs from the previous member by >= BURST_CHANGE; the first still frame ends
- * the burst; at most BURST_MAX frames; every member costs one token of the global per-minute budget. `grab` returns
- * the next buffered frame (the caller threads the buffer cursor through it). Exported for the unit test.
- */
-export async function extendBurst(o: {
-  headId: number;
-  camera: string;
-  dir: string;
-  headThumb: Buffer;
-  grab: () => Promise<Buffer>;
-  store: EventStore;
-  bus: Bus;
-  gapMs?: number;
-}): Promise<{
-  members: number;
-  frameIds: number[];
-  lastThumb?: Buffer;
-  stopped: 'still' | 'max' | 'budget' | 'error';
-}> {
-  const frameIds = [o.headId];
-  let prevThumb = o.headThumb;
-  let seq = 1;
-  let stopped: 'still' | 'max' | 'budget' | 'error' = 'max';
-  while (seq < BURST_MAX) {
-    await sleep(o.gapMs ?? BURST_GAP_S * 1000);
-    if (!takeBurstToken()) {
-      stopped = 'budget';
-      break;
-    }
-    let jpeg: Buffer;
-    try {
-      jpeg = await o.grab();
-    } catch {
-      stopped = 'error';
-      break;
-    }
-    const img = sharp(jpeg);
-    let meta: sharp.Metadata;
-    let thumb: Buffer;
-    try {
-      [meta, thumb] = await Promise.all([
-        img.metadata(),
-        img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer(),
-      ]);
-    } catch {
-      stopped = 'error';
-      break;
-    }
-    const change = blockMaxDiff(thumb, prevThumb);
-    if (change < BURST_CHANGE) {
-      stopped = 'still';
-      break;
-    }
-    if (seq === 1) {
-      o.store.markBurstHead(o.headId);
-    }
-    const ts = new Date().toISOString();
-    const path = join(o.dir, `${ts.replace(/[:.]/g, '-')}.jpg`);
-    writeFileSync(path, jpeg);
-    const id = o.store.insertFrame({
-      ts,
-      camera: o.camera,
-      path,
-      reason: 'change',
-      change,
-      bytes: jpeg.length,
-      burst_id: o.headId,
-      seq,
-      ...(meta.width ? { width: meta.width } : {}),
-      ...(meta.height ? { height: meta.height } : {}),
-    });
-    await o.bus.publish(topics.frames(o.camera), {
-      id,
-      ts,
-      camera: o.camera,
-      path,
-      reason: 'change',
-      change,
-      width: meta.width,
-      height: meta.height,
-      burst_id: o.headId,
-      seq,
-    });
-    frameIds.push(id);
-    prevThumb = thumb;
-    seq++;
-  }
-  if (frameIds.length > 1) {
-    burstStats.bursts++;
-    burstStats.burst_frames += frameIds.length - 1;
-    await o.bus.publish(topics.bursts(o.camera), {
-      burst_id: o.headId,
-      camera: o.camera,
-      frame_ids: frameIds,
-      n: frameIds.length,
-      stopped,
-    });
-    return { members: frameIds.length - 1, frameIds, lastThumb: prevThumb, stopped };
-  }
-  return { members: 0, frameIds, stopped };
 }
 
 /** A clip closed: cut the mp4 from the ring, sample frames for the detector, publish both. Failures close the row without media. */
@@ -406,7 +249,6 @@ async function finishClip(
 async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: { v: boolean }): Promise<void> {
   let lastThumb: Buffer | undefined;
   let lastKept = 0;
-  let lastBurstEnd = 0;
   let lastName = '';
   let staleSince = 0;
   // clip decisions run on consecutive keyframes (the buffer's 2 s cadence), independent of what the sampler keeps
@@ -506,30 +348,6 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
       });
       lastThumb = thumb;
       lastKept = now.getTime();
-      if (reason === 'change' && BURST_MAX > 1 && now.getTime() - lastBurstEnd > BURST_COOLDOWN_S * 1000) {
-        const cursor = { name: f.name };
-        const b = await extendBurst({
-          headId: id,
-          camera,
-          dir,
-          headThumb: thumb,
-          store,
-          bus,
-          grab: async () => {
-            const nf = await nextBufferFrame(camera, cursor.name, BURST_GAP_S * 1000 + 2500);
-            if (!nf) {
-              throw new Error('no buffered frame');
-            }
-            cursor.name = nf.name;
-            return nf.buf;
-          },
-        });
-        if (b.members > 0) {
-          lastThumb = b.lastThumb!;
-          lastKept = Date.now();
-          lastBurstEnd = Date.now();
-        }
-      }
     } else {
       lastThumb = thumb;
     }
@@ -602,13 +420,6 @@ async function main(): Promise<void> {
     retention_d: RETENTION_D,
     stale_s: STALE_S,
     buffer: config.bufferDir,
-    burst: {
-      max: BURST_MAX,
-      gap_s: BURST_GAP_S,
-      change: BURST_CHANGE,
-      cooldown_s: BURST_COOLDOWN_S,
-      budget_per_min: BURST_BUDGET_PER_MIN,
-    },
     media: config.mediaDir,
     db: config.dbPath,
   });
@@ -622,10 +433,6 @@ async function main(): Promise<void> {
         pid: process.pid,
         cameras,
         rss_mb: Math.round(m.rss / 1048576),
-        bursts: burstStats.bursts,
-        burst_frames: burstStats.burst_frames,
-        burst_throttled: burstStats.throttled,
-        burst_budget_per_min: BURST_BUDGET_PER_MIN,
         clips_open: clipStats.open,
         clips_cut: clipStats.cut,
         clip_frames: clipStats.frames,
@@ -656,7 +463,7 @@ async function main(): Promise<void> {
   );
 }
 
-// Run the daemon only when this file is the entry point (the burst test imports extendBurst).
+// Run the daemon only when this file is the entry point (tests import the module).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => {
     log('fatal', { error: String(e) });
