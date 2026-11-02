@@ -41,7 +41,7 @@
   ansible.builtin.command: >-
     rsync -ai --delete --checksum --prune-empty-dirs {{ '--dry-run' if ansible_check_mode else '' }}
     --exclude .git --exclude .claude --exclude node_modules --exclude .scratch --exclude .venv --exclude __pycache__ --exclude infra/snapshots
-    --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store --exclude 'evals/baseline/*/frames' --exclude 'apps/web/.next' --exclude 'apps/web/test-results' --exclude 'apps/web/playwright-report' --exclude 'apps/web/e2e/ai/runs' --exclude 'apps/web/coverage' --exclude 'apps/web/tsconfig.tsbuildinfo'
+    --exclude '*.mlpackage' --exclude '*.mlmodelc' --exclude '*.pt' --exclude .DS_Store --exclude 'evals/baseline/*/frames' --exclude 'evals/golden/batches' --exclude 'apps/web/.next' --exclude 'apps/web/test-results' --exclude 'apps/web/playwright-report' --exclude 'apps/web/e2e/ai/runs' --exclude 'apps/web/coverage' --exclude 'apps/web/tsconfig.tsbuildinfo'
     -e "ssh -o BatchMode=yes" {{ playbook_dir }}/../../ {{ ansible_user }}@{{ ansible_host }}:{{ ranch_app_dir }}/
   delegate_to: localhost
   register: app_sync
