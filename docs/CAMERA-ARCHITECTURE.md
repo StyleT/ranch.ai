@@ -203,6 +203,9 @@ row for the camera with the seconds it took. `camsup_dry_run` records decisions 
 nothing, and front_porch had 410 reboot decisions against a stuck TUTK session and zero reboots. Armed since 1 Nov. The
 ladder itself is a pure module with tests (`apps/camsup/src/ladder.ts`).
 
+**Clips (1 Nov).** The always-on JPEG ffmpeg also writes a stream-copy ring of one-GOP segments; ingest cuts motion
+clips from it and samples frames for the detector. Design, constants and measurements: `docs/CLIPS.md`.
+
 **Where a camera really is (1 Nov).** The bridge's `ip` is the Wyze cloud's `device_params.ip`, the address the camera
 reported when it last booted. netprobe sweeps the cameras' /24 every `netprobe_sweep_every` probes (5 min) and reads the
 neighbor table, so each probe row carries `mac`, `mac_seen_at` (the address the camera's MAC holds now) and

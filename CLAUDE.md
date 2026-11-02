@@ -137,7 +137,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **Cameras: one producer, consumers share it (docs/CAMERA-ARCHITECTURE.md).** go2rtc holds exactly one connection
   (one producer) to each camera and multiplexes it to every consumer. `com.ranch.recorder` runs an always-on
   keyframe-JPEG ffmpeg per camera that keeps that producer up and writes the rolling disk buffer at
-  `<media>/buffer/<cam>/`; the sampler, detector and status read that buffer and NEVER call go2rtc or a camera. The
+  `<media>/buffer/<cam>/`; the same ffmpeg also stream-copies the H.264 into a 3-minute ring of one-GOP MPEG-TS segments at
+  `<media>/ring/<cam>/`, from which ingest cuts motion clips (`docs/CLIPS.md`, 1 Nov); the sampler, detector and status read that buffer and NEVER call go2rtc or a camera. The
   browser live view is the one place that consumes go2rtc directly — WebRTC/WHEP, or on-demand HLS as fallback — but
   because the recorder's pull already holds the producer, a viewer attaching or detaching shares that producer and
   never makes go2rtc dial the camera. Prefer the local TUTK/LAN path; keep the bridge's WebRTC fallback. Never
