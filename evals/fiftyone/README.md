@@ -28,7 +28,7 @@ make fiftyone-install                                   # uv sync
 make frames-pull DATE=2026-10-24                        # images from the mini -> evals/baseline/2026-10-24/frames/
 make fiftyone-import SET=evals/baseline/2026-10-24 LABELS=evals/golden/labels-ranch-bursts-claude-v1.jsonl:gt_claude MODELS=yolo26s,yolo11n
 make fiftyone NAME=frames-ranch-bursts-v1               # the App, bursts grouped as sequences (browse)
-make fiftyone NAME=frames-ranch-bursts-v1 MODE=annotate # flat, sorted by burst then seq: the Annotate tab works here
+make fiftyone NAME=frames-ranch-bursts-v1 MODE=annotate # only for an older flat dataset; a grouped one ignores MODE
 make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=claude-v1
 make fiftyone REPO=ranch-frames-bursts-v1 REV=claude-v1 # load that exact revision from the Hub, then the App
 ```

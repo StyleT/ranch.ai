@@ -56,11 +56,11 @@ hls.js (pinned). Any number of viewers reads the same files; the camera and go2r
 
 **Why the video is re-encoded.** The plan was `-c:v copy`. Measured on 23 Oct the cameras' keyframes come 2–18 s apart
 (segment durations 2, 6, 10.8, 18 s), an HLS segment can only start at a keyframe, and hls.js syncs 2–3 target
-durations behind the edge: 20–50 s of latency. So the recorder decodes on the Apple media engine
-(`-hwaccel videotoolbox`, frames stay on the GPU), re-encodes with `h264_videotoolbox` at a forced keyframe every
-second (`recorder_hls_bitrate`, 2 Mbit/s), transcodes the 8 kHz PCM audio to AAC, and takes the 1 fps JPEG for the
-sampler from the same decoded frames (`hwdownload` of one frame per second). `recorder_transcode: false` restores the
-copy. Cost, measured: see "Status". No `EXT-X-PROGRAM-DATE-TIME`: ffmpeg anchors it at muxer start and lets it drift
+durations behind the edge: 20–50 s of latency. So the recorder's on-demand HLS role (`pull_hls` in
+`infra/bin/recorder.sh`, running only while a viewer's `.demand` marker is fresh) decodes in software, re-encodes with
+`h264_videotoolbox` at a forced keyframe every second (`recorder_hls_bitrate`, 2 Mbit/s) and transcodes the 8 kHz PCM
+audio to AAC. The always-on `pull_jpeg` role is a separate ffmpeg: keyframes only, no decode of the rest, which is what
+keeps the producer held at ~3 % CPU per camera (docs/CAMERA-ARCHITECTURE.md). Cost, measured: see "Status". No `EXT-X-PROGRAM-DATE-TIME`: ffmpeg anchors it at muxer start and lets it drift
 (15–70 s off per camera, even negative), which would mislead hls.js's latency controller.
 
 The badge is derived from facts, never asserted (`features/camera/liveState.ts`, unit-tested): `LIVE · 3.8 s` while

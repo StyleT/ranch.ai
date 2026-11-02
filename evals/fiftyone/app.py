@@ -1,13 +1,12 @@
-"""Open the FiftyOne App on a dataset, bursts grouped as sequences.
+"""Open the FiftyOne App on a dataset.
 
   uv run python app.py --name frames-ranch-bursts-v1            # a local dataset (after import_jsonl.py or hub.py load)
-  uv run python app.py --repo ranch-frames-bursts-v1 [--revision claude-v1]   # load from the Hub first
+  uv run python app.py --repo ranch-frames-bursts-v1 [--revision claude-v1-grouped]   # load from the Hub first
 
-Bursts: the dataset is one image sample per frame. --mode browse (default): `group_by("burst_id", order_by="seq")`,
-one card per burst in the grid, the burst's frames in order in the modal. --mode annotate: the flat dataset sorted
-by (burst_id, seq), because the App's Annotate tab only works on image samples, not on a grouped view ("This group
-dataset has no slices that support annotation"); a burst's frames stay consecutive, so next/prev in the modal still
-walks the sequence while every sample is editable. Scoring always runs on the flat dataset.
+A grouped dataset (bursts since 1 Nov: one group per burst, image slices "0".."3") is launched as is: the grid shows
+the head slice, the modal the burst's slices, and the Annotate tab edits each slice. --mode browse/annotate/flat only
+apply to an older flat dataset (one image sample per frame): browse = `group_by("burst_id", order_by="seq")`,
+annotate = sorted by (burst_id, seq) so every sample is editable, flat = as is.
 """
 import argparse
 import os

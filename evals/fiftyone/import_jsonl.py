@@ -1,8 +1,8 @@
 """Import a baseline frames set (+ labels, + predictions) from the repo's JSONL into a FiftyOne dataset.
 
 The JSONL files are what the TypeScript side writes on the mini (evals/baseline/snapshot.ts, evals/label/claude.ts);
-FiftyOne is the store for review, sharing (Hub) and scoring. One image sample per frame; a burst is the samples that
-share `burst_id`, browsed with `group_by("burst_id", order_by="seq")` (app.py).
+FiftyOne is the store for review, sharing (Hub) and scoring. Bursts become a grouped dataset: group field `burst`, one
+image slice per frame named by `seq` (`"0"` is the head); the App annotates each slice (README, "Data model").
 
   uv run python import_jsonl.py --set <repo>/evals/baseline/2026-10-24 \
       --labels <repo>/evals/golden/labels-ranch-bursts-claude-v1.jsonl:gt_claude --predictions yolo26s,yolo11n [--overwrite]
