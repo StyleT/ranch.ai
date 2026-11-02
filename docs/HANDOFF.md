@@ -180,11 +180,11 @@ Order of work:
    - `apps/detector/export`: uv project on the laptop; `export_yolo.py` (n, s exported), `export_rfdetr.py`
      (image input with ImageNet normalization folded in, so Vision can feed it). Models are not in git; `make
      provision` syncs `*.mlpackage` + `*.labels.json` to `/usr/local/ranch/models`.
-   - `evals/label`: `select.ts` (stratified pick), `claude.ts` (Batch API + structured outputs). Needs
+   - `evals/label`: `claude.ts` (Batch API + structured outputs; the pick is `evals/baseline/snapshot.ts`). Needs
      `ANTHROPIC_API_KEY` on the laptop; the mini has no key and does not need one for this.
 6. Claude labels 100 seed frames first (`claude-opus-5-5`, structured outputs, Batch API) → `evals/golden/*.jsonl`
    with `labeler: claude`. Decided 15 Oct: AI labels are the Phase 1 ground truth, no human review yet.
-7. Benchmark: latency/fps/RSS half **done 15 Oct** (`evals/detector/README.md`): yolo11n 8 ms, yolo11s 18 ms,
+7. Benchmark: latency/fps/RSS half **done 15 Oct** (`evals/results/README.md`, `2026-10-15-latency.json`): yolo11n 8 ms, yolo11s 18 ms,
    RF-DETR nano fp16 31 ms on the ANE; RF-DETR fp32 + `.cpuAndNeuralEngine` returns all-zero logits (GPU/CPU
    fine). Recall half waits for the labels (step 6). `horse_count` per minute is already published by
    `com.ranch.detector` (yolo11n placeholder). Post 1.
@@ -202,18 +202,9 @@ Order of work:
   boxes within a few percent of the detectors', horse at the feeder found, gate/trough read. Real cost is ~1.5 ¢
   per frame (3.7k input tokens: image + system + output schema), so 100 frames ≈ $1.60.
   Day frames exist from the morning of 16 Oct onward, so the 100-frame pick should wait for one daylight cycle.
-  **Next session, on the mini, from `/usr/local/ranch/app`:**
-  ```
-  N="/usr/local/ranch/bin/node --no-warnings=ExperimentalWarning"; set -a; . ~/.config/ranch/anthropic.env; set +a
-  $N evals/label/select.ts --n 100 --out evals/golden            # check the day/night split it prints
-  $N evals/label/claude.ts estimate && $N evals/label/claude.ts submit
-  $N evals/label/claude.ts collect --batch <id>                   # → evals/golden/labels.claude.jsonl
-  M=/usr/local/ranch/models; $N apps/detector/src/bench.ts --labels evals/golden/labels.claude.jsonl \
-     --model $M/yolo11n.mlpackage --model $M/yolo11s.mlpackage --model $M/rfdetr-nano-float16.mlpackage \
-     --compute ane --threshold 0.25 --out evals/detector/bench-recall-$(date +%F).json
-  ```
-  then rsync `evals/golden/{frames.jsonl,labels.claude.jsonl}` and the bench JSON back into the laptop checkout
-  and commit (the tree on the mini is an rsync target, not a git clone).
+  Done 20 Oct (`labels-ranch-claude-v1`, then the revised set; rows in `evals/DATASETS.md`). The current flow is
+  `evals/baseline/snapshot.ts` for the pick (docs/FRAMES-AND-BASELINE.md), `evals/label/claude.ts` for the labels
+  and `apps/detector/src/bench.ts` for the scores (docs/EVALUATION.md §3); results land in `evals/results/`.
 - Tractor Cam and Back Pasture Cam are off the LAN (no ARP entry); power / Wi-Fi at the camera end.
 - Confirm the "In scope" column in `docs/CAMERAS.md`; which camera watches the trough.
 - ~~Camera inventory~~, ~~Wyze API credentials~~, ~~SSD decision~~: all closed 14 Oct.

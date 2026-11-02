@@ -89,7 +89,7 @@ const models = readdirSync(a.models!).filter((m) => m.endsWith('.mlpackage')).so
 const manifest: Record<string, unknown> = { date, host: hostname(), n: rows.length, bursts: burstsMode ? picked.length : null, seed: Number(a.seed), since: a.since, threshold: Number(a.threshold), media_dir: mediaDir, models: {} as Record<string, unknown> };
 for (const m of models) {
   const path = join(a.models!, m); const name = m.replace(/\.mlpackage$/, '');
-  // RF-DETR fp32 returns zero logits on the Neural Engine (evals/detector/README.md); it runs on the GPU.
+  // RF-DETR fp32 returns zero logits on the Neural Engine (evals/results/README.md, 15 Oct latency run); it runs on the GPU.
   const compute = name.includes('float32') ? 'gpu' : 'ane';
   const runner = new Runner({ model: path, compute, threshold: Number(a.threshold) });
   const info = await runner.info;

@@ -71,8 +71,10 @@ Current datasets:
 |---|---|---|
 | `frames-ranch-v1` | 300 frames, seeded 20261020, stratified camera × day/night from the 7-day pool of kept frames | Hub: `vladlenfedosov/ranch-frames` tag `frames-ranch-v1` (private); repo: `evals/baseline/2026-10-20/`; images on the mini `/usr/local/ranch/media/baseline/2026-10-20/` (never pruned), laptop copy git-ignored |
 | `preds-frames-ranch-v1-<model>-<sha8>` | yolo11n, yolo11s, rfdetr-nano fp16/fp32 at threshold 0.05 | same directory, `predictions.<model>.jsonl` |
-| `labels-ranch-claude-v1` | *planned*: Claude on 100 frames of `frames-ranch-v1` | `evals/golden/labels-ranch-claude-v1.jsonl` |
-| `labels-ranch-vlad-v1` | *planned, Phase 1b*: human, same 100 frames, blind | `evals/golden/labels-ranch-vlad-v1.jsonl` |
+| `labels-ranch-claude-v1` | Claude on 100 frames of `frames-ranch-v1` (20 Oct); superseded for scoring by the revised set | `evals/golden/labels-ranch-claude-v1.jsonl` |
+| `labels-ranch-claude-revised-vlad-v1` | the above after Vlad's review (five cat boxes removed); the scoring reference for `frames-ranch-v1` | `evals/golden/labels-ranch-claude-revised-vlad-v1.jsonl` |
+| `frames-ranch-bursts-v1` | 156 frames in 50 bursts (24 Oct), heads stratified camera × day/night, all members | `evals/baseline/2026-10-24/`; Hub `vladlenfedosov/ranch-frames-bursts-v1` (FiftyOne native) |
+| `labels-ranch-bursts-claude-v1` | Claude on the 50 bursts, one request per burst, object ids and `moved` | `evals/golden/labels-ranch-bursts-claude-v1.jsonl`; Hub field `gt_claude`, human revision `gt_vlad` (`revised-vlad-v1`) |
 
 **Stratification.** Camera × day/night (day = 07:00–17:59 local) is the minimum. From Phase 3 on, also event
 class and "hard" slices: night IR at distance, rain/fog, the lens-cobweb frames, cameras with poor signal.
@@ -137,7 +139,7 @@ trained on and never used to pick thresholds. `frames-ranch-v1` and its labels a
   tracker change, with `stills.false_motion_share` as the guard; `--gate iou|dist --gate-dist k` runs alternatives on
   the same data. 24 Oct: the IoU gate followed 0.12 of movers, the centre-distance gate 0.65, flat for k = 1–4
   (chosen on the test set, so the policy rows that depend on it carry §4.3's optimism).
-- Latency p50/p95 and runner RSS on the Neural Engine, as already measured in `evals/detector/README.md`.
+- Latency p50/p95 and runner RSS on the Neural Engine, as measured on 15 Oct (`evals/results/README.md`, `2026-10-15-latency.json`) and 22 Oct (`2026-10-22-latency-yolo26.json`).
 
 ### 4.2 Confidence intervals
 300 frames is small. Every headline number carries a 95 % bootstrap interval over frames (1,000 resamples).
@@ -201,20 +203,18 @@ mini's self-hosted runner and fails the PR.
 2. **Phase 1b:** Vlad labels the same 100 blind, in a small local page that shows the frame without boxes.
    Disagreements are reviewed together; the review protocol for Phase 3 (full review vs spot checks per class)
    is decided from the agreement numbers. → `labels-ranch-vlad-v1`.
-3. **Phase 3:** 300–500 frames, Claude first pass, human review per the protocol; stored as
-   `labels.human.<date>.jsonl`, with the AI pass kept beside it.
+3. **Phase 3:** 300–500 frames, Claude first pass, human review per the protocol; the human revision is its own
+   label set (`labels-<name>-<labeler>-vN`, §2) with the AI pass kept beside it.
 4. **Review surface (1 Nov):** labels are reviewed and edited in open-source FiftyOne on the laptop
-   (`evals/fiftyone/README.md`): the set is imported from the JSONL, bursts are browsed as sequences
-   (`group_by("burst_id", order_by="seq")`), boxes and attributes are edited in the App's Annotate tab, and the
+   (`evals/fiftyone/README.md`): the set is imported from the JSONL as a grouped dataset (one group per burst, one
+   image slice per frame), boxes and attributes are edited per slice in the App's Annotate tab, and the
    revision is pushed to the Hub as a new field (`gt_vlad`) and revision tag — the parent field is never edited in
    place. The JSONL labeler output stays the record of the AI pass.
 
 ## 8. What is deliberately not measured yet
-Tracking across frames, re-identification of individual horses, and anything on the SD sub-stream. They get a
-section here when they get a tier.
+Re-identification of individual horses, and anything on the SD sub-stream. (Tracking across the frames of a burst is
+measured since 24 Oct: `movers.followed_share` in §4.1.) They get a section here when they get a tier.
 
 ## 9. Next actions
-1. Extend `bench.ts` per §5 (slices, AP, FPPF, bootstrap, operating points, `--predictions`).
-2. Create `evals/LEADERBOARD.md`; row 0 = the four zero-shot models on `frames-ranch-v1` once labels exist.
-3. Run the Claude labeling batch on 100 frames (`evals/label/claude.ts --n 100`), ~$1.60.
-4. Score all four models; write Post 1's table from the JSON.
+Done through 24 Oct (§5 in `bench.ts`, the leaderboard, the labeled sets above). Next: the clip-based set
+(docs/PLAN.md, 1 Nov plan).
