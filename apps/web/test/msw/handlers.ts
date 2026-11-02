@@ -66,10 +66,6 @@ export const handlers = [
       ? HttpResponse.json({ ok: true, id: 100 })
       : HttpResponse.json({ error: 'bad or missing x-ranch-token' }, { status: 403 }),
   ),
-  http.get(`${DAEMON}/api/clips`, ({ request }) => {
-    const cam = new URL(request.url).searchParams.get('camera');
-    return HttpResponse.json(fixture<{ camera: string }[]>('clips').filter((c) => !cam || c.camera === cam));
-  }),
   // The clip file: the HLS init segment stands in for an mp4; Range answered like the daemon (206 + content-range).
   http.get(`${DAEMON}/api/clip/:file`, ({ params, request }) => {
     if (params.file !== '31.mp4') {

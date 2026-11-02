@@ -63,7 +63,7 @@ const cardOf = (f: FrameWithDetections): FrameCard => ({
 export const frameCardFromHead = (f: FrameHeadT): FrameCard => ({
   ...cardOf(f),
   burst: f.burst.map(cardOf),
-  clip: f.clip ? { ...f.clip, video: clipVideo(f.clip.id) } : null,
+  clip: f.clip ? { ...f.clip, labels: f.clip.labels ?? [], video: clipVideo(f.clip.id) } : null,
 });
 
 export async function getDetections(q: DetectionsQuery): Promise<DetectionsPage> {

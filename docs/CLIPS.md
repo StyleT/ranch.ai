@@ -47,11 +47,11 @@ so a detector miss in one 2 fps sample does not fragment a walking track.
 The status daemon serves `GET /api/clips?camera=&since=&limit=` (rows plus the detector's labels and the first sampled
 frame id) and `GET /api/clip/<id>.mp4` with byte ranges (206, `Content-Range`, `Accept-Ranges: bytes`): Safari and iOS
 refuse an mp4 whose server ignores Range, and every player seeks. A frame card whose head was sampled from a clip
-carries `clip: {id, duration_s, stopped}` and only every 4th member (the video is the way to watch it; a 60 s clip has
-120 sampled frames). The web app proxies both (`/api/ui/clips`, `/api/ui/clip/<id>`, Range and the 206 passed
-through), shows a play badge on such cards, opens the viewer on the video with the frames and boxes one tap away, and
-lists the clips on `/clips` (poster from the first sampled frame, `preload="none"` so a page of 100 clips costs the mini
-100 thumbnails and no video bytes until a play).
+carries `clip: {id, duration_s, stopped, labels}` and only every 4th member (the video is the way to watch it; a 60 s
+clip has 120 sampled frames; `labels` are what the detector saw on any sampled frame). The web app proxies the file
+(`/api/ui/clip/<id>`, Range and the 206 passed through), shows a play badge and the clip's labels on such cards, opens
+the viewer on the video with the frames and boxes one tap away, and the "clips only" filter on `/detections` and the
+camera page is the clip view (`/api/clips` serves the export and the fixture recorder, not a page).
 
 ## Measured (the ring's and the clips' first hour)
 

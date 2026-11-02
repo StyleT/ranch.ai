@@ -159,6 +159,7 @@ export const ClipRef = z.object({
   id: z.number(),
   duration_s: NullableNum,
   stopped: z.enum(['quiet', 'max', 'stale']).nullable(),
+  labels: z.array(z.string()).optional(), // distinct detector labels over the clip's sampled frames
 });
 export const FrameHead = FrameWithDetections.extend({
   burst: z.array(FrameWithDetections),

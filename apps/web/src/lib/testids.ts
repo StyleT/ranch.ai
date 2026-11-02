@@ -11,7 +11,7 @@ export const tid = {
   detectionsMatrix: 'detections-matrix',
   frameCard: (id: number) => `frame-card-${id}`,
   clipBadge: (id: number) => `clip-badge-${id}`,
-  clipCard: (id: number) => `clip-card-${id}`,
+  clipLabels: (id: number) => `clip-labels-${id}`,
   viewerVideo: 'viewer-video',
   viewerFrames: 'viewer-frames',
   viewer: 'viewer-dialog',

@@ -213,16 +213,8 @@ createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'video/mp4', 'cache-control': 'max-age=60' });
     return res.end(seg);
   }
-  if (p === '/api/clips') {
-    const cam = url.searchParams.get('camera');
-    return json(
-      res,
-      200,
-      fx<{ camera: string }[]>('clips').filter((c) => !cam || c.camera === cam),
-    );
-  }
   if (/^\/api\/clip\/\d+\.mp4$/.test(p)) {
-    if (!fx<{ id: number }[]>('clips').some((c) => `/api/clip/${c.id}.mp4` === p)) {
+    if (!fx<{ clip: { id: number } | null }[]>('frames').some((f) => f.clip && `/api/clip/${f.clip.id}.mp4` === p)) {
       return json(res, 404, { error: 'no clip' });
     }
     const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? '');

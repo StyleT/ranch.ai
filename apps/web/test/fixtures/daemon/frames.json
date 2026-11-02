@@ -17,7 +17,11 @@
     "clip": {
       "id": 31,
       "duration_s": 18.0,
-      "stopped": "quiet"
+      "stopped": "quiet",
+      "labels": [
+        "equine",
+        "person"
+      ]
     },
     "clip_id": 31
   },

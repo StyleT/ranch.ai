@@ -222,7 +222,10 @@ export function CameraView({ name }: { name: string }) {
       <Section
         title="Detections"
         action={
-          <Link href={`/clips?camera=${name}`} className="text-accent tracking-normal normal-case">
+          <Link
+            href={`/detections?camera=${name}&clip=1&since=24h`}
+            className="text-accent tracking-normal normal-case"
+          >
             clips ›
           </Link>
         }

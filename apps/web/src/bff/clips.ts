@@ -1,41 +1,9 @@
-// Motion clips (docs/CLIPS.md): the list for /clips and the mp4 proxy. The daemon serves the file with byte ranges;
+// Motion clips (docs/CLIPS.md): the mp4 proxy. The daemon serves the file with byte ranges;
 // the Range header and the 206/Content-Range answer pass through untouched because Safari and iOS refuse an mp4
 // whose server ignores Range, and every player seeks.
-import { z } from 'zod';
-import { ClipsResponse } from '@ranch/contracts';
-import type { ClipRow } from '@/lib/types';
-import { daemonJson, daemonFetch, UpstreamError } from './daemon.ts';
-
-export const ClipsQuery = z.object({
-  camera: z.string().max(64).optional(),
-  since: z
-    .string()
-    .regex(/^(\d+[smhd]|\d{4}-.+)$/)
-    .default('24h'),
-  limit: z.coerce.number().int().min(1).max(500).default(100),
-});
-export type ClipsQuery = z.infer<typeof ClipsQuery>;
+import { daemonFetch, UpstreamError } from './daemon.ts';
 
 export const clipVideo = (id: number) => `/api/ui/clip/${id}`;
-
-export async function getClips(q: ClipsQuery): Promise<ClipRow[]> {
-  const p = new URLSearchParams({ since: q.since, limit: String(q.limit) });
-  if (q.camera) {
-    p.set('camera', q.camera);
-  }
-  const rows = await daemonJson(ClipsResponse, `/api/clips?${p}`, { timeoutMs: 10_000 });
-  return rows.map((c) => ({
-    id: c.id,
-    camera: c.camera,
-    start_ts: c.start_ts,
-    duration_s: c.duration_s,
-    stopped: c.stopped,
-    bytes: c.bytes,
-    labels: c.labels ?? [],
-    video: clipVideo(c.id),
-    poster: c.frame_id ? `/api/ui/frame/${c.frame_id}?w=640` : null,
-  }));
-}
 
 const PASS = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control'];
 export async function proxyClip(id: string, range: string | null, signal: AbortSignal): Promise<Response> {

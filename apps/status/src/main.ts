@@ -400,7 +400,7 @@ const withClip = <T extends { clip_id: number | null; burst: { seq: number | nul
   return c
     ? {
         ...f,
-        clip: { id: c.id, duration_s: c.duration_s, stopped: c.stopped },
+        clip: { id: c.id, duration_s: c.duration_s, stopped: c.stopped, labels: store.clipLabels(c.id) },
         burst: f.burst.filter((m) => (m.seq ?? 0) % CLIP_MEMBER_STRIDE === 0),
       }
     : { ...f, clip: null };

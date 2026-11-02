@@ -20,6 +20,7 @@ export function FrameCardView({ f, onOpen }: { f: FrameCard; onOpen: () => void 
   const tracked = f.detections.some((b) => (b.seen ?? 0) > 1);
   // The badge text is part of the button's accessible name (axe label-content-name-mismatch); the glyph is CSS.
   const clipText = f.clip ? `clip${f.clip.duration_s !== null ? ` ${Math.round(f.clip.duration_s)} s` : ''}` : '';
+  const clipLabels = (f.clip?.labels ?? []).filter((l) => !tally.has(l)); // seen later in the clip, not on the head
   const start = () => {
     if (seqs.length < 2 || timer.current || !window.matchMedia('(pointer: fine)').matches) {
       return;
@@ -97,6 +98,11 @@ export function FrameCardView({ f, onOpen }: { f: FrameCard; onOpen: () => void 
             [...tally].map(([l, n]) => `${l}${n > 1 ? ` ×${n}` : ''}`).join(', ')
           ) : (
             <span className="text-dim">no detections</span>
+          )}
+          {clipLabels.length > 0 && (
+            <span className="text-dim" data-testid={tid.clipLabels(f.id)}>
+              {tally.size ? ' · ' : ' '}in clip: {clipLabels.join(', ')}
+            </span>
           )}
         </div>
       </div>

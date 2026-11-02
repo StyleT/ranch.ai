@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from
 import { server } from './setup-server';
 import { invalidate } from '@/bff/daemon';
 import { GET as clipGET } from '@/app/api/ui/clip/[id]/route';
-import { GET as clipsGET } from '@/app/api/ui/clips/route';
 import { getDetections } from '@/bff/detections';
 
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -36,23 +35,16 @@ describe('/api/ui/clip/[id]', () => {
   });
 });
 
-describe('/api/ui/clips and the clip ref on frame cards', () => {
-  it('lists clips with their labels, the video url and a poster', async () => {
-    const r = await clipsGET(new Request('http://x/api/ui/clips?since=24h'));
-    expect(r.status).toBe(200);
-    const rows = (await r.json()) as { id: number; video: string; poster: string | null; labels: string[] }[];
-    expect(rows.map((c) => c.id)).toEqual([31, 30, 29]);
-    expect(rows[0]).toMatchObject({ video: '/api/ui/clip/31', labels: ['equine'] });
-    expect(rows[2]!.labels).toEqual([]);
-  });
-  it('narrows by camera and rejects a bad window', async () => {
-    const r = await clipsGET(new Request('http://x/api/ui/clips?camera=tractor_cam'));
-    expect(((await r.json()) as { id: number }[]).map((c) => c.id)).toEqual([30]);
-    expect((await clipsGET(new Request('http://x/api/ui/clips?since=yesterday'))).status).toBe(400);
-  });
+describe('the clip ref on frame cards', () => {
   it('a frame head sampled from a clip carries the clip ref; others carry null', async () => {
     const page = await getDetections({ since: '24h', limit: 60 });
-    expect(page.items[0]!.clip).toEqual({ id: 31, duration_s: 18, stopped: 'quiet', video: '/api/ui/clip/31' });
+    expect(page.items[0]!.clip).toEqual({
+      id: 31,
+      duration_s: 18,
+      stopped: 'quiet',
+      labels: ['equine', 'person'],
+      video: '/api/ui/clip/31',
+    });
     expect(page.items[1]!.clip).toBeNull();
     const only = await getDetections({ since: '24h', limit: 60, clip: '1' });
     expect(only.items.map((f) => f.clip?.id)).toEqual([31]);

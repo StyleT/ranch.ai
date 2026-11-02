@@ -7,7 +7,6 @@ export const keys = {
   taxonomy: () => ['taxonomy'] as const,
   taxonomyVersion: (id: number) => ['taxonomy', 'version', id] as const,
   system: () => ['system'] as const,
-  clips: (params: string) => ['clips', params] as const,
   evals: () => ['evals'] as const,
   result: (file: string) => ['evals', 'result', file] as const,
   health: () => ['health'] as const,

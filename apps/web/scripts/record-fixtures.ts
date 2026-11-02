@@ -72,7 +72,6 @@ if (burstHead) {
   write('frame-head.json', C.parseContract(C.FrameHead, await get(`/api/frames/${burstHead.id}`), 'frame head'));
 }
 write('tracks.json', C.parseContract(C.Tracks, await get('/api/tracks?since=24h&limit=30'), 'tracks'));
-write('clips.json', C.parseContract(C.ClipsResponse, await get('/api/clips?since=24h&limit=10'), 'clips'));
 write(
   'counts-series.json',
   C.parseContract(C.CountSeries, await get('/api/counts/series?since=24h&bucket=15m'), 'counts series'),
