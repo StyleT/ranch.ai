@@ -49,6 +49,9 @@ export interface Clip {
   stopped: 'quiet' | 'max' | 'stale' | null;
   preroll_s: number | null;
   expired_at: string | null;
+  trigger_score: number | null;
+  scores: string | null; // JSON [[t_s, blockmax, lit], ...]
+  dropped: 'single' | 'global' | 'stale' | null;
 }
 export interface ClipCut {
   end_ts: string;
@@ -61,6 +64,7 @@ export interface ClipCut {
   width: number;
   height: number;
   preroll_s: number;
+  scores?: string;
 }
 export interface Detection {
   id: number;
@@ -258,23 +262,45 @@ export class EventStore {
   }
 
   // ---- clips (docs/CLIPS.md)
-  insertClip(c: { camera: string; trigger_ts: string; start_ts: string }): number {
+  /** A candidate's row, written at the trigger keyframe; it becomes a clip, is dropped, or is abandoned. */
+  insertClip(c: { camera: string; trigger_ts: string; start_ts: string; trigger_score?: number }): number {
     return Number(
       this.db
-        .prepare('INSERT INTO clips (camera, trigger_ts, start_ts) VALUES (?, ?, ?)')
-        .run(c.camera, c.trigger_ts, c.start_ts).lastInsertRowid,
+        .prepare('INSERT INTO clips (camera, trigger_ts, start_ts, trigger_score) VALUES (?, ?, ?, ?)')
+        .run(c.camera, c.trigger_ts, c.start_ts, c.trigger_score ?? null).lastInsertRowid,
     );
   }
   closeClip(id: number, c: ClipCut): void {
     this.db
       .prepare(
-        'UPDATE clips SET end_ts = ?, stopped = ?, start_ts = ?, path = ?, bytes = ?, duration_s = ?, fps = ?, width = ?, height = ?, preroll_s = ? WHERE id = ?',
+        'UPDATE clips SET end_ts = ?, stopped = ?, start_ts = ?, path = ?, bytes = ?, duration_s = ?, fps = ?, width = ?, height = ?, preroll_s = ?, scores = ? WHERE id = ?',
       )
-      .run(c.end_ts, c.stopped, c.start_ts, c.path, c.bytes, c.duration_s, c.fps, c.width, c.height, c.preroll_s, id);
+      .run(
+        c.end_ts,
+        c.stopped,
+        c.start_ts,
+        c.path,
+        c.bytes,
+        c.duration_s,
+        c.fps,
+        c.width,
+        c.height,
+        c.preroll_s,
+        c.scores ?? null,
+        id,
+      );
   }
   /** A clip that could not be cut (no ring segments, ffmpeg failed): closed without media, so it never shows as open. */
-  abandonClip(id: number, end_ts: string, stopped: 'quiet' | 'max' | 'stale'): void {
-    this.db.prepare('UPDATE clips SET end_ts = ?, stopped = ? WHERE id = ?').run(end_ts, stopped, id);
+  abandonClip(id: number, end_ts: string, stopped: 'quiet' | 'max' | 'stale', scores?: string): void {
+    this.db
+      .prepare('UPDATE clips SET end_ts = ?, stopped = ?, scores = ? WHERE id = ?')
+      .run(end_ts, stopped, scores ?? null, id);
+  }
+  /** A candidate that never became a clip: motion did not persist, a lighting change, or the camera went away. */
+  dropClip(id: number, end_ts: string, dropped: 'single' | 'global' | 'stale', scores: string): void {
+    this.db
+      .prepare('UPDATE clips SET end_ts = ?, dropped = ?, scores = ? WHERE id = ?')
+      .run(end_ts, dropped, scores, id);
   }
   clipById(id: number): Clip | undefined {
     return this.db.prepare('SELECT * FROM clips WHERE id = ?').get(id) as unknown as Clip | undefined;

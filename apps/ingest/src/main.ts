@@ -12,7 +12,21 @@ import sharp from 'sharp';
 import { config } from '@ranch/config';
 import { EventStore } from '@ranch/events';
 import { connectBus, topics, type Bus } from '@ranch/bus';
-import { CLIP, step, staleCheck, cutClip, sampleFrames, type ClipState, type ClipEvent } from './clips.ts';
+import {
+  CLIP,
+  step,
+  staleCheck,
+  cutClip,
+  sampleFrames,
+  thumbnail,
+  meanAbsDiff,
+  blockMaxDiff,
+  litFraction,
+  idleState,
+  type ClipState,
+  type ClipEvent,
+  type ScoreSeries,
+} from './clips.ts';
 
 const GRAB_S = Number(process.env.RANCH_GRAB_S ?? 5); // how often we sample the newest buffered frame
 const FLOOR_S = Number(process.env.RANCH_FLOOR_S ?? 10);
@@ -40,11 +54,10 @@ const motionSummary = () => {
   motionSamples.clear();
   return out;
 };
-const THUMB_W = 128;
-const THUMB_H = 72;
-const BLOCK = 8; // 16x9 blocks of 8x8 for the local motion metric
 // Motion clips (docs/CLIPS.md, 1 Nov): the decisions are in clips.ts; counters for the status message
-const clipStats = { open: 0, cut: 0, frames: 0 };
+const clipStats = { open: 0, cut: 0, dropped: 0, frames: 0 };
+const seriesJson = (s: ScoreSeries) =>
+  JSON.stringify(s.map(([t, a, b]) => [+t.toFixed(1), +a.toFixed(3), +b.toFixed(3)]));
 const iso = (ms: number) => new Date(ms).toISOString();
 const freeGb = () => {
   try {
@@ -110,39 +123,6 @@ function latestBufferFrame(camera: string, afterName?: string): { name: string; 
   return { name, buf, ageS: (Date.now() - bufferNameMs(name)) / 1000 };
 }
 
-function meanAbsDiff(a: Buffer, b: Buffer): number {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) {
-    sum += Math.abs(a[i]! - b[i]!);
-  }
-  return sum / a.length / 255;
-}
-/**
- * Local motion: the largest mean absolute difference over any 8x8 block of the greyscale thumbnail (0..1). A whole-
- * frame mean (meanAbsDiff) sees lighting changes but not a distant animal; the block maximum sees the animal.
- * Measured 22 Oct on consecutive frames (docs/MODEL-YOLO26.md): quiet cameras stay <= 0.021 day and night,
- * real motion scores 0.06-0.59.
- */
-export function blockMaxDiff(a: Buffer, b: Buffer): number {
-  let best = 0;
-  for (let by = 0; by < THUMB_H / BLOCK; by++) {
-    for (let bx = 0; bx < THUMB_W / BLOCK; bx++) {
-      let s = 0;
-      for (let y = 0; y < BLOCK; y++) {
-        for (let x = 0; x < BLOCK; x++) {
-          const i = (by * BLOCK + y) * THUMB_W + bx * BLOCK + x;
-          s += Math.abs(a[i]! - b[i]!);
-        }
-      }
-      const m = s / (BLOCK * BLOCK) / 255;
-      if (m > best) {
-        best = m;
-      }
-    }
-  }
-  return best;
-}
-
 /** A clip closed: cut the mp4 from the ring, sample frames for the detector, publish both. Failures close the row without media. */
 async function finishClip(
   store: EventStore,
@@ -161,7 +141,7 @@ async function finishClip(
       endTs: ev.endTs,
     });
     if (!cut) {
-      store.abandonClip(clipId, iso(ev.endTs), ev.stopped);
+      store.abandonClip(clipId, iso(ev.endTs), ev.stopped, seriesJson(ev.series));
       log('clip abandoned: no ring segments', { camera, clip_id: clipId, stopped: ev.stopped });
       return;
     }
@@ -170,6 +150,7 @@ async function finishClip(
     store.closeClip(clipId, {
       end_ts: iso(ev.endTs),
       stopped: ev.stopped,
+      scores: seriesJson(ev.series),
       start_ts: startIso,
       path: cut.path,
       bytes: cut.bytes,
@@ -241,7 +222,7 @@ async function finishClip(
       fps: +cut.fps.toFixed(1),
     });
   } catch (e) {
-    store.abandonClip(clipId, iso(ev.endTs), ev.stopped);
+    store.abandonClip(clipId, iso(ev.endTs), ev.stopped, seriesJson(ev.series));
     log('clip failed', { camera, clip_id: clipId, error: String(e).slice(0, 200) });
   }
 }
@@ -252,10 +233,20 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
   let lastName = '';
   let staleSince = 0;
   // clip decisions run on consecutive keyframes (the buffer's 2 s cadence), independent of what the sampler keeps
-  const clip: ClipState = { triggerTs: null, motionLastTs: null, lastCloseTs: 0 };
+  const clip: ClipState = idleState();
   let prevThumb: Buffer | undefined;
-  let openClipId: number | null = null;
+  let openClipId: number | null = null; // the candidate's or clip's row, from the trigger keyframe on
   let lastKeyTs = 0;
+  const dropClip = (ev: Extract<ClipEvent, { type: 'drop' }>) => {
+    if (openClipId === null) {
+      return;
+    }
+    store.dropClip(openClipId, iso(ev.endTs), ev.reason, seriesJson(ev.series));
+    log('clip dropped', { camera, clip_id: openClipId, reason: ev.reason, keyframes: ev.series.length });
+    openClipId = null;
+    clipStats.open--;
+    clipStats.dropped++;
+  };
   while (!stop.v) {
     const t0 = Date.now();
     const f = latestBufferFrame(camera, lastName);
@@ -272,6 +263,8 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
         const id = openClipId;
         openClipId = null;
         void finishClip(store, bus, camera, id, sev);
+      } else if (sev?.type === 'drop') {
+        dropClip(sev);
       }
       await sleep(1000);
       continue;
@@ -279,16 +272,14 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
     if (staleSince) {
       log('camera recovered', { camera, down_s: Math.round((Date.now() - staleSince) / 1000) });
       staleSince = 0;
+      prevThumb = undefined; // the first keyframe after a gap compares with nothing: a stale reference scores like motion
     }
     lastName = f.name;
     let meta: sharp.Metadata;
     let thumb: Buffer;
     try {
       const img = sharp(f.buf);
-      [meta, thumb] = await Promise.all([
-        img.metadata(),
-        img.clone().resize(THUMB_W, THUMB_H, { fit: 'fill' }).greyscale().raw().toBuffer(),
-      ]);
+      [meta, thumb] = await Promise.all([img.metadata(), thumbnail(img)]);
     } catch {
       await sleep(500);
       continue;
@@ -297,18 +288,36 @@ async function sampleCamera(camera: string, store: EventStore, bus: Bus, stop: {
     const motion = lastThumb ? blockMaxDiff(thumb, lastThumb) : 0;
     const keyTs = bufferNameMs(f.name);
     lastKeyTs = keyTs;
-    const ev = step(clip, { ts: keyTs, score: prevThumb ? blockMaxDiff(thumb, prevThumb) : 0 });
+    const key = prevThumb
+      ? { ts: keyTs, score: blockMaxDiff(thumb, prevThumb), lit: litFraction(thumb, prevThumb) }
+      : { ts: keyTs, score: 0, lit: 0 };
+    const ev = step(clip, key);
     prevThumb = thumb;
-    if (ev?.type === 'open') {
+    if ((ev?.type === 'candidate' || ev?.type === 'open') && openClipId === null) {
       if (freeGb() < CLIP.minFreeGb) {
-        clip.triggerTs = null;
-        clip.motionLastTs = null;
+        Object.assign(clip, idleState(), { lastCloseTs: clip.lastCloseTs });
         log('clip not opened: low disk', { camera, free_gb: Math.round(freeGb()) });
       } else {
-        openClipId = store.insertClip({ camera, trigger_ts: iso(keyTs), start_ts: iso(keyTs - CLIP.prerollS * 1000) });
+        openClipId = store.insertClip({
+          camera,
+          trigger_ts: iso(keyTs),
+          start_ts: iso(keyTs - CLIP.prerollS * 1000),
+          trigger_score: +key.score.toFixed(3),
+        });
         clipStats.open++;
-        log('clip open', { camera, clip_id: openClipId });
+        log(ev.type === 'open' ? 'clip open' : 'clip candidate', {
+          camera,
+          clip_id: openClipId,
+          score: +key.score.toFixed(3),
+          lit: +key.lit.toFixed(2),
+        });
       }
+    } else if (ev?.type === 'open' && openClipId !== null) {
+      log('clip confirmed', { camera, clip_id: openClipId, keyframes: clip.series.length });
+    } else if (ev?.type === 'drop') {
+      dropClip(ev);
+    } else if (ev?.type === 'global') {
+      log('global change, no clip', { camera, score: +ev.score.toFixed(3), lit: +ev.lit.toFixed(2) });
     } else if (ev?.type === 'close' && openClipId !== null) {
       const id = openClipId;
       openClipId = null;

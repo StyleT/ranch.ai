@@ -197,4 +197,17 @@ export const migrations: ReadonlyArray<{ version: number; name: string; sql: str
       CREATE INDEX frames_clip ON frames (clip_id, seq);
     `,
   },
+  {
+    version: 9,
+    name: 'clip candidates keep their scores',
+    sql: `
+      -- Every trigger is a row from the start (docs/CLIPS.md): trigger_score is the block-max that opened it, scores the
+      -- JSON series [[seconds since trigger, block-max, lit fraction], ...] through the drop or close, dropped why a
+      -- candidate never became a clip ('single': motion did not persist, 'global': a lighting change, 'stale': the
+      -- camera went away). A dropped row has end_ts set and path NULL, so the open and cut queries ignore it.
+      ALTER TABLE clips ADD COLUMN trigger_score REAL;
+      ALTER TABLE clips ADD COLUMN scores TEXT;
+      ALTER TABLE clips ADD COLUMN dropped TEXT CHECK (dropped IN ('single', 'global', 'stale'));
+    `,
+  },
 ];

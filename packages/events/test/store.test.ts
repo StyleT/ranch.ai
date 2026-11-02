@@ -4,7 +4,7 @@ import { EventStore, parseSince, detectionsDiffer } from '../src/index.ts';
 
 test('migrates an empty database and round-trips frames, detections and events', () => {
   const s = new EventStore(':memory:');
-  assert.equal(s.schemaVersion, 8); // v8: motion clips (docs/CLIPS.md)
+  assert.equal(s.schemaVersion, 9); // v9: clip candidates keep their scores (docs/CLIPS.md)
   const fid = s.insertFrame({
     ts: '2026-10-15T00:00:00.000Z',
     camera: 'front_porch_cam',
@@ -208,4 +208,44 @@ test('remediation ledger: insert, open rows, resolve with recovery time, query n
   assert.equal(rows[1]?.dry_run, false);
   assert.equal(s.remediations({ since: '2026-10-23T00:00:00Z', camera: 'mops_cam' }).length, 0);
   s.close();
+});
+
+test('clip candidates: a drop keeps its scores and never shows as open or cut; a close keeps the series too', () => {
+  const s = new EventStore(':memory:');
+  const a = s.insertClip({
+    camera: 'c',
+    trigger_ts: '2026-11-02T03:00:05.000Z',
+    start_ts: '2026-11-02T03:00:00.000Z',
+    trigger_score: 0.12,
+  });
+  assert.equal(s.openClips().length, 1);
+  s.dropClip(a, '2026-11-02T03:00:11.000Z', 'single', '[[0,0.12,0.02],[2,0.11,0.02],[4,0.01,0]]');
+  const row = s.clipById(a)!;
+  assert.equal(row.dropped, 'single');
+  assert.equal(row.trigger_score, 0.12);
+  assert.deepEqual(JSON.parse(row.scores!)[1], [2, 0.11, 0.02]);
+  assert.equal(row.path, null);
+  assert.equal(s.openClips().length, 0);
+  assert.equal(s.clips({ since: '2026-11-01T00:00:00Z' }).length, 0);
+  const b = s.insertClip({
+    camera: 'c',
+    trigger_ts: '2026-11-02T03:01:05.000Z',
+    start_ts: '2026-11-02T03:01:00.000Z',
+    trigger_score: 0.3,
+  });
+  s.closeClip(b, {
+    end_ts: '2026-11-02T03:01:20.000Z',
+    stopped: 'quiet',
+    start_ts: '2026-11-02T03:01:00.000Z',
+    path: '/x/b.mp4',
+    bytes: 1,
+    duration_s: 20,
+    fps: 15,
+    width: 2560,
+    height: 1440,
+    preroll_s: 5,
+    scores: '[[0,0.3,0.1],[2,0.2,0.1]]',
+  });
+  assert.equal(s.clipById(b)!.scores, '[[0,0.3,0.1],[2,0.2,0.1]]');
+  assert.equal(s.clips({ since: '2026-11-01T00:00:00Z' }).length, 1);
 });
