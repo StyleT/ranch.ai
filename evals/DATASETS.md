@@ -12,6 +12,8 @@ rows further down remain the record of what the TypeScript tools on the mini pro
 | frames set | Hub repo (private) | revision tag | fields at that revision | samples | round trip |
 |---|---|---|---|---|---|
 | frames-ranch-bursts-v1 | `vladlenfedosov/ranch-frames-bursts-v1` | `claude-v1` | `gt_claude` (= labels-ranch-bursts-claude-v1, 236 boxes), `pred_yolo26s` (248), `pred_yolo11n` (237) | 156 (50 bursts) | 1 Nov: `hub.py load --revision claude-v1` → `hub.py check`: 0 differences over every field and detection attribute |
+| frames-ranch-bursts-v1 | same | `claude-v1-grouped` | same fields; the dataset is grouped (group field `burst`, one image slice per frame named by `seq`) so the Annotate tab edits per slice; supersedes `claude-v1` (flat), which stays as the record of the first push | 156 (50 bursts) | 1 Nov |
+| frames-ranch-bursts-v1 | same | `revised-vlad-v1` | adds `gt_vlad`: Vlad's revision of `gt_claude` in the App (first push 1 Nov; see the git history of this row for the diff when it is scored) | 156 (50 bursts) | 1 Nov: tag listed by `hub.py ls`; not yet loaded back and checked |
 
 ## JSONL datasets (produced on the mini; imported into FiftyOne)
 
