@@ -18,16 +18,52 @@ const run = promisify(execFile);
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), svc: 'netprobe', msg, ...extra }) + '\n');
 
-interface CamInfo { name: string; ip: string }
+interface CamInfo { name: string; ip: string; mac: string | null }
 let camsCache: { at: number; cams: CamInfo[] } = { at: 0, cams: [] };
 async function cameras(): Promise<CamInfo[]> {
   if (Date.now() - camsCache.at < 300_000 && camsCache.cams.length) return camsCache.cams;
   try {
     const res = await fetch(`${config.bridgeUrl}/api/cameras`, { signal: AbortSignal.timeout(4000) });
-    const list = (await res.json()) as { name: string; ip: string }[];
-    camsCache = { at: Date.now(), cams: list.filter((c) => !config.camerasExclude.includes(c.name)).map((c) => ({ name: c.name, ip: c.ip })) };
+    const list = (await res.json()) as { name: string; ip: string; mac?: string }[];
+    camsCache = { at: Date.now(), cams: list.filter((c) => !config.camerasExclude.includes(c.name)).map((c) => ({ name: c.name, ip: c.ip, mac: normalizeMac(c.mac) })) };
   } catch (e) { log('bridge camera list failed', { error: String(e) }); }
   return camsCache.cams;
+}
+
+// Where a camera really is on the LAN. The bridge's `ip` is what the Wyze cloud reports, which is the address the camera
+// had when it last booted: a DHCP re-lease while the camera runs leaves the cloud, the bridge and go2rtc dialing an
+// address the camera no longer holds (1 Nov: four cameras moved, go2rtc logged "discovery timeout" for 3.5 h, the
+// supervisor read "off the network"). The neighbor table knows better: after a subnet sweep every SWEEP_EVERY probes,
+// `arp -an` lists every MAC that answered, so the fact `mac_seen_at` is the address the camera's MAC currently holds.
+const SWEEP_EVERY = Number(process.env.RANCH_SWEEP_EVERY ?? 20);   // probes (20 x 15 s = 5 min)
+/** "80482C46E577", "80:48:2c:46:e5:77" or macOS arp's "0:ae:f7:23:c0:e" -> "80:48:2c:46:e5:77". */
+export function normalizeMac(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const hex = raw.replace(/[^0-9a-fA-F:]/g, '');
+  const parts = hex.includes(':') ? hex.split(':') : hex.match(/.{1,2}/g) ?? [];
+  if (parts.length !== 6 || parts.some((p) => p.length === 0 || p.length > 2)) return null;
+  return parts.map((p) => p.padStart(2, '0').toLowerCase()).join(':');
+}
+/** The neighbor table as mac -> ip (one read of `arp -an`; incomplete entries carry no MAC and are skipped). */
+async function arpTable(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  try {
+    const { stdout } = await run('/usr/sbin/arp', ['-an'], { timeout: 4000 });
+    for (const line of stdout.split('\n')) {
+      const m = /\((\d+\.\d+\.\d+\.\d+)\) at ([0-9a-f:]+) /i.exec(line);
+      const mac = m ? normalizeMac(m[2]) : null;
+      if (m && mac) out.set(mac, m[1]!);
+    }
+  } catch (e) { log('arp read failed', { error: String(e).slice(0, 120) }); }
+  return out;
+}
+/** One ping to every host of each /24 the cameras live in, in batches, so the neighbor table is complete and fresh. */
+async function sweep(prefixes: Set<string>): Promise<void> {
+  const hosts: string[] = [];
+  for (const p of prefixes) for (let i = 1; i < 255; i++) hosts.push(`${p}.${i}`);
+  for (let i = 0; i < hosts.length; i += 64) {
+    await Promise.all(hosts.slice(i, i + 64).map((h) => run('/sbin/ping', ['-c', '1', '-W', '400', '-q', h], { timeout: 2500 }).catch(() => null)));
+  }
 }
 
 // `producer` means go2rtc lists the source (true even while the camera is unreachable); `connected` means that
@@ -83,15 +119,23 @@ async function main(): Promise<void> {
   const store = new EventStore(config.dbPath);
   const prev = new Map<string, StreamState>();
   const flowing = new Map<string, boolean>();
+  const seenAt = new Map<string, string | null>();   // last reported mac_seen_at per camera, for the transition line
+  let arp = new Map<string, string>();
   let tick = 0;
   log('starting', { probe_s: PROBE_S, go2rtc: config.go2rtcUrl, bridge: config.bridgeUrl });
   for (;;) {
     const t0 = Date.now();
     const cams = await cameras();
+    if (tick % SWEEP_EVERY === 0) { await sweep(new Set(cams.map((c) => c.ip.split('.').slice(0, 3).join('.')).filter((p) => p.split('.').length === 3))); }
+    arp = await arpTable();
     const row_ts = new Date().toISOString();
     const snapshot: Record<string, unknown> = { ts: row_ts, pid: process.pid };
     await Promise.all(cams.map(async (c) => {
       const [st, rtt] = await Promise.all([streamState(c.name), ping(c.ip)]);
+      const macSeenAt = c.mac ? arp.get(c.mac) ?? null : null;
+      const addressMoved = macSeenAt !== null && macSeenAt !== c.ip;
+      if (seenAt.has(c.name) && seenAt.get(c.name) !== macSeenAt) log(addressMoved ? 'address moved' : macSeenAt === null ? 'mac not on lan' : 'address back', { camera: c.name, cloud_ip: c.ip, mac: c.mac, mac_seen_at: macSeenAt });
+      seenAt.set(c.name, macSeenAt);
       const p = prev.get(c.name);
       const delta = st && p && st.rx_bytes !== null && p.rx_bytes !== null && st.remote === p.remote ? st.rx_bytes - p.rx_bytes : null;
       const liveAge = liveAgeS(c.name); const framesFresh = liveAge !== null && liveAge < FRESH_S;
@@ -99,7 +143,7 @@ async function main(): Promise<void> {
       // view is kept as session_visible only: it stays "connected" for ~90 s after the packets stop (chaos run 23 Oct:
       // detection took 95 s while the frames had stopped at 15 s) and it misses orphaned stream objects. When the recorder
       // has never written a playlist for the camera (no live dir), the session view is the fallback.
-      const row = { camera: c.name, ip: c.ip, producer: st?.producer ?? null, connected: liveAge === null ? (st?.connected ?? null) : framesFresh, session_visible: st?.connected ?? null, frames_fresh: framesFresh, live_age_s: liveAge === null ? null : Math.round(liveAge), state: st?.state ?? null, consumers: st?.consumers ?? null, rx_bytes_delta: delta, remote: st?.remote ?? null, ping_ms: rtt };
+      const row = { camera: c.name, ip: c.ip, mac: c.mac, mac_seen_at: macSeenAt, address_moved: addressMoved, producer: st?.producer ?? null, connected: liveAge === null ? (st?.connected ?? null) : framesFresh, session_visible: st?.connected ?? null, frames_fresh: framesFresh, live_age_s: liveAge === null ? null : Math.round(liveAge), state: st?.state ?? null, consumers: st?.consumers ?? null, rx_bytes_delta: delta, remote: st?.remote ?? null, ping_ms: rtt };
       log('probe', row);
       snapshot[c.name] = row;
       if (st || framesFresh) { try { store.insertProbe({ ts: row_ts, camera: c.name, connected: row.connected === true, ping_ms: rtt, consumers: st?.consumers ?? null }); } catch (e) { log('probe insert failed', { error: String(e).slice(0, 120) }); } }

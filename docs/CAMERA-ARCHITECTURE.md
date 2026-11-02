@@ -190,13 +190,29 @@ attach, hence rung 1 below. netprobe records both (`connected`, `session_visible
 |---|---|---|---|---|
 | 1 | recorder watchdog | no playlist write for 45 s while ffmpeg runs (hung dial, dead feed) | kill that ffmpeg, re-attach | every 45 s |
 | 1 | supervisor | frames flowing but go2rtc shows no consumer for two ticks (orphaned stream object) | re-attach that ffmpeg (`pkill` by camera); never dry-run gated, it only restarts our own process | 1 per camera per 2 min |
-| 2 | supervisor | down ≥ `camsup_reboot_after_s` (600) and the camera answers ping (≥ 50 % of the last 8 probes) | camera reboot through the Wyze cloud: MQTT `wyzebridge/<cam>/power/set` = `restart` (the bridge runs `RunAction(restart)`) | 1 per camera per 30 min, 2 per hour fleet-wide |
+| 1b | supervisor | down ≥ `camsup_stream_restart_after_s` (120), answers ping at the address the bridge dials, address not moved, once per outage | the bridge's own health check counts a configured go2rtc source as alive and never reconnects a producer that never connects, so ask it to stop/start that one stream: MQTT `wyzebridge/<cam>/state/set` = `stop`, 5 s, `start`; go2rtc redials that camera only | once per outage |
+| 2 | supervisor | down ≥ `camsup_reboot_after_s` (600) and the camera is reachable for a reboot: answers ping (≥ 50 % of the last 8 probes) after rung 1b did not help, **or its MAC is seen at another address** (netprobe `mac_seen_at`; 1 Nov: a DHCP re-lease moved four cameras, the Wyze cloud kept reporting the address each camera had at its last boot, the bridge and go2rtc dialed it for 3.5 h) | camera reboot through the Wyze cloud: MQTT `wyzebridge/<cam>/power/set` = `restart` (the bridge runs `RunAction(restart)`); for a moved address, 120 s later `wyzebridge/bridge/discover/set` (the bridge pulls the address the camera just reported) and a stop/start of that stream (the bridge re-registers it with the new address) | 1 per camera per 30 min, 2 per hour fleet-wide |
+| 2b | supervisor | off the LAN (no ping, MAC seen nowhere) ≥ `camsup_blind_reboot_after_s` (3600) | one reboot through the cloud in case the camera is cloud-connected on another AP or band and rejoins | once per `camsup_blind_reboot_cooldown_s` (6 h) per camera, inside the rung-2 caps |
 | 3 | supervisor | ≥ 3 cameras down ≥ 900 s after a reboot each | `launchctl kickstart -k system/com.ranch.go2rtc` (every camera redials once) | 1 per hour |
-| 4 | supervisor | down ≥ 600 s and not answering ping | ledger row + alert only: the camera is off the network, nothing on the mini can help | once per outage |
+| 4 | supervisor | down ≥ 600 s, no ping, MAC seen nowhere on the LAN | ledger row + alert only: the camera is off the network, nothing on the mini can help (rung 2b tries one blind reboot an hour in); `com.ranch.notify` posts it to the phone after an hour | once per outage |
 
 Rows other than the outage note are judged `not_recovered` after 10 min without recovery; recovery closes every open
-row for the camera with the seconds it took. `camsup_dry_run: true` (the default for the first day) records decisions
-without acting; the ladder itself is a pure module with tests (`apps/camsup/src/ladder.ts`).
+row for the camera with the seconds it took. `camsup_dry_run` records decisions without acting; it was on from 23 Oct to
+1 Nov, when the ladder had the fix for a DHCP outage (a cloud reboot makes a camera report its new address) and acted on
+nothing, and front_porch had 410 reboot decisions against a stuck TUTK session and zero reboots. Armed since 1 Nov. The
+ladder itself is a pure module with tests (`apps/camsup/src/ladder.ts`).
+
+**Where a camera really is (1 Nov).** The bridge's `ip` is the Wyze cloud's `device_params.ip`, the address the camera
+reported when it last booted. netprobe sweeps the cameras' /24 every `netprobe_sweep_every` probes (5 min) and reads the
+neighbor table, so each probe row carries `mac`, `mac_seen_at` (the address the camera's MAC holds now) and
+`address_moved`. The supervisor reads those; the bridge re-fetches the cloud list every `wyze_bridge_refresh_interval`
+(5 min, was 30). Nothing on the mini patches the bridge: the cloud learns the new address from the camera's reboot.
+
+**Notifications (`com.ranch.notify`, apps/notify, 1 Nov).** Fleet-down (≥ `notify_fleet_min` cameras down ≥
+`notify_fleet_after_s`), a single camera down ≥ `notify_camera_after_s` (with where its MAC was seen), the supervisor's
+reboots and go2rtc restarts, recoveries with their duration, and a daily online line at `notify_daily_utc_hour`, posted to
+an ntfy.sh topic whose random name lives in `~/.config/ranch/notify.env` on the mini (mode 600, never in the repo).
+Subscribe to the topic in the ntfy app to receive them; without the file the daemon logs what it would have posted.
 
 **Proof: `make e2e-chaos [CAM=back_yard_cam] [DURATION=90] [MODE=stop|udp]`** (`infra/bin/e2e-chaos.sh`, on the
 mini, software only). `stop` (default): SIGSTOP the camera's ffmpeg, so frames stop at once, the symptom the rest of

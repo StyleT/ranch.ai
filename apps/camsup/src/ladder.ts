@@ -1,37 +1,61 @@
-// The remediation ladder, pure (docs/CAMERA-ARCHITECTURE.md, 23 Oct). Facts in, decisions out; main.ts owns the clock,
-// the ledger and the side effects.
+// The remediation ladder, pure (docs/CAMERA-ARCHITECTURE.md, 23 Oct; address facts 1 Nov). Facts in, decisions out;
+// main.ts owns the clock, the ledger and the side effects.
 //
-//   rung 1  re-attach the recorder's ffmpeg          frames are flowing but go2rtc shows no consumer for the stream for
-//           (software only, never dry-run gated)     two ticks: the bridge re-registered the stream (DELETE+PUT) and ffmpeg
-//                                                    is consuming an orphaned stream object; the new object will dial the
-//                                                    camera a second time on the next attach. Re-attaching moves ffmpeg
-//                                                    onto the new object and lets the orphan (and its camera session) die.
-//                                                    (A hung dial is rung 1 too, but the recorder's own watchdog handles it.)
-//   rung 2  camera reboot via the Wyze cloud         down ≥ rebootAfterS, camera answers ping, cooldown + fleet budget ok
-//   rung 3  go2rtc restart                           ≥ go2rtcMinCamerasDown cameras down ≥ go2rtcRestartAfterS with a reboot
-//                                                    already tried, go2rtc cooldown ok
-//   rung 4  alert only                               down ≥ rebootAfterS and the camera does not answer ping (off the network:
-//                                                    nothing on the mini can help); once per outage
+//   rung 1   re-attach the recorder's ffmpeg          frames are flowing but go2rtc shows no consumer for the stream for
+//            (software only, never dry-run gated)     two ticks: the bridge re-registered the stream (DELETE+PUT) and ffmpeg
+//                                                     is consuming an orphaned stream object; the new object will dial the
+//                                                     camera a second time on the next attach. Re-attaching moves ffmpeg
+//                                                     onto the new object and lets the orphan (and its camera session) die.
+//                                                     (A hung dial is rung 1 too, but the recorder's own watchdog handles it.)
+//   rung 1b  bridge stream restart                    down ≥ streamRestartAfterS, the camera answers ping at the address the
+//            (software only, one camera)              bridge dials, address not moved, not yet tried this outage: the bridge's
+//                                                     own health check cannot see a producer that never connects (it counts a
+//                                                     configured source as alive), so ask it to stop/start that one stream;
+//                                                     go2rtc re-dials that camera only
+//   rung 2   camera reboot via the Wyze cloud         down ≥ rebootAfterS and the camera is reachable for a reboot: it answers
+//                                                     ping (after rung 1b did not help) OR its MAC is seen at another address
+//                                                     (the cloud reports the address a camera had when it last booted; a DHCP
+//                                                     re-lease while it runs leaves the cloud, the bridge and go2rtc dialing
+//                                                     a dead address, and only a reboot makes the camera report the new one);
+//                                                     cooldown + fleet budget ok
+//   rung 2b  blind reboot                             off the LAN (no ping, MAC seen nowhere) for ≥ blindRebootAfterS: one
+//                                                     reboot through the cloud in case the camera is cloud-connected on
+//                                                     another AP or band and rejoins; once per blindRebootCooldownS
+//   rung 3   go2rtc restart                           ≥ go2rtcMinCamerasDown cameras down ≥ go2rtcRestartAfterS with a reboot
+//                                                     already tried, go2rtc cooldown ok
+//   rung 4   alert only                               down ≥ rebootAfterS, no ping, MAC seen nowhere (off the network: nothing
+//                                                     on the mini can help but rung 2b); once per outage
 
-export interface CamFacts { camera: string; connected: boolean | null; pingOk: boolean | null; framesFresh?: boolean | null; consumers?: number | null }
-export interface CamState { downSinceMs: number | null; lastRebootMs: number | null; rebootsThisOutage: number; alertedThisOutage: boolean; orphanTicks?: number; lastReattachMs?: number | null }
+export interface CamFacts {
+  camera: string; connected: boolean | null; pingOk: boolean | null; framesFresh?: boolean | null; consumers?: number | null;
+  /** the address the bridge dials (the Wyze cloud's), and the address the camera's MAC currently holds on the LAN */
+  ip?: string | null; macSeenAt?: string | null; addressMoved?: boolean | null;
+}
+export interface CamState {
+  downSinceMs: number | null; lastRebootMs: number | null; rebootsThisOutage: number; alertedThisOutage: boolean;
+  orphanTicks?: number; lastReattachMs?: number | null; streamRestartTried?: boolean; lastBlindRebootMs?: number | null;
+}
 export interface LadderConfig {
   rebootAfterS: number; rebootCooldownS: number; fleetRebootsPerHour: number;
   go2rtcRestartAfterS: number; go2rtcMinCamerasDown: number; go2rtcCooldownS: number;
-  reattachCooldownS?: number;
+  reattachCooldownS?: number; streamRestartAfterS?: number; blindRebootAfterS?: number; blindRebootCooldownS?: number;
 }
 export type Decision =
   | { rung: 1; action: 'reattach'; camera: string; reason: string }
-  | { rung: 2; action: 'camera_reboot'; camera: string; reason: string }
+  | { rung: 1.5; action: 'stream_restart'; camera: string; reason: string }
+  | { rung: 2; action: 'camera_reboot'; camera: string; reason: string; moved: boolean; blind: boolean }
   | { rung: 3; action: 'go2rtc_restart'; camera: string; reason: string; cameras: string[] }
   | { rung: 4; action: 'alert'; camera: string; reason: string };
 
-export const DEFAULTS: LadderConfig = { rebootAfterS: 600, rebootCooldownS: 1800, fleetRebootsPerHour: 2, go2rtcRestartAfterS: 900, go2rtcMinCamerasDown: 3, go2rtcCooldownS: 3600, reattachCooldownS: 120 };
+export const DEFAULTS: LadderConfig = {
+  rebootAfterS: 600, rebootCooldownS: 1800, fleetRebootsPerHour: 2, go2rtcRestartAfterS: 900, go2rtcMinCamerasDown: 3, go2rtcCooldownS: 3600,
+  reattachCooldownS: 120, streamRestartAfterS: 120, blindRebootAfterS: 3600, blindRebootCooldownS: 21600,
+};
 
 /** Advance a camera's state with a new fact. Returns the transition, if any. */
 export function advance(state: CamState, f: CamFacts, nowMs: number): 'went_down' | 'came_back' | null {
   if (f.connected === true) {
-    if (state.downSinceMs !== null) { state.downSinceMs = null; state.rebootsThisOutage = 0; state.alertedThisOutage = false; return 'came_back'; }
+    if (state.downSinceMs !== null) { state.downSinceMs = null; state.rebootsThisOutage = 0; state.alertedThisOutage = false; state.streamRestartTried = false; return 'came_back'; }
     return null;
   }
   if (f.connected === false && state.downSinceMs === null) { state.downSinceMs = nowMs; return 'went_down'; }
@@ -43,6 +67,10 @@ export function decide(nowMs: number, facts: CamFacts[], states: Map<string, Cam
   const recentReboots = fleetRebootTimesMs.filter((t) => nowMs - t < 3600e3).length;
   let budget = Math.max(0, cfg.fleetRebootsPerHour - recentReboots);
   const downLong: string[] = [];
+  const reboot = (f: CamFacts, s: CamState, reason: string, moved: boolean, blind: boolean) => {
+    budget--; s.lastRebootMs = nowMs; s.rebootsThisOutage++;
+    out.push({ rung: 2, action: 'camera_reboot', camera: f.camera, reason: `${reason} (${s.rebootsThisOutage} this outage, fleet ${recentReboots + 1}/${cfg.fleetRebootsPerHour} per hour)`, moved, blind });
+  };
   for (const f of facts) {
     const s = states.get(f.camera); if (!s) continue;
     // rung 1: orphaned consumer (frames flow, go2rtc sees no consumer) for two consecutive ticks
@@ -53,17 +81,25 @@ export function decide(nowMs: number, facts: CamFacts[], states: Map<string, Cam
     } else s.orphanTicks = 0;
     if (s.downSinceMs === null) continue;
     const downS = (nowMs - s.downSinceMs) / 1000;
-    if (downS < cfg.rebootAfterS) continue;
-    if (f.pingOk === false) {
-      if (!s.alertedThisOutage) { s.alertedThisOutage = true; out.push({ rung: 4, action: 'alert', camera: f.camera, reason: `down ${Math.round(downS)} s and not answering ping: off the network, nothing on the mini can help` }); }
+    const moved = f.addressMoved === true && !!f.macSeenAt;
+    // rung 1b: the bridge cannot see a dead producer; ask it to restart this one stream before anything touches the camera
+    if (!moved && f.pingOk === true && !s.streamRestartTried && downS >= (cfg.streamRestartAfterS ?? 120)) {
+      s.streamRestartTried = true;
+      out.push({ rung: 1.5, action: 'stream_restart', camera: f.camera, reason: `down ${Math.round(downS)} s, answers ping at ${f.ip ?? 'its address'}: asking the bridge to stop/start this stream (its health check counts a configured source as alive)` });
       continue;
     }
-    if (f.pingOk !== true) continue;   // no ping fact yet: wait
+    if (downS < cfg.rebootAfterS) continue;
     const cooled = s.lastRebootMs === null || nowMs - s.lastRebootMs >= cfg.rebootCooldownS * 1000;
-    if (cooled && budget > 0) {
-      budget--; s.lastRebootMs = nowMs; s.rebootsThisOutage++;
-      out.push({ rung: 2, action: 'camera_reboot', camera: f.camera, reason: `down ${Math.round(downS)} s, answers ping, re-attach did not help; reboot via Wyze cloud (${s.rebootsThisOutage} this outage, fleet ${recentReboots + 1}/${cfg.fleetRebootsPerHour} per hour)` });
-    }
+    if (moved) {
+      if (cooled && budget > 0) reboot(f, s, `address moved (${f.ip ?? '?'} -> ${f.macSeenAt}): the cloud still reports the old address, the bridge dials it; reboot so the camera reports the new one`, true, false);
+    } else if (f.pingOk === true) {
+      if (cooled && budget > 0) reboot(f, s, `down ${Math.round(downS)} s, answers ping, stream restart did not help; reboot via Wyze cloud`, false, false);
+    } else if (f.pingOk === false) {
+      if (!s.alertedThisOutage) { s.alertedThisOutage = true; out.push({ rung: 4, action: 'alert', camera: f.camera, reason: `down ${Math.round(downS)} s, no ping, MAC seen nowhere on the LAN: off the network, nothing on the mini can help` }); }
+      const blindCooled = s.lastBlindRebootMs === null || s.lastBlindRebootMs === undefined || nowMs - s.lastBlindRebootMs >= (cfg.blindRebootCooldownS ?? 21600) * 1000;
+      if (downS >= (cfg.blindRebootAfterS ?? 3600) && blindCooled && cooled && budget > 0) { s.lastBlindRebootMs = nowMs; reboot(f, s, `off the LAN for ${Math.round(downS)} s: one reboot through the cloud in case it rejoins`, false, true); }
+      continue;
+    } else continue;   // no ping fact yet: wait
     if (downS >= cfg.go2rtcRestartAfterS && s.rebootsThisOutage >= 1) downLong.push(f.camera);
   }
   if (downLong.length >= cfg.go2rtcMinCamerasDown && (lastGo2rtcRestartMs === null || nowMs - lastGo2rtcRestartMs >= cfg.go2rtcCooldownS * 1000)) {

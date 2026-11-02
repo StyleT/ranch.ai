@@ -36,7 +36,7 @@ export interface NewEvent {
 export interface EventQuery { since?: string; until?: string; camera?: string; type?: string; limit?: number; verdict?: Verdict | 'none' }
 
 export interface NewProbe { ts: string; camera: string; connected: boolean; ping_ms: number | null; consumers: number | null }
-export type RemediationAction = 'down' | 'reattach' | 'camera_reboot' | 'go2rtc_restart' | 'alert';
+export type RemediationAction = 'down' | 'reattach' | 'stream_restart' | 'camera_reboot' | 'go2rtc_restart' | 'alert';
 export type RemediationRow = {
   id: number; ts: string; camera: string; rung: number; action: RemediationAction; reason: string; dry_run: boolean;
   outcome: string | null; outcome_ts: string | null; recovered_after_s: number | null;

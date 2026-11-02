@@ -28,6 +28,15 @@ camera). mops_cam is effectively off the network (5 % ping success) and needs ph
 4. Vlad: relocate mops_cam or its AP; report per-camera signal from the Wyze app. Consider the SD sub-stream
    for sampling if the 15 Mbit/s of continuous HD ever matters (today it does not: 5 GHz link is clean).
 
+**1 Nov, camera outage and the fix (docs/CAMERA-ARCHITECTURE.md, ladder table):** a DHCP re-lease at 21:34 UTC moved
+four cameras to new addresses; the Wyze cloud kept reporting the boot-time addresses, the bridge and go2rtc dialed them
+for 3.5 h ("discovery timeout"), the supervisor read "off the network" and was in dry-run anyway (front_porch had been
+stuck since 24 Oct with 410 dry-run reboot decisions). Fixed without touching the bridge: netprobe reports where each
+camera's MAC really is (`mac_seen_at`), the ladder reboots a moved camera through the cloud (then asks the bridge to
+rediscover and restart that stream), a reachable camera gets a bridge stream restart (rung 1b) before any reboot, the
+ladder is armed (`camsup_dry_run: false`), the bridge refreshes the cloud list every 5 min, and `com.ranch.notify` posts
+outages to an ntfy topic. Watch the first day: `remediation` rows with reason `address moved` and outcome `recovered`.
+
 ## The machine
 | Item | Value |
 |---|---|
