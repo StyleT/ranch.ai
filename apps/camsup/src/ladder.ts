@@ -12,12 +12,17 @@
 //                                                     own health check cannot see a producer that never connects (it counts a
 //                                                     configured source as alive), so ask it to stop/start that one stream;
 //                                                     go2rtc re-dials that camera only
+//   rung 1c  re-register                              go2rtc dials an address the camera's MAC is not at, but the bridge (the
+//            (software only, one camera)              cloud) already has the address the MAC is at: the bridge stored the new
+//                                                     address without re-registering the stream, so ask it to stop/start that
+//                                                     stream now; no reboot, no budget, reattachCooldownS between tries
 //   rung 2   camera reboot via the Wyze cloud         down ≥ rebootAfterS and the camera is reachable for a reboot: it answers
 //                                                     ping (after rung 1b did not help) OR its MAC is seen at another address
-//                                                     (the cloud reports the address a camera had when it last booted; a DHCP
-//                                                     re-lease while it runs leaves the cloud, the bridge and go2rtc dialing
-//                                                     a dead address, and only a reboot makes the camera report the new one);
-//                                                     cooldown + fleet budget ok (fleetRebootsPerHour per fleetWindowS)
+//                                                     that the cloud does not know yet (the cloud reports the address a camera
+//                                                     had when it last booted; a DHCP re-lease while it runs leaves the cloud,
+//                                                     the bridge and go2rtc dialing a dead address, and only a reboot makes the
+//                                                     camera report the new one); cooldown + fleet budget ok
+//                                                     (fleetRebootsPerHour per fleetWindowS)
 //   rung 2b  blind reboot                             off the LAN (no ping, MAC seen nowhere) for ≥ blindRebootAfterS: one
 //                                                     reboot through the cloud in case the camera is cloud-connected on
 //                                                     another AP or band and rejoins; once per blindRebootCooldownS
@@ -28,8 +33,9 @@
 
 export interface CamFacts {
   camera: string; connected: boolean | null; pingOk: boolean | null; framesFresh?: boolean | null; consumers?: number | null;
-  /** the address the bridge dials (the Wyze cloud's), and the address the camera's MAC currently holds on the LAN */
-  ip?: string | null; macSeenAt?: string | null; addressMoved?: boolean | null;
+  /** ip: the address the bridge (the Wyze cloud) has for the camera; dialIp: the address go2rtc's source dials right now;
+   *  macSeenAt: the address the camera's MAC currently holds on the LAN (null: seen nowhere) */
+  ip?: string | null; dialIp?: string | null; macSeenAt?: string | null;
   /** the bridge lists this camera right now (its MQTT commands answer "unknown camera" while it is starting or has not
    *  finished discovery; 1 Nov: two reboots sent 100 ms after a bridge re-bootstrap were dropped and the budget spent) */
   bridgeKnown?: boolean | null;
@@ -46,6 +52,7 @@ export interface LadderConfig {
 export type Decision =
   | { rung: 1; action: 'reattach'; camera: string; reason: string }
   | { rung: 1.5; action: 'stream_restart'; camera: string; reason: string }
+  | { rung: 1; action: 'reregister'; camera: string; reason: string }
   | { rung: 2; action: 'camera_reboot'; camera: string; reason: string; moved: boolean; blind: boolean }
   | { rung: 3; action: 'go2rtc_restart'; camera: string; reason: string; cameras: string[] }
   | { rung: 4; action: 'alert'; camera: string; reason: string };
@@ -85,8 +92,17 @@ export function decide(nowMs: number, facts: CamFacts[], states: Map<string, Cam
     } else s.orphanTicks = 0;
     if (s.downSinceMs === null) continue;
     const downS = (nowMs - s.downSinceMs) / 1000;
-    const moved = f.addressMoved === true && !!f.macSeenAt;
     const bridgeReady = f.bridgeKnown !== false;   // unknown counts as ready (older netprobe rows); false waits for the next tick
+    const dial = f.dialIp ?? f.ip ?? null;
+    const stale = !!f.macSeenAt && !!dial && dial !== f.macSeenAt;   // go2rtc dials where the camera is not
+    const cloudKnows = stale && f.ip === f.macSeenAt;                 // the bridge already holds the right address
+    const moved = stale && !cloudKnows;                               // only a reboot gets the new address into the cloud
+    // rung 1c: the right address is in the bridge, the stream just was not re-registered
+    if (cloudKnows && bridgeReady) {
+      const cooled = s.lastReattachMs === null || s.lastReattachMs === undefined || nowMs - s.lastReattachMs >= (cfg.reattachCooldownS ?? 120) * 1000;
+      if (cooled) { s.lastReattachMs = nowMs; out.push({ rung: 1, action: 'reregister', camera: f.camera, reason: `go2rtc dials ${dial} but the camera is at ${f.macSeenAt} and the bridge already has that address: asking the bridge to stop/start this stream (no reboot needed)` }); }
+      continue;
+    }
     // rung 1b: the bridge cannot see a dead producer; ask it to restart this one stream before anything touches the camera
     if (!moved && f.pingOk === true && bridgeReady && !s.streamRestartTried && downS >= (cfg.streamRestartAfterS ?? 120)) {
       s.streamRestartTried = true;

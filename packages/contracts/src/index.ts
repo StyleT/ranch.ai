@@ -29,7 +29,7 @@ export const AvailabilityResponse = z.array(CameraAvailability);
 /** The camera supervisor's ledger (`/api/remediation`, apps/camsup): rung 0 outage noted, 2 camera reboot via the Wyze
  *  cloud, 3 go2rtc restart, 4 alert only; outcome filled on recovery or when judged not to have helped. */
 export const RemediationRow = z.looseObject({
-  id: z.number(), ts: Iso, camera: z.string(), rung: z.number(), action: z.enum(['down', 'reattach', 'stream_restart', 'camera_reboot', 'go2rtc_restart', 'alert']), reason: z.string(), dry_run: z.boolean(),
+  id: z.number(), ts: Iso, camera: z.string(), rung: z.number(), action: z.enum(['down', 'reattach', 'stream_restart', 'reregister', 'camera_reboot', 'go2rtc_restart', 'alert']), reason: z.string(), dry_run: z.boolean(),
   outcome: z.string().nullable(), outcome_ts: Iso.nullable(), recovered_after_s: NullableNum,
 });
 export const RemediationResponse = z.array(RemediationRow);

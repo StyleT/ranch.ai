@@ -43,9 +43,29 @@ test('rung 2 fires after rebootAfterS when the camera pings, respects cooldown a
   assert.equal(later.filter((x) => x.rung === 2).length, 2);
 });
 
+test('re-register: go2rtc dials a stale address but the cloud already has the new one -> stream re-register at once, no reboot, no budget', () => {
+  const states = new Map<string, CamState>([['mops_cam', { ...fresh(), downSinceMs: T0 }]]);
+  const f: CamFacts = { camera: 'mops_cam', connected: false, pingOk: false, ip: '192.168.1.236', dialIp: '192.168.1.233', macSeenAt: '192.168.1.236', bridgeKnown: true };
+  const d = decide(T0 + 15e3, [f], states, [T0, T0], null);                           // fleet budget spent: irrelevant here
+  assert.deepEqual(d.map((x) => [x.rung, x.action]), [[1, 'reregister']]);
+  assert.match(d[0]!.reason, /192\.168\.1\.233 .*192\.168\.1\.236/);
+  assert.deepEqual(decide(T0 + 30e3, [f], states, [], null), []);                     // cooling (reattachCooldownS)
+  assert.equal(decide(T0 + 15e3 + 120e3, [f], states, [], null).length, 1);           // still stale after the cooldown: again
+  assert.equal(states.get('mops_cam')!.rebootsThisOutage, 0);
+});
+
+test('reboot: go2rtc and the cloud both hold the stale address -> rung 2 after rebootAfterS, never a re-register', () => {
+  const states = new Map<string, CamState>([['wash_stall', { ...fresh(), downSinceMs: T0 }]]);
+  const f: CamFacts = { camera: 'wash_stall', connected: false, pingOk: false, ip: '192.168.1.149', dialIp: '192.168.1.149', macSeenAt: '192.168.1.111', bridgeKnown: true };
+  assert.deepEqual(decide(T0 + 300e3, [f], states, [], null), []);
+  const d = decide(T0 + 600e3, [f], states, [], null);
+  assert.deepEqual(d.map((x) => [x.rung, x.action]), [[2, 'camera_reboot']]);
+  if (d[0]!.rung === 2) assert.equal(d[0]!.moved, true);
+});
+
 test('rung 2 for a moved address: no ping at the cloud address, MAC seen elsewhere -> reboot with the move in the reason, no stream restart first', () => {
   const states = new Map<string, CamState>([['back_pasture_cam', { ...fresh(), downSinceMs: T0 }]]);
-  const moved: CamFacts = { camera: 'back_pasture_cam', connected: false, pingOk: false, ip: '192.168.1.124', macSeenAt: '192.168.1.102', addressMoved: true };
+  const moved: CamFacts = { camera: 'back_pasture_cam', connected: false, pingOk: false, ip: '192.168.1.124', dialIp: '192.168.1.124', macSeenAt: '192.168.1.102' };
   assert.deepEqual(decide(T0 + 300e3, [moved], states, [], null), []);                 // before rebootAfterS: nothing, no rung 1b, no rung 4
   const d = decide(T0 + 600e3, [moved], states, [], null);
   assert.equal(d.length, 1);
@@ -57,7 +77,7 @@ test('rung 2 for a moved address: no ping at the cloud address, MAC seen elsewhe
 
 test('nothing that reaches a camera fires while the bridge does not list it; the budget is kept for the next tick', () => {
   const states = new Map<string, CamState>([['wash_stall', { ...fresh(), downSinceMs: T0 }], ['a', tried()]]);
-  const moved: CamFacts = { camera: 'wash_stall', connected: false, pingOk: false, ip: '192.168.1.149', macSeenAt: '192.168.1.111', addressMoved: true, bridgeKnown: false };
+  const moved: CamFacts = { camera: 'wash_stall', connected: false, pingOk: false, ip: '192.168.1.149', dialIp: '192.168.1.149', macSeenAt: '192.168.1.111', bridgeKnown: false };
   const reachable: CamFacts = { ...facts(false, true, 'a'), bridgeKnown: false };
   assert.deepEqual(decide(T0 + 600e3, [moved, reachable], states, [], null), []);
   assert.equal(states.get('wash_stall')!.rebootsThisOutage, 0);
@@ -67,7 +87,7 @@ test('nothing that reaches a camera fires while the bridge does not list it; the
 
 test('rung 4 alerts once when the camera is off the LAN; after blindRebootAfterS one blind reboot, then a long cooldown', () => {
   const states = new Map<string, CamState>([['mops_cam', { ...fresh(), downSinceMs: T0 }]]);
-  const off = { ...facts(false, false, 'mops_cam'), macSeenAt: null, addressMoved: false };
+  const off = { ...facts(false, false, 'mops_cam'), macSeenAt: null };
   const d1 = decide(T0 + 700e3, [off], states, [], null);
   assert.deepEqual(d1.map((x) => x.rung), [4]);
   assert.deepEqual(decide(T0 + 800e3, [off], states, [], null), []);

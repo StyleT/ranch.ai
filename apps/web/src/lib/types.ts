@@ -3,7 +3,7 @@ import type { Detection, BridgeMetrics } from '@ranch/contracts';
 
 export type Alert = { kind: 'camera_offline' | 'camera_down' | 'remediating' | 'daemon_down' | 'detector_stale' | 'taxonomy_drift' | 'disk_low' | 'burst_throttled' | 'no_frames'; text: string; href: string; severity: 'warn' | 'bad' };
 /** One row of the camera supervisor's ledger (daemon /api/remediation, apps/camsup). */
-export type RemediationRow = { id: number; ts: string; camera: string; rung: number; action: 'down' | 'reattach' | 'stream_restart' | 'camera_reboot' | 'go2rtc_restart' | 'alert'; reason: string; dry_run: boolean; outcome: string | null; outcome_ts: string | null; recovered_after_s: number | null };
+export type RemediationRow = { id: number; ts: string; camera: string; rung: number; action: 'down' | 'reattach' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert'; reason: string; dry_run: boolean; outcome: string | null; outcome_ts: string | null; recovered_after_s: number | null };
 
 export type DaemonView = { name: string; label: string; up: boolean; pid: number | null; last_exit: number; rss_mb: number | null; log: string; status: Record<string, unknown> | null };
 
