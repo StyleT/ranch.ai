@@ -30,6 +30,9 @@ export interface CamFacts {
   camera: string; connected: boolean | null; pingOk: boolean | null; framesFresh?: boolean | null; consumers?: number | null;
   /** the address the bridge dials (the Wyze cloud's), and the address the camera's MAC currently holds on the LAN */
   ip?: string | null; macSeenAt?: string | null; addressMoved?: boolean | null;
+  /** the bridge lists this camera right now (its MQTT commands answer "unknown camera" while it is starting or has not
+   *  finished discovery; 1 Nov: two reboots sent 100 ms after a bridge re-bootstrap were dropped and the budget spent) */
+  bridgeKnown?: boolean | null;
 }
 export interface CamState {
   downSinceMs: number | null; lastRebootMs: number | null; rebootsThisOutage: number; alertedThisOutage: boolean;
@@ -82,14 +85,16 @@ export function decide(nowMs: number, facts: CamFacts[], states: Map<string, Cam
     if (s.downSinceMs === null) continue;
     const downS = (nowMs - s.downSinceMs) / 1000;
     const moved = f.addressMoved === true && !!f.macSeenAt;
+    const bridgeReady = f.bridgeKnown !== false;   // unknown counts as ready (older netprobe rows); false waits for the next tick
     // rung 1b: the bridge cannot see a dead producer; ask it to restart this one stream before anything touches the camera
-    if (!moved && f.pingOk === true && !s.streamRestartTried && downS >= (cfg.streamRestartAfterS ?? 120)) {
+    if (!moved && f.pingOk === true && bridgeReady && !s.streamRestartTried && downS >= (cfg.streamRestartAfterS ?? 120)) {
       s.streamRestartTried = true;
       out.push({ rung: 1.5, action: 'stream_restart', camera: f.camera, reason: `down ${Math.round(downS)} s, answers ping at ${f.ip ?? 'its address'}: asking the bridge to stop/start this stream (its health check counts a configured source as alive)` });
       continue;
     }
     if (downS < cfg.rebootAfterS) continue;
     const cooled = s.lastRebootMs === null || nowMs - s.lastRebootMs >= cfg.rebootCooldownS * 1000;
+    if (!bridgeReady) continue;   // nothing below reaches a camera without the bridge; try again next tick, spend nothing
     if (moved) {
       if (cooled && budget > 0) reboot(f, s, `address moved (${f.ip ?? '?'} -> ${f.macSeenAt}): the cloud still reports the old address, the bridge dials it; reboot so the camera reports the new one`, true, false);
     } else if (f.pingOk === true) {

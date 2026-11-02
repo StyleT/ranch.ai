@@ -49,6 +49,14 @@ const openRows = new Map<string, number[]>();      // camera -> open ledger ids
 const fleetReboots: number[] = []; let lastGo2rtcRestartMs: number | null = null;
 const pending: { at: number; what: string; run: () => Promise<void> }[] = [];   // follow-ups scheduled by a decision, run by the main loop
 
+/** The cameras the bridge lists right now; its MQTT commands answer "unknown camera" for any other name (and while it starts). */
+async function bridgeCameras(): Promise<Set<string> | null> {
+  try {
+    const res = await fetch(`${config.bridgeUrl}/api/cameras`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    return new Set(((await res.json()) as { name: string }[]).map((c) => c.name));
+  } catch { return null; }
+}
 function liveAgeS(cam: string): number | null { try { return (Date.now() - statSync(join(config.liveDir, cam, 'index.m3u8')).mtimeMs) / 1000; } catch { return null; } }
 
 async function main(): Promise<void> {
@@ -89,10 +97,12 @@ async function main(): Promise<void> {
   for (;;) {
     const now = Date.now();
     if (now - probeTs < 120e3) {
+      const known = await bridgeCameras();
       const facts: CamFacts[] = Object.entries(probe).filter(([cam]) => !config.camerasExclude.includes(cam)).map(([cam, row]) => {
         const h = pingHistory.get(cam) ?? []; const pingOk = h.length >= 4 ? h.filter(Boolean).length / h.length >= 0.5 : null;
         return { camera: cam, connected: typeof row.connected === 'boolean' ? row.connected : null, pingOk, framesFresh: typeof row.frames_fresh === 'boolean' ? row.frames_fresh : null, consumers: typeof row.consumers === 'number' ? row.consumers : null,
-          ip: row.ip ?? null, macSeenAt: row.mac_seen_at ?? null, addressMoved: typeof row.address_moved === 'boolean' ? row.address_moved : null };
+          ip: row.ip ?? null, macSeenAt: row.mac_seen_at ?? null, addressMoved: typeof row.address_moved === 'boolean' ? row.address_moved : null,
+          bridgeKnown: known === null ? null : known.has(cam) };
       });
       for (const f of facts) {
         const s = states.get(f.camera) ?? states.set(f.camera, { downSinceMs: null, lastRebootMs: null, rebootsThisOutage: 0, alertedThisOutage: false }).get(f.camera)!;

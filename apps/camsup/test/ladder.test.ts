@@ -52,6 +52,16 @@ test('rung 2 for a moved address: no ping at the cloud address, MAC seen elsewhe
   assert.deepEqual(decide(T0 + 601e3, [moved], states, [T0 + 600e3], null), []);       // cooling
 });
 
+test('nothing that reaches a camera fires while the bridge does not list it; the budget is kept for the next tick', () => {
+  const states = new Map<string, CamState>([['wash_stall', { ...fresh(), downSinceMs: T0 }], ['a', tried()]]);
+  const moved: CamFacts = { camera: 'wash_stall', connected: false, pingOk: false, ip: '192.168.1.149', macSeenAt: '192.168.1.111', addressMoved: true, bridgeKnown: false };
+  const reachable: CamFacts = { ...facts(false, true, 'a'), bridgeKnown: false };
+  assert.deepEqual(decide(T0 + 600e3, [moved, reachable], states, [], null), []);
+  assert.equal(states.get('wash_stall')!.rebootsThisOutage, 0);
+  const d = decide(T0 + 615e3, [{ ...moved, bridgeKnown: true }, { ...reachable, bridgeKnown: true }], states, [], null);
+  assert.deepEqual(d.map((x) => [x.rung, x.camera]), [[2, 'wash_stall'], [2, 'a']]);
+});
+
 test('rung 4 alerts once when the camera is off the LAN; after blindRebootAfterS one blind reboot, then a long cooldown', () => {
   const states = new Map<string, CamState>([['mops_cam', { ...fresh(), downSinceMs: T0 }]]);
   const off = { ...facts(false, false, 'mops_cam'), macSeenAt: null, addressMoved: false };
