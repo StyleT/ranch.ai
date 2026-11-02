@@ -56,6 +56,13 @@ describe('evals parsers', () => {
     const ds = parseDatasets(readFileSync(join(repo, 'evals', 'DATASETS.md'), 'utf8'));
     expect(ds.some((d) => d.id === 'frames-ranch-v1')).toBe(true);
   });
+  it('skips every table header, not just the first: DATASETS.md has a FiftyOne table above the JSONL one', () => {
+    const md = ['# Datasets', '', '| dataset | repo | revision | fields | n | notes |', '|---|---|---|---|---|---|',
+      '| frames-ranch-bursts-v1 | `x/y` | `claude-v1` | gt_claude | 156 | ok |', '', '## JSONL', '',
+      '| id | kind | created | n | parent | sha256 | location | hub |', '|---|---|---|---|---|---|---|---|',
+      '| frames-ranch-v1 | frames | 2026-10-20 | 300 | – | abc… | `evals/baseline/2026-10-20/` | hub |'].join('\n');
+    expect(parseDatasets(md).map((d) => d.id)).toEqual(['frames-ranch-v1']);
+  });
 });
 
 describe('live translate and gapFill', () => {

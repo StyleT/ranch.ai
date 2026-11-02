@@ -17,9 +17,16 @@ export function parseLeaderboard(md: string): { rows: LeaderboardRow[]; notes: s
   }
   return { rows, notes: notes.join('\n') };
 }
+/** Parse the JSONL dataset table(s) of DATASETS.md. A header is any table row followed by a separator row, so a file
+ *  with several tables (the FiftyOne table comes first since 1 Nov) yields no header-as-row. */
 export function parseDatasets(md: string): EvalsData['datasets'] {
-  const out: EvalsData['datasets'] = []; let header = false;
-  for (const l of md.split('\n')) { if (!l.startsWith('|')) continue; const c = cells(l); if (!header) { header = true; continue; } if (c.every((x) => /^-+$/.test(x)) || c.length < 7) continue; out.push({ id: c[0]!, kind: c[1]!, created: c[2]!, n: c[3]!, parent: c[4]!, location: c[6]! }); }
+  const out: EvalsData['datasets'] = []; const lines = md.split('\n');
+  const isSeparator = (l: string | undefined) => !!l && l.startsWith('|') && cells(l).every((x) => /^-+$/.test(x));
+  for (const [i, l] of lines.entries()) {
+    if (!l.startsWith('|') || isSeparator(l) || isSeparator(lines[i + 1])) continue;
+    const c = cells(l); if (c.length < 7) continue;
+    out.push({ id: c[0]!, kind: c[1]!, created: c[2]!, n: c[3]!, parent: c[4]!, location: c[6]! });
+  }
   return out;
 }
 
