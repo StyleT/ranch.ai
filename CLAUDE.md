@@ -123,6 +123,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   push to `origin main` before starting the next piece of work. Never leave finished work uncommitted at the end of
   a session. The repo is public: no secrets, no credentials, no device tokens, ever.
 - Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` (or the current model).
+- ESLint (`curly: all` on every workspace; the web app adds its Next.js rules) and Prettier (120 columns, single quotes,
+  code files only) run on staged files from the husky pre-commit hook via lint-staged; a commit that fails a non-fixable
+  rule is refused. Whole tree: `npm run lint`, `npm run format` (check) and `npm run format:write`.
 
 ## Architecture rules (see docs/PLAN.md §4)
 - TypeScript (Node 24 via fnm) for orchestration, agent, MCP tools, CLI. Python (`uv`) only for the MLX

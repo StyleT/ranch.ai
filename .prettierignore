@@ -1,0 +1,8 @@
+apps/web/.next
+**/test-results
+**/playwright-report
+apps/web/e2e/ai/runs
+apps/web/next-env.d.ts
+.claude
+.scratch
+.venv
