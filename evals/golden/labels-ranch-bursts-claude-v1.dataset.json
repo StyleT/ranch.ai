@@ -1,0 +1,18 @@
+{
+  "id": "labels-ranch-bursts-claude-v1",
+  "kind": "labels",
+  "version": 1,
+  "created": "2026-10-24T02:04:54.866Z",
+  "parent": null,
+  "frames_dataset": "frames-ranch-bursts-v1",
+  "n": 156,
+  "sha256": {
+    "labels-ranch-bursts-claude-v1.jsonl": "e11bc8f1086efddded782b9ebf60db296c635c10ce5ec41b403afc3ae1865012"
+  },
+  "source": {
+    "method": "evals/label/claude.ts label-bursts: one Messages API request per burst, every member frame in order, structured output (24 Oct 2026)",
+    "labeler": "claude-opus-5-5",
+    "cost_usd": 3.08
+  },
+  "host": "laptop"
+}

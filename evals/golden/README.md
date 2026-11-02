@@ -1,29 +1,16 @@
-# Golden set
+# Label sets
 
-Phase 1 label set for the detector benchmark (PLAN.md Phase 1 and 1b).
+One JSONL per label set, one row per labeled frame, named `labels-<name>-<labeler>-vN.jsonl` with a
+`.dataset.json` sidecar (id, parent, frames dataset, n, sha256, provenance). A set covers exactly one frames set
+(`evals/baseline/<date>/`); any edit is a new version, never an edit in place. Rows and ids are listed in
+`evals/DATASETS.md`; the naming rule is `docs/EVALUATION.md` §2.
 
-| File | What | In git |
+| File | Frames set | What |
 |---|---|---|
-| `frames.jsonl` | the picked frames: path, source path on the mini, camera, UTC ts, day/night | yes |
-| `frames/<camera>/*.jpg` | the frames themselves, copied from the seed recorder | no (30 MB; regenerate with `select.ts`) |
-| `labels.claude.jsonl` | Claude's labels, one row per frame: `boxes[]` (label, normalized x/y/w/h, posture, kind), the full structured `label`, usage and cost | yes |
-| `labels.human.jsonl` | Vlad's blind labels, same `boxes[]` shape (Phase 1b) | yes |
-| `batches/<id>.json` | Batch API bookkeeping | no |
+| `labels-ranch-claude-v1.jsonl` | `frames-ranch-v1` | Claude's first pass on 100 frames (superseded for scoring, kept for provenance) |
+| `labels-ranch-claude-revised-vlad-v1.jsonl` | `frames-ranch-v1` | the above after Vlad's review; the scoring reference for `frames-ranch-v1` |
+| `labels-ranch-bursts-claude-v1.jsonl` | `frames-ranch-bursts-v1` | Claude on 50 whole bursts (156 frames), one request per burst, with per-burst object ids and a `moved` verdict |
 
-Box format everywhere: normalized to the image, origin top-left, `x,y` = corner, `w,h` = size. Labels use COCO
-names where one exists (`horse`, `person`, `car`, `truck`, `dog`); donkeys are kept as `kind: donkey` but scored
-as `horse` because neither COCO detector has a donkey class. That mapping is itself a Post 1b finding.
-
-## How it was made
-
-```
-# on the mini (frames live there)
-ranch_app=/usr/local/ranch/app
-node $ranch_app/evals/label/select.ts --n 100 --out $ranch_app/evals/golden   # stratified by camera x day/night, seeded
-# on the laptop, with ANTHROPIC_API_KEY set; frames rsynced into evals/golden/frames/
-node evals/label/claude.ts estimate                                     # tokens and cost per frame
-node evals/label/claude.ts submit                                       # Batch API, claude-opus-5-5, structured output
-node evals/label/claude.ts collect --batch <id>                         # → labels.claude.jsonl
-# benchmark, on the mini
-node apps/detector/src/bench.ts --labels evals/golden/labels.claude.jsonl --model /usr/local/ranch/models/yolo11n.mlpackage ... --compute ane,gpu,cpu
-```
+Box format everywhere: normalized to the image, origin top-left, `x,y` = corner, `w,h` = size. `label` is the COCO
+scoring class (`horse`, `person`, `car`, `truck`, ...); the taxonomy subclass (`donkey`, `tractor`, ...) is `kind`.
+Produced by `evals/label/claude.ts`; `batches/` (git-ignored) holds Batch API bookkeeping.
