@@ -30,10 +30,12 @@ const { values: a } = parseArgs({
     existing: { type: 'string' },
     'models-only': { type: 'string' },
     bursts: { type: 'string' }, // pick this many burst heads instead of --n single frames; every member rides along (docs/EVALUATION.md §2)
+    clips: { type: 'string' }, // pick this many motion clips (docs/CLIPS.md): the mp4 plus its sampled frames; strata camera x day/night x duration tercile
+    'exclude-clips': { type: 'string' }, // a file of clip ids rejected in review (plan Part 3 step 0): never picked; the strata refill from the pool
   },
 });
-if (!a.existing && (!a.id || !/^frames-[a-z0-9-]+-v\d+$/.test(a.id))) {
-  console.error('--id frames-<name>-vN is required (docs/EVALUATION.md §2)');
+if (!a.existing && (!a.id || !/^(frames|clips)-[a-z0-9-]+-v\d+$/.test(a.id))) {
+  console.error('--id frames-<name>-vN or clips-<name>-vN is required (docs/EVALUATION.md §2)');
   process.exit(2);
 }
 
@@ -148,6 +150,238 @@ if (a.existing) {
 
 const date = new Date().toISOString().slice(0, 10);
 const store = new EventStore(config.dbPath);
+
+if (a.clips != null) {
+  // Clip set (docs/CLIPS.md): pool = cut clips since --since minus rejects; strata = camera x day/night x duration tercile;
+  // the same seeded shuffle and fill-from-the-fullest-pools as the frame pick. Output beside the frame sets: clips.jsonl,
+  // frames.jsonl (the clips' sampled frames with clip_id/seq/t_s, so bench.ts --bursts and the FiftyOne import work
+  // unchanged), predictions per sampled frame, manifest.json, dataset.json with kind 'clips'.
+  const rejected = new Set<number>();
+  if (a['exclude-clips']) {
+    for (const l of readFileSync(a['exclude-clips'], 'utf8').split('\n')) {
+      const m = /(\d+)/.exec(l);
+      if (m) {
+        rejected.add(Number(m[1]));
+      }
+    }
+  }
+  const pool = store
+    .clips({ since: parseSince(a.since!), limit: 100000 })
+    .filter(
+      (c) =>
+        !a.exclude!.split(/\s+/).includes(c.camera) && c.stopped !== 'stale' && !c.expired_at && !rejected.has(c.id),
+    );
+  const durs = pool.map((c) => c.duration_s ?? 0).sort((x, y) => x - y);
+  const t1 = durs[Math.floor(durs.length / 3)] ?? 0;
+  const t2 = durs[Math.floor((2 * durs.length) / 3)] ?? 0;
+  const tercile = (d: number) => (d < t1 ? 'short' : d < t2 ? 'mid' : 'long');
+  const cb = new Map<string, typeof pool>();
+  for (const c of pool) {
+    const k = `${c.camera}|${period(c.start_ts)}|${tercile(c.duration_s ?? 0)}`;
+    (cb.get(k) ?? cb.set(k, []).get(k)!).push(c);
+  }
+  const ck = [...cb.keys()].sort();
+  const want = Number(a.clips);
+  const perC = Math.floor(want / Math.max(1, ck.length));
+  const chosen: typeof pool = [];
+  for (const k of ck) {
+    const b = cb.get(k)!;
+    for (let i = b.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [b[i], b[j]] = [b[j]!, b[i]!];
+    }
+    chosen.push(...b.slice(0, perC));
+  }
+  let gi = 0;
+  while (chosen.length < want && gi < ck.length * 100) {
+    const b = cb.get(ck[gi++ % ck.length]!)!;
+    const next = b.find((c) => !chosen.includes(c));
+    if (next) {
+      chosen.push(next);
+    }
+  }
+  chosen.sort((u, v) => u.camera.localeCompare(v.camera) || u.start_ts.localeCompare(v.start_ts));
+  const mediaDir = join(a['out-media']!, date);
+  const outDir = join(a.out!, date);
+  mkdirSync(outDir, { recursive: true });
+  const clipRows: Record<string, unknown>[] = [];
+  const frameRows: Record<string, unknown>[] = [];
+  for (const c of chosen) {
+    const cdir = join(mediaDir, 'clips', c.camera);
+    mkdirSync(cdir, { recursive: true });
+    const dst = join(cdir, basename(c.path!));
+    try {
+      statSync(dst);
+    } catch {
+      copyFileSync(c.path!, dst);
+    }
+    clipRows.push({
+      clip_id: c.id,
+      camera: c.camera,
+      start_ts: c.start_ts,
+      end_ts: c.end_ts,
+      trigger_ts: c.trigger_ts,
+      period: period(c.start_ts),
+      duration_s: c.duration_s,
+      fps: c.fps,
+      width: c.width,
+      height: c.height,
+      preroll_s: c.preroll_s,
+      stopped: c.stopped,
+      path: dst,
+      source: c.path,
+      bytes: c.bytes,
+      sha256: await sha256(c.path!),
+    });
+    for (const f of store.clipFrames(c.id)) {
+      const fdst = join(mediaDir, c.camera, basename(f.path));
+      mkdirSync(join(mediaDir, c.camera), { recursive: true });
+      try {
+        statSync(fdst);
+      } catch {
+        copyFileSync(f.path, fdst);
+      }
+      frameRows.push({
+        path: fdst,
+        source: f.path,
+        frame_id: f.id,
+        camera: f.camera,
+        ts: f.ts,
+        period: period(f.ts),
+        reason: f.reason,
+        width: f.width,
+        height: f.height,
+        burst_id: f.burst_id ?? null,
+        seq: f.seq ?? null,
+        clip_id: c.id,
+        t_s: +((Date.parse(f.ts) - Date.parse(c.start_ts)) / 1000).toFixed(2),
+      });
+    }
+  }
+  writeFileSync(join(outDir, 'clips.jsonl'), clipRows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  writeFileSync(join(outDir, 'frames.jsonl'), frameRows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const strata: Record<string, number> = {};
+  for (const c of chosen) {
+    const k = `${c.camera}/${period(c.start_ts)}/${tercile(c.duration_s ?? 0)}`;
+    strata[k] = (strata[k] ?? 0) + 1;
+  }
+  console.log(
+    JSON.stringify({
+      date,
+      clips: chosen.length,
+      frames: frameRows.length,
+      pools: Object.fromEntries(ck.map((k) => [k, cb.get(k)!.length])),
+      chosen: strata,
+      terciles_s: [t1, t2],
+      rejected: rejected.size,
+    }),
+  );
+  const models = readdirSync(a.models!)
+    .filter((m) => m.endsWith('.mlpackage'))
+    .sort();
+  const manifest: Record<string, unknown> = {
+    date,
+    host: hostname(),
+    n: frameRows.length,
+    clips: chosen.length,
+    seed: Number(a.seed),
+    since: a.since,
+    threshold: Number(a.threshold),
+    media_dir: mediaDir,
+    models: {} as Record<string, unknown>,
+  };
+  for (const m of models) {
+    const path = join(a.models!, m);
+    const name = m.replace(/\.mlpackage$/, '');
+    const compute = name.includes('float32') ? 'gpu' : 'ane';
+    const runner = new Runner({ model: path, compute, threshold: Number(a.threshold) });
+    const info = await runner.info;
+    const out: string[] = [];
+    const t0 = Date.now();
+    let ms = 0;
+    for (const r of frameRows) {
+      const res = await runner.detect(r.path as string);
+      ms += res.ms;
+      out.push(
+        JSON.stringify({
+          frame_id: r.frame_id,
+          path: r.path,
+          camera: r.camera,
+          ts: r.ts,
+          clip_id: r.clip_id,
+          seq: r.seq,
+          model: name,
+          ms: res.ms,
+          detections: res.detections,
+        }),
+      );
+    }
+    runner.close();
+    writeFileSync(join(outDir, `predictions.${name}.jsonl`), out.join('\n') + '\n');
+    (manifest.models as Record<string, unknown>)[name] = {
+      sha256: await dirSha(path),
+      compute,
+      inputs: info.inputs,
+      outputs: info.outputs,
+      mean_ms: +(ms / Math.max(1, frameRows.length)).toFixed(2),
+      wall_s: +((Date.now() - t0) / 1000).toFixed(1),
+    };
+    console.log(
+      JSON.stringify({
+        model: name,
+        frames: frameRows.length,
+        mean_ms: +(ms / Math.max(1, frameRows.length)).toFixed(2),
+      }),
+    );
+  }
+  writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  const commit = (() => {
+    try {
+      return execSync('git rev-parse --short HEAD 2>/dev/null').toString().trim() || null;
+    } catch {
+      return null;
+    }
+  })();
+  const clipsSha = await sha256(join(outDir, 'clips.jsonl'));
+  const framesSha = await sha256(join(outDir, 'frames.jsonl'));
+  writeFileSync(
+    join(outDir, 'dataset.json'),
+    JSON.stringify(
+      {
+        id: a.id,
+        kind: 'clips',
+        version: Number(a.id!.split('-v').pop()),
+        created: new Date().toISOString(),
+        parent: a.parent ?? null,
+        n: chosen.length,
+        frames: frameRows.length,
+        sha256: { 'clips.jsonl': clipsSha, 'frames.jsonl': framesSha },
+        source: {
+          query: 'clips table',
+          since: a.since,
+          seed: Number(a.seed),
+          stratify: 'camera x day/night x duration tercile',
+          terciles_s: [t1, t2],
+          exclude: a.exclude,
+          rejected: rejected.size,
+        },
+        host: hostname(),
+        commit,
+        media_dir: mediaDir,
+        preds: Object.fromEntries(
+          Object.entries(manifest.models as Record<string, { sha256: string }>).map(([m, v]) => [
+            `preds-${a.id}-${m}-${v.sha256.slice(0, 8)}`,
+            `predictions.${m}.jsonl`,
+          ]),
+        ),
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+  console.log(JSON.stringify({ dataset: a.id, sha256: clipsSha.slice(0, 12), out: outDir }));
+  process.exit(0);
+}
 // Pool: single frames and burst heads (never a member on its own); with --bursts, heads only, each expanded to its
 // whole burst after the pick so the stratification counts bursts, not frames.
 const burstsMode = a.bursts != null;
