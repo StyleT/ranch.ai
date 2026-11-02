@@ -21,7 +21,8 @@
         "deer",
         "coyote",
         "bird",
-        "other"
+        "other",
+        "fox"
       ]
     },
     "person": {
@@ -39,11 +40,9 @@
       "attribute": null,
       "subclasses": [
         "car",
-        "truck",
         "delivery_vehicle",
         "tractor",
         "atv",
-        "trailer",
         "other"
       ]
     }
@@ -62,11 +61,9 @@
     "coyote",
     "bird",
     "car",
-    "truck",
     "delivery_vehicle",
     "tractor",
     "atv",
-    "trailer",
     "other"
   ],
   "mappings": {
@@ -84,7 +81,7 @@
       },
       "bus": {
         "class": "vehicle",
-        "subclass": "truck",
+        "subclass": "car",
         "threshold": 0.25
       },
       "car": {
@@ -147,7 +144,7 @@
       "truck": {
         "class": "vehicle",
         "note": "tractors are never found as trucks (0/14)",
-        "subclass": "truck",
+        "subclass": "car",
         "threshold": 0.25
       },
       "zebra": {
@@ -178,11 +175,8 @@
   },
   "scoring_map": {
     "coco": {
-      "atv": "truck",
-      "delivery_vehicle": "truck",
-      "donkey": "horse",
-      "tractor": "truck",
-      "trailer": "truck"
+      "delivery_vehicle": "car",
+      "donkey": "horse"
     }
   },
   "version": 1

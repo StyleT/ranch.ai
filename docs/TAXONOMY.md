@@ -17,9 +17,9 @@ Three levels: **class** → **subclass** → optional **attribute** (posture for
 for the trough). Subclasses are the labels humans use; classes are what the alert policy reasons about.
 
 ```
-animal   : horse, donkey, dog, cat, deer, coyote, bird, other     posture: standing, grazing, drinking, walking, lying_sternal, lying_flat, unknown
+animal   : horse, donkey, dog, cat, deer, coyote, bird, fox, other posture: standing, grazing, drinking, walking, lying_sternal, lying_flat, unknown
 person   : friendly, mailman, unknown                              look (free text)
-vehicle  : car, truck, delivery_vehicle, tractor, atv, trailer, other
+vehicle  : car, delivery_vehicle, tractor, atv, other
 scene    : gate {open, closed, unknown}, trough {full, half, low, empty, unknown}, lighting {day, dusk, night_ir}
 ignored  : insects, spiders (named so the rule is explicit, never boxed)
 ```
@@ -42,12 +42,13 @@ and a note on why. For the COCO zero-shot models:
 | bear, elephant, zebra, giraffe | animal/other | 0.50 | large-animal confusions worth seeing, not counting as horses |
 | person | person/unknown | 0.60 | recall 1.00 at 0.25 with precision 0.42 (night horses as people); 0.60 keeps the real ones |
 | car | vehicle/car | 0.25 | recall 1.00, precision 0.88 |
-| truck, bus | vehicle/truck | 0.25 | tractors are never found as trucks (0/14), so this costs nothing today |
+| truck, bus | vehicle/car | 0.25 | COCO's truck is how it sees pickups and SUVs, which the ranch counts as cars; tractors are never found as trucks (0/14) |
 | motorcycle | vehicle/atv | 0.40 | |
 | everything else | dropped | | bench, bottle, clock, airplane, train, toilet, suitcase: the night noise |
 
 The reverse mapping, used only by the benchmark to score taxonomy labels against a COCO model, is derived from
-the same table: donkey → horse; delivery_vehicle, tractor, atv, trailer → truck; every person subclass → person.
+the same table: donkey → horse; delivery_vehicle → car; every person subclass → person. tractor and atv score as
+themselves, which no COCO label produces: a gold tractor is an honest miss until a model has a tractor output.
 Thresholds are per model family and live next to the mapping, so a fine-tuned model with real `donkey` and
 `tractor` outputs gets its own table and no code changes elsewhere.
 

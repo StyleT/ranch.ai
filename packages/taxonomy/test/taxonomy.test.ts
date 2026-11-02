@@ -31,7 +31,7 @@ test('mapping, thresholds, stored labels', () => {
   assert.equal(thresholdFor('coco', 'person'), 0.6);
   assert.equal(interestLabels('coco')[0], 'horse');
   assert.equal(scoringLabel('coco', 'animal', 'donkey'), 'horse');
-  assert.equal(scoringLabel('coco', 'vehicle', 'tractor'), 'truck');
+  assert.equal(scoringLabel('coco', 'vehicle', 'tractor'), 'tractor');
   assert.equal(scoringLabel('coco', 'person', 'mailman'), 'person');
   assert.equal(scoringLabel('coco', 'animal', 'deer'), 'deer');
   assert.ok(horseIsEquine('coco'));
