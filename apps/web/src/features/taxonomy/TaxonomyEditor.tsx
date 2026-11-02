@@ -10,45 +10,11 @@ import { tid } from '@/lib/testids';
 import { localDateTime } from '@/lib/format';
 import { useTz } from '@/lib/tz';
 
-const inp = 'min-h-touch rounded-md border border-line bg-bg px-2 text-sm';
-const Chip = ({ children, onRemove, label }: { children: React.ReactNode; onRemove: () => void; label: string }) => (
-  <span className="bg-surface-2 m-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm">
-    {children}
-    <button
-      type="button"
-      onClick={onRemove}
-      aria-label={`Remove ${label}`}
-      className="min-h-touch text-dim hover:text-bad min-w-6"
-    >
-      ×
-    </button>
-  </span>
-);
-function AddForm({ placeholder, onAdd, testid }: { placeholder: string; onAdd: (v: string) => void; testid?: string }) {
-  const [v, setV] = useState('');
-  return (
-    <form
-      className="inline-flex gap-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (v.trim()) {
-          onAdd(v.trim());
-          setV('');
-        }
-      }}
-    >
-      <input
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        placeholder={placeholder}
-        pattern="[a-z][a-z0-9_]*"
-        className={`${inp} w-36`}
-        {...(testid ? { 'data-testid': testid } : {})}
-      />
-      <Button type="submit">add</Button>
-    </form>
-  );
-}
+import { inp } from './inputClass';
+import { Chip } from './Chip';
+import { AddForm } from './AddForm';
+import { AddMapping } from './AddMapping';
+import { AddScoring } from './AddScoring';
 
 export function TaxonomyEditor() {
   const tz = useTz();
@@ -561,93 +527,5 @@ export function TaxonomyEditor() {
         </Card>
       </Section>
     </div>
-  );
-}
-function AddMapping({
-  subs,
-  onAdd,
-}: {
-  subs: { cls: Cls; subclass: string }[];
-  onAdd: (raw: string, cls: Cls, sub: string, thr: number) => void;
-}) {
-  const [raw, setRaw] = useState('');
-  const [sub, setSub] = useState(subs[0] ? `${subs[0].cls}/${subs[0].subclass}` : '');
-  const [thr, setThr] = useState(0.5);
-  return (
-    <form
-      className="mt-2 flex flex-wrap items-center gap-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!raw.trim() || !sub) {
-          return;
-        }
-        const [cls, s] = sub.split('/') as [Cls, string];
-        onAdd(raw.trim(), cls, s, thr);
-        setRaw('');
-      }}
-    >
-      <input
-        value={raw}
-        onChange={(e) => setRaw(e.target.value)}
-        placeholder="raw label (model class)"
-        aria-label="Raw label"
-        className={`${inp} w-44`}
-      />
-      <select value={sub} onChange={(e) => setSub(e.target.value)} aria-label="Subclass" className={inp}>
-        {subs.map((s) => (
-          <option key={`${s.cls}/${s.subclass}`} value={`${s.cls}/${s.subclass}`}>
-            {s.cls} / {s.subclass}
-          </option>
-        ))}
-      </select>
-      <input
-        type="number"
-        step={0.05}
-        min={0}
-        max={1}
-        value={thr}
-        onChange={(e) => setThr(Number(e.target.value))}
-        aria-label="Threshold"
-        className={`${inp} w-20`}
-      />
-      <Button type="submit">add mapping</Button>
-    </form>
-  );
-}
-function AddScoring({
-  subs,
-  labels,
-  onAdd,
-}: {
-  subs: string[];
-  labels: string[];
-  onAdd: (s: string, l: string) => void;
-}) {
-  const [s, setS] = useState('');
-  const [l, setL] = useState(labels[0] ?? '');
-  return (
-    <form
-      className="mt-2 flex flex-wrap items-center gap-1 text-sm"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (s && l) {
-          onAdd(s, l);
-        }
-      }}
-    >
-      <select value={s} onChange={(e) => setS(e.target.value)} aria-label="Subclass" className={inp}>
-        <option value="">subclass…</option>
-        {subs.map((x) => (
-          <option key={x}>{x}</option>
-        ))}
-      </select>{' '}
-      →{' '}
-      <select value={l} onChange={(e) => setL(e.target.value)} aria-label="Label" className={inp}>
-        {labels.map((x) => (
-          <option key={x}>{x}</option>
-        ))}
-      </select>
-      <Button type="submit">add</Button>
-    </form>
   );
 }

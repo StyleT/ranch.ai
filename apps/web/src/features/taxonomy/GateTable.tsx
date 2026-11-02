@@ -1,6 +1,7 @@
 import type { ScoreResponse, ScoreSummary } from '@ranch/contracts';
 import { tid } from '@/lib/testids';
 import { Badge } from '@/components/ui';
+import { Delta } from './Delta';
 
 const f = (v: number | null | undefined) => (v === null || v === undefined ? '–' : v.toFixed(2));
 export function delta(
@@ -17,8 +18,6 @@ export function delta(
   }
   return { text: `${x > 0 ? '+' : ''}${x.toFixed(2)}`, good: lowerIsBetter ? x < 0 : x > 0 };
 }
-const Delta = ({ d }: { d: ReturnType<typeof delta> }) =>
-  d ? <span className={`ml-1 text-xs ${d.good ? 'text-ok' : 'text-bad'}`}>({d.text})</span> : null;
 const METRICS: { key: string; label: string; get: (s: ScoreSummary) => number | null; lower?: boolean }[] = [
   { key: 'horse_recall', label: 'horse recall', get: (s) => s.horse_recall },
   { key: 'horse_ap', label: 'horse AP', get: (s) => s.horse_ap },

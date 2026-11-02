@@ -129,9 +129,9 @@ export function StepLine({
                 {localTime(new Date(t).toISOString(), tz, { second: undefined })}
               </text>
             ))}
-            {segs.map((s, i) => (
+            {segs.map((s) => (
               <path
-                key={i}
+                key={s}
                 d={s}
                 fill="none"
                 className="stroke-chart-1"

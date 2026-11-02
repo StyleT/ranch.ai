@@ -16,7 +16,8 @@ export type TrackEvent = {
   }[];
   at: number;
 };
-export type RawEvent = { topic: string; payload: unknown; at: number };
+export type RawEvent = { topic: string; payload: unknown; at: number; seq: number };
+let rawSeq = 0; // list key for the ticker: timestamps collide within a millisecond
 type Snapshot = { tracks: TrackEvent[]; raw: RawEvent[] };
 let snap: Snapshot = { tracks: [], raw: [] };
 const subs = new Set<() => void>();
@@ -31,7 +32,7 @@ export const activityStore = {
     emit();
   },
   pushRaw(r: { topic: string; payload: unknown }) {
-    snap = { ...snap, raw: [{ ...r, at: Date.now() }, ...snap.raw].slice(0, 100) };
+    snap = { ...snap, raw: [{ ...r, at: Date.now(), seq: ++rawSeq }, ...snap.raw].slice(0, 100) };
     emit();
   },
   get: () => snap,

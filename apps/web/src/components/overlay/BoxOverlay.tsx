@@ -4,6 +4,8 @@ import type { Box } from '@/lib/types';
 import { pctBox, arrow, caption, labelKind } from '@/lib/overlay/geometry';
 import { FrameImage } from './FrameImage';
 
+const boxKey = (b: Box) => `${b.label}:${b.x}:${b.y}:${b.w}:${b.h}`;
+
 const KIND_CLASS = {
   horse: 'border-label-horse',
   person: 'border-label-person',
@@ -59,10 +61,10 @@ export function BoxOverlay({
         preserveAspectRatio="none"
         aria-hidden
       >
-        {boxes.map((b, i) => {
+        {boxes.map((b) => {
           const a = arrow(b);
           return a ? (
-            <g key={i}>
+            <g key={boxKey(b)}>
               <line
                 x1={a.x1}
                 y1={a.y1}
@@ -85,11 +87,11 @@ export function BoxOverlay({
           ) : null;
         })}
       </svg>
-      {boxes.map((b, i) => {
+      {boxes.map((b) => {
         const k = labelKind(b);
         return (
           <div
-            key={i}
+            key={boxKey(b)}
             className={`pointer-events-none absolute rounded-sm border-2 ${KIND_CLASS[k]}`}
             style={pctBox(b)}
             data-label={b.label}
