@@ -19,7 +19,6 @@ export default [
       '@next/next/no-img-element': 'off',
       curly: ['error', 'all'],
       'react/no-array-index-key': 'error',
-      'react/jsx-no-bind': 'warn',
       'react/no-multi-comp': 'error',
     },
   }, // frames come from our own resize proxy; next/image adds nothing
