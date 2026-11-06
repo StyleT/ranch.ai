@@ -87,7 +87,7 @@ tunnel:           ## ssh -L to the mini's loopback-only ports: status API 5091, 
 camera-owners:    ## Who consumes camera streams right now (go2rtc consumers, :8554 sockets, buffer writers); the single-consumer rule, measured
 	@ssh $(HOST) /usr/local/ranch/bin/camera-owners.sh
 
-verify-live:      ## Live-view soak on the mini: every connected camera's JPEG buffer stays fresh for MINUTES (default 30); crash reports, web errors, CPU, owners asserted at the end
+verify-live:      ## Live-view soak on the mini: every connected camera's ring (packets) stays fresh for MINUTES (default 30); crash reports, web errors, CPU, owners asserted at the end
 	@ssh $(HOST) /usr/local/ranch/bin/verify-live.sh $(or $(MINUTES),30)
 
 live-probe:       ## The real dashboard over the tailnet in Chrome, per camera: player state, picture advancing, PNG for OSD glass-to-glass. make live-probe [CAMS=a,b]

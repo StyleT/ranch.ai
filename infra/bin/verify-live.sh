@@ -1,7 +1,8 @@
 #!/bin/bash
 # Live-view soak on the mini (make verify-live [MINUTES=30]): every 10 s, for every camera the probe calls connected,
-# the recorder's JPEG buffer must have a frame at most MAX_AGE s old. The buffer is the always-on, transport-agnostic
-# liveness truth (it is what `connected` itself is derived from, and what WebRTC/HLS viewers both ride on top of); the
+# the recorder's ring must have received packets at most MAX_AGE s ago. The ring (the always-on stream copy, written per
+# packet) is the transport-agnostic liveness truth, what `connected` itself is derived from; the JPEG buffer holds one
+# frame per keyframe, and some cameras send a keyframe per 40-52 s, so it is the picture's age, not liveness. The
 # on-demand HLS playlist is deliberately only fresh while someone is watching over HLS, so it is not what we soak.
 # At the end it asserts: buffer stayed fresh, no new node crash reports, no web socket errors, the single-consumer rule
 # holds, and the on-demand transcode invariant (NO pull_hls encoder runs unless a camera has a fresh .demand marker --
@@ -15,11 +16,11 @@ STATUS=${RANCH_STATUS_URL:-http://127.0.0.1:5091}
 say() { echo "$(date -u '+%FT%TZ') $*"; }
 crash0=$(ls /Library/Logs/DiagnosticReports/ 2>/dev/null | grep -c '^node-'); t0=$(date +%s); end=$(( t0 + MINUTES * 60 ))
 ticks=0; stale=0; checked=0; worst=0
-say "soak: $MINUTES min, buffer frame age <= $MAX_AGE s for connected cameras"
+say "soak: $MINUTES min, ring packet age <= $MAX_AGE s for connected cameras"
 while [ "$(date +%s)" -lt "$end" ]; do
   while IFS=$'\t' read -r cam connected; do
     [ "$connected" = "True" ] || continue
-    newest=$(ls -t "/usr/local/ranch/media/buffer/$cam/"*.jpg 2>/dev/null | head -1)
+    newest=$(ls -t "/usr/local/ranch/media/ring/$cam/"*.ts 2>/dev/null | head -1)
     age=$(( $(date +%s) - $(stat -f %m "$newest" 2>/dev/null || echo 0) ))
     checked=$((checked + 1)); [ "$age" -gt "$worst" ] && worst=$age
     [ "$age" -gt "$MAX_AGE" ] && stale=$((stale + 1))
