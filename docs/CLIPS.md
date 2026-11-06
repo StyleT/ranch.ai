@@ -23,12 +23,12 @@ greyscale thumbnail's 8x8 blocks: `score` = the largest block mean difference (`
 | global | lit >= 0.5 | most blocks changed at once: a light switched or the exposure stepped, never an object; while idle it is logged, never a candidate; it drops a candidate and neither extends nor closes an open clip |
 | candidate | score >= 0.08, not global, outside a 10 s cooldown, >= 40 GB free | the row is written at once with `trigger_score`; the sampler reads every keyframe from here on |
 | confirm | 2 of the next 3 keyframes score >= 0.05 and are not global | one hot keyframe is not motion: an insect streak near an IR lens, a flick or a reference reset scores hot on the pair where it appears and the pair where it vanishes, then nothing; a walking animal keeps scoring. Confirmation opens the clip with the trigger as its start, so the pre-roll is unchanged (the ring holds 3 min) |
-| drop | the window ends unconfirmed (`single`), a global keyframe (`global`), no keyframe for 30 s (`stale`) | the row keeps `dropped` and the score series; no cooldown follows a drop, so motion right after a transient opens normally |
+| drop | the window ends unconfirmed (`single`), a global keyframe (`global`), no keyframe for 60 s (`stale`) | the row keeps `dropped` and the score series; no cooldown follows a drop, so motion right after a transient opens normally |
 | continue | score >= 0.05 | the burst-member threshold |
 | close quiet | first keyframe 8 s after the last motion | four quiet keyframes; a horse pausing mid-walk rarely stands longer |
 | close max | 60 s after the trigger | the eval's cap; longer motion becomes consecutive clips |
-| close stale | no keyframe for 30 s | the camera is gone; keep what there is |
-| pre-roll | the segment containing trigger - 5 s | keyframes every 2 s, so 5 s reaches the GOP before the trigger |
+| close stale | no keyframe for 60 s | the camera is gone; keep what there is; above the longest keyframe interval seen (52 s) |
+| pre-roll | the segment containing trigger - 5 s | a segment is one GOP, so this is the GOP before the trigger (2 s on most cameras, up to 52 s on some) |
 | sample | 2 fps, 1280 wide JPEGs | 7 cameras x 2 fps = 14 fps of the ANE's ~44; the runner scale-fills to 640 anyway |
 
 While a clip is open the sampler reads every keyframe (1 s poll) instead of one per 5 s. On close, ingest concatenates
@@ -60,6 +60,14 @@ clip has 120 sampled frames; `labels` are what the detector saw on any sampled f
 the viewer on the video with the frames and boxes one tap away, and the "clips only" filter on `/detections` and the
 camera page is the clip view (`/api/clips` serves the export and the fixture recorder, not a page).
 
+**Pipeline indicator.** `GET /api/clips/summary` reports each stage per camera: ring packet age, ingest's largest
+motion score in its last minute, candidates, clips and drops by reason over 1 h and 24 h, the oldest open candidate,
+and the detector's queue. Home shows a `clips 1h: <cut> cut · <cand> cand` tile and System a per-camera table
+(`apps/web/src/lib/clips.ts`). The tone uses structural rules, not rates: **bad** when a camera's ring has had no
+packets for 30 s or has no segment (the input stopped); **warn** when candidates arrive but no clip was cut for 6 h,
+a clip is open past 90 s (the cap is 60 s), or the detector queue is past 300 of its 600. A rate threshold would need
+a healthy rate, and the rates measured so far came from a recorder that ran behind real time.
+
 ## Why a clip needs persistence: the first night's clips
 
 The first night under the trigger-opens rule cut 20 clips in 90 min, every one `quiet` at 11 to 18 s, 15 without a
@@ -85,7 +93,10 @@ with daytime horse clips among them, is what a spatial-continuity feature would 
 
 - **Copy completeness (U1)**: every 2 s segment holds 30 frames at 15 fps, 40 at 20 fps, on all seven cameras: the
   copy output gets every packet while the JPEG output decodes keyframes only.
-- **GOP (U2)**: 2 s on every camera (one 4 s and one 3 s segment in ~700). Pre-roll lands at exactly 5.0 s.
+- **GOP (U2)**: 2 s on every camera in that hour (one 4 s and one 3 s segment in ~700), pre-roll exactly 5.0 s. Later
+  segments show 34–52 s GOPs on back_pasture_cam, front_porch_cam and tractor_cam with packets flowing throughout, so
+  GOP length varies per camera and over time, and liveness reads packet age, not keyframe age
+  (`docs/CAMERA-ARCHITECTURE.md`).
 - **Ring cost**: the seven always-on ffmpegs 201 % CPU over a 10 s interval sample with the ring (233 % lifetime
   average before it); RSS 1794 MB after vs 1848 MB before; ring 148 MB at 3 min retention.
 - **First clips**: seven in three minutes at night, 11 to 15 s each (`quiet`), 1.2 to 2.3 MB, 22 to 30 sampled frames,
