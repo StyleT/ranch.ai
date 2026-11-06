@@ -3,12 +3,12 @@
 # only, never touches a camera. Exit 1 on any failed assertion. Needs sudo for pfctl (passwordless on the mini).
 #
 # MODE=stop (default, deterministic): SIGSTOP the camera's ffmpeg. Frames stop at once: exactly the symptom of a hung
-#   go2rtc dial or a dead feed as the rest of the system sees it (playlist not written). Asserts:
-#     1. netprobe reports the camera not connected within DETECT_MAX s (frames are the truth: FRESH_S + one probe)
-#     2. the recorder's stall watchdog logs "no frames for … re-attaching" within WATCHDOG_MAX s (TERM, then KILL: a
+#   go2rtc dial or a dead feed as the rest of the system sees it (no packets reach the ring). Asserts:
+#     1. netprobe reports the camera not connected within DETECT_MAX s (ring packet age: FRESH_S + one probe)
+#     2. the recorder's stall watchdog logs "no packets for … re-attaching" within WATCHDOG_MAX s (TERM, then KILL: a
 #        stopped process only dies from the KILL, which is what the watchdog does)
 #     3. the supervisor writes a rung-0 "down" row for the camera
-#     4. the camera is connected again within RECOVER_MAX s and the playlist is fresh
+#     4. the camera is connected again within RECOVER_MAX s and its ring is fresh (packets flowing again)
 #     5. camera-owners.sh still OK
 # MODE=udp (experiment, informational): a pf rule in the child anchor com.ranch/chaos drops UDP from the camera's IP.
 #   Measured 23 Oct: the drop counter grows for ~40 s and then stops while frames keep flowing: the TUTK session relays
@@ -47,7 +47,7 @@ if [ "$(state)" = "True" ]; then must 1 "still reported connected after $DETECT_
 # 2. the recorder reacted (watchdog re-attach, or ffmpeg's own exit)
 n=0
 while [ $(( $(date +%s) - t_block )) -lt "$WATCHDOG_MAX" ]; do
-  n=$(sudo -n log show --start "$(date -r "$t_block" '+%Y-%m-%d %H:%M:%S')" --predicate "process == \"logger\" AND (eventMessage CONTAINS \"$CAM: no frames for\" OR eventMessage CONTAINS \"$CAM: rtsp ended\")" --style compact 2>/dev/null | grep -cE "re-attaching|rtsp ended")
+  n=$(sudo -n log show --start "$(date -r "$t_block" '+%Y-%m-%d %H:%M:%S')" --predicate "process == \"logger\" AND (eventMessage CONTAINS \"$CAM: no packets for\" OR eventMessage CONTAINS \"$CAM: rtsp ended\")" --style compact 2>/dev/null | grep -cE "re-attaching|rtsp ended")
   [ "$n" -ge 1 ] && break; sleep 10
 done
 t_wd=$(( $(date +%s) - t_block ))
@@ -67,8 +67,9 @@ cleanup; ffpid=""; t_unblock=$(date +%s)
 while [ "$(state)" != "True" ] && [ $(( $(date +%s) - t_unblock )) -lt "$RECOVER_MAX" ]; do sleep 5; done
 t_rec=$(( $(date +%s) - t_unblock ))
 if [ "$(state)" = "True" ]; then say "ok 4: camera connected again $t_rec s after the fault was removed"; else say "FAIL 4: not connected $RECOVER_MAX s after the fault was removed"; fail=1; fi
-sleep 15; age=$(( $(date +%s) - $(stat -f %m "/usr/local/ranch/media/live/$CAM/index.m3u8" 2>/dev/null || echo 0) ))
-if [ "$age" -le 10 ]; then say "ok 4b: live playlist fresh (${age} s)"; else say "FAIL 4b: live playlist age ${age} s"; fail=1; fi
+# the ring, not the HLS playlist: HLS runs only while someone watches, the ring is the always-on stream copy
+sleep 15; seg=$(ls -t "/usr/local/ranch/media/ring/$CAM"/*.ts 2>/dev/null | head -1); age=$(( $(date +%s) - $(stat -f %m "$seg" 2>/dev/null || echo 0) ))
+if [ "$age" -le 10 ]; then say "ok 4b: ring fresh (${age} s)"; else say "FAIL 4b: ring age ${age} s"; fail=1; fi
 outcome=$(curl -s -m 5 "$STATUS/api/remediation?since=15m&camera=$CAM" | python3 -c "import json,sys; d=json.load(sys.stdin); r=[x for x in d if x['action']=='down']; print(r[0]['outcome'], r[0]['recovered_after_s']) if r else print('none')")
 say "supervisor outcome for the newest outage row: $outcome"
 
