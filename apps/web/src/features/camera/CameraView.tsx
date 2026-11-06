@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCamera } from './useCamera';
 import { useHome } from '@/features/home/useHome';
 import { StreamPlayer } from './StreamPlayer';
+import { sessionHeld } from '@/lib/live';
 import { StepLine } from '@/components/charts/StepLine';
 import { TimelineStrip } from '@/components/charts/TimelineStrip';
 import { Card, Section, Badge, Skeleton } from '@/components/ui';
@@ -68,7 +69,12 @@ export function CameraView({ name }: { name: string }) {
       </div>
       <div className="md:grid md:grid-cols-[3fr_2fr] md:gap-4">
         <div>
-          <StreamPlayer camera={name} poster={poster} playlist={d.stream.playlist} />
+          <StreamPlayer
+            camera={name}
+            poster={poster}
+            playlist={d.stream.playlist}
+            available={sessionHeld(c.ring_age_s)}
+          />
           <p className="text-dim mt-1 text-xs">
             {c.frames_per_min}/min · {horse}s now <b className="text-fg">{c.equine_now ?? '–'}</b>
           </p>

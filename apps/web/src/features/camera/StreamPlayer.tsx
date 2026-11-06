@@ -4,6 +4,9 @@
 // browser <-> go2rtc directly on the tailnet). If WebRTC does not connect, it falls back to the recorder's on-demand
 // HLS (docs/CAMERA-ARCHITECTURE.md). A WebRTC consumer shares the producer the recorder already holds, so it never
 // re-dials the camera. The badge is derived from facts (the picture must advance to read LIVE), never asserted.
+// While the recorder holds no session (`available` false, from the camera's ring age), the player attaches nothing: no
+// WebRTC offer and no playlist fetch, because either would make go2rtc dial a camera that is down or still waking
+// (docs/CAMERA-ARCHITECTURE.md, NFR-1/10). The server refuses such an offer with 409 too; the player treats that as offline.
 import { useEffect, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import { tid } from '@/lib/testids';
@@ -16,7 +19,17 @@ const nativeHls = (v: HTMLVideoElement) => v.canPlayType('application/vnd.apple.
 
 type Transport = 'webrtc' | 'hls';
 
-export function StreamPlayer({ camera, poster, playlist }: { camera: string; poster: string; playlist: string }) {
+export function StreamPlayer({
+  camera,
+  poster,
+  playlist,
+  available = true,
+}: {
+  camera: string;
+  poster: string;
+  playlist: string;
+  available?: boolean;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastTime = useRef(0);
   const [visible, setVisible] = useState(true);
@@ -28,6 +41,17 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
   const [lastProgressMs, setLastProgressMs] = useState<number | null>(null);
   const [startedMs, setStartedMs] = useState(() => Date.now());
   const [error, setError] = useState(false);
+  // the server said the session is not held (409) although the page thought it was; retry after a backoff
+  const [refused, setRefused] = useState(false);
+  const attachable = available && !refused;
+  // when the session goes away, re-enter on the primary transport once it is back (state adjusted during render)
+  const [prevAvailable, setPrevAvailable] = useState(available);
+  if (available !== prevAvailable) {
+    setPrevAvailable(available);
+    if (!available) {
+      setTransport('webrtc');
+    }
+  }
   // HLS-only facts (playlist age / buffered edge), for the HLS fallback badge
   const [hlsFacts, setHlsFacts] = useState<Pick<LiveFacts, 'playlistAgeS' | 'playlistPolledMs' | 'edgeGapS'>>(() => ({
     playlistAgeS: null,
@@ -53,7 +77,7 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
   // attach the current transport; WebRTC first, HLS on fallback or on re-attach after a webrtc failure
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !visible) {
+    if (!video || !visible || !attachable) {
       return;
     }
     let cancelled = false;
@@ -126,6 +150,14 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
             headers: { 'content-type': 'application/sdp' },
             body: pc.localDescription!.sdp,
           });
+          if (resp.status === 409) {
+            // no held session: falling back to HLS would only dial the camera from another path
+            if (!cancelled) {
+              setRefused(true);
+              setFailures((n) => n + 1);
+            }
+            return;
+          }
           if (!resp.ok) {
             return fallbackToHls();
           }
@@ -194,7 +226,16 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
       video.srcObject = null;
       video.load();
     };
-  }, [camera, playlist, visible, attach, transport]);
+  }, [camera, playlist, visible, attach, transport, attachable]);
+
+  // a refused offer is retried after the usual backoff; the session coming back (available) also clears it
+  useEffect(() => {
+    if (!refused) {
+      return;
+    }
+    const t = setTimeout(() => setRefused(false), retryDelayMs(failures));
+    return () => clearTimeout(t);
+  }, [refused, failures]);
 
   // re-attach after a fatal HLS error with backoff
   useEffect(() => {
@@ -207,7 +248,7 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
 
   // HLS fallback: poll the playlist for its write age (WebRTC needs no polling)
   useEffect(() => {
-    if (!visible || transport !== 'hls') {
+    if (!visible || transport !== 'hls' || !attachable) {
       return;
     }
     let stop = false;
@@ -236,7 +277,7 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
       stop = true;
       clearInterval(t);
     };
-  }, [playlist, visible, transport]);
+  }, [playlist, visible, transport, attachable]);
 
   const onTimeUpdate = () => {
     const v = videoRef.current;
@@ -261,6 +302,9 @@ export function StreamPlayer({ camera, poster, playlist }: { camera: string; pos
   if (!visible) {
     mode = 'paused';
     badge = 'PAUSED';
+  } else if (!attachable) {
+    mode = 'offline';
+    badge = 'camera offline · reconnecting';
   } else if (transport === 'webrtc') {
     const progressing = lastProgressMs !== null && now - lastProgressMs < PROGRESS_STALL_MS;
     if (progressing) {

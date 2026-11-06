@@ -43,6 +43,7 @@ export type CameraRow = {
   ip: string | null;
   buffer_frames: number;
   buffer_age_s: number | null;
+  ring_age_s: number | null; // seconds since the ring got packets (liveness, NFR-9); the WebRTC gate reads it
   live_age_s: number | null; // seconds since the recorder last rewrote this camera's HLS playlist (null = no HLS output yet)
   connected: boolean | null; // netprobe: go2rtc holds a live session with the camera (null = no probe yet)
   state: 'connected' | 'degraded' | 'down' | 'unknown'; // connected = JPEG buffer fresh (delivering video) | down = stale | unknown = no buffer yet ('degraded' retired 23 Oct)
@@ -390,6 +391,7 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
       ip: b?.ip ?? null,
       buffer_frames: buf?.frames ?? 0,
       buffer_age_s: bufAge === null ? null : Math.round(bufAge),
+      ring_age_s: ring,
       live_age_s: liveAge,
       connected,
       state: connected === null ? 'unknown' : connected ? 'connected' : 'down',

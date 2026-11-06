@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
 import { server } from './setup-server';
+import { GO2RTC } from '../msw/handlers';
 import { invalidate } from '@/bff/daemon';
 import { GET as hlsGET } from '@/app/api/ui/hls/[camera]/[file]/route';
 import { POST as webrtcPOST } from '@/app/api/ui/webrtc/[camera]/route';
@@ -59,6 +60,19 @@ describe('/api/ui/webrtc/[camera]', () => {
   it('rejects a non-SDP body and a bad camera name', async () => {
     expect((await call('donkey_cam', 'not sdp')).status).toBe(400);
     expect((await call('Donkey', 'v=0\r\n')).status).toBe(404);
+  });
+  it('refuses an offer for a camera whose session is not held (409), without contacting go2rtc', async () => {
+    let go2rtcCalls = 0;
+    server.events.on('request:start', ({ request }) => {
+      if (request.url.startsWith(`${GO2RTC}/api/webrtc`)) {
+        go2rtcCalls++;
+      }
+    });
+    const r = await call('mops_cam', 'v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\n'); // fixture: offline, no ring
+    expect(r.status).toBe(409);
+    expect(((await r.json()) as { error?: string }).error).toBe('camera_offline');
+    expect(go2rtcCalls).toBe(0);
+    server.events.removeAllListeners();
   });
 });
 

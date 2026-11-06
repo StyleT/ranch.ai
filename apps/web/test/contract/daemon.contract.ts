@@ -32,6 +32,10 @@ await check('/api/status invariants', async () => {
   if (!status.cameras.length) {
     throw new Error('no cameras');
   }
+  const noRing = status.cameras.filter((c) => !('ring_age_s' in c)).map((c) => c.name);
+  if (noRing.length) {
+    throw new Error(`no ring_age_s (the live-attach gate's input) for ${noRing.join(', ')}`);
+  }
 });
 await check('/api/frames', async () => {
   C.parseContract(C.FramesResponse, await get('/api/frames?since=1h&limit=10'), 'frames');

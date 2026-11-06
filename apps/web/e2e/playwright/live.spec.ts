@@ -57,3 +57,27 @@ test('a playlist the recorder stopped writing is shown as the camera reconnectin
   await expect(player.getByText(/camera reconnecting/)).toBeVisible();
   await expect(player.getByText(/^LIVE/)).toHaveCount(0);
 });
+
+test('an offline camera attaches nothing: no WebRTC offer, no playlist, an offline badge over the poster', async ({
+  page,
+}) => {
+  // mops_cam has no ring in the fixture: the recorder holds no session, so any attach would dial the camera (NFR-10)
+  const attaches: string[] = [];
+  page.on('request', (r) => {
+    if (/\/api\/ui\/(webrtc|hls)\/mops_cam/.test(r.url())) {
+      attaches.push(`${r.method()} ${r.url()}`);
+    }
+  });
+  await page.goto('/cameras/mops_cam');
+  const player = page.getByTestId('stream-player');
+  await expect(player).toHaveAttribute('data-mode', 'offline');
+  await expect(player).toContainText('camera offline · reconnecting');
+  await page.waitForTimeout(8_000); // longer than the WebRTC connect timeout (6 s) that used to trigger the HLS fallback
+  expect(attaches).toEqual([]);
+  // a client that offers anyway is refused by the server without go2rtc being contacted
+  const r = await page.request.post('/api/ui/webrtc/mops_cam', {
+    headers: { 'content-type': 'application/sdp' },
+    data: 'v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\n',
+  });
+  expect(r.status()).toBe(409);
+});

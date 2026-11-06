@@ -59,6 +59,7 @@ export type CameraCard = {
   height: number | null;
   buffer_frames: number;
   buffer_age_s: number | null;
+  ring_age_s: number | null;
   connected: boolean | null;
   state: 'connected' | 'degraded' | 'down' | 'unknown'; // netprobe + recorder facts (docs/CAMERA-ARCHITECTURE.md)
 };
