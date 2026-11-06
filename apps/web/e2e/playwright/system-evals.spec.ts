@@ -42,6 +42,17 @@ test('system shows the supervisor ledger with the dry-run reboot and its recover
   await expect(row).toContainText(/camera reboot/);
   await expect(row).toContainText(/recovered · 3 min/);
 });
+test('system shows the clips pipeline per camera and names the stalled stage', async ({ page }) => {
+  await page.goto('/system');
+  const section = page.getByTestId('clips-section');
+  await expect(section).toHaveAttribute('data-tone', 'bad');
+  await expect(section).toContainText('ring input stalled: mops_cam 95 s');
+  await expect(page.getByTestId('clips-row-mops_cam')).toContainText('0/4');
+  await expect(page.getByTestId('clips-row-back_yard_cam')).toContainText('12/40');
+  // the camera links to its clips (DataTable renders a table on desktop and a list on phones: assert the visible one)
+  await expect(page.locator('a[href="/detections?camera=back_yard_cam&clip=1&since=24h"]:visible')).toBeVisible();
+});
+
 test('system shows the Wyze bridge metrics moved from :5080', async ({ page }) => {
   await page.goto('/system');
   const summary = page.getByTestId('bridge-summary');

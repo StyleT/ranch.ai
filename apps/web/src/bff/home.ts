@@ -1,9 +1,16 @@
-import { Status, Tracks, CountSeries, RemediationResponse } from '@ranch/contracts';
+import { Status, Tracks, CountSeries, RemediationResponse, ClipsSummary } from '@ranch/contracts';
+import { clipsHealth, type ClipsHealth } from '@/lib/clips';
 import type { HomeData, CameraCard, DaemonView, ActivityItem } from '@/lib/types';
 import { deriveAlerts } from '@/lib/alerts/derive';
 import { daemonJson, cached } from './daemon.ts';
 
 export const getStatus = () => cached('status', 3000, () => daemonJson(Status, '/api/status', { timeoutMs: 8000 }));
+
+/** The clips pipeline (docs/CLIPS.md); null when the daemon does not answer, so the page renders without it. */
+export const getClips = (): Promise<ClipsHealth | null> =>
+  cached('clips:summary', 10_000, () => daemonJson(ClipsSummary, '/api/clips/summary', { timeoutMs: 4000 }))
+    .then((s) => clipsHealth(s, Date.now()))
+    .catch(() => null);
 
 export function daemonViews(status: Status): DaemonView[] {
   return status.daemons.map((d) => ({
@@ -53,7 +60,7 @@ export function cameraCards(status: Status, spark: Map<string, (number | null)[]
 
 export async function getHome(): Promise<HomeData> {
   const status = await getStatus();
-  const [tracks, series, remediation] = await Promise.all([
+  const [tracks, series, remediation, clips] = await Promise.all([
     cached('tracks:1h', 3000, () => daemonJson(Tracks, '/api/tracks?since=1h&limit=30')).catch(() => []),
     cached(`counts:1h:${status.horse_label === 'equine' ? 'horse' : status.horse_label}`, 10_000, () =>
       daemonJson(CountSeries, `/api/counts/series?since=1h&bucket=5m&label=horse`),
@@ -61,6 +68,7 @@ export async function getHome(): Promise<HomeData> {
     cached('remediation:1h', 10_000, () => daemonJson(RemediationResponse, '/api/remediation?since=1h&limit=50')).catch(
       () => [],
     ), // supervisor actions in flight -> alerts
+    getClips(),
   ]);
   const spark = new Map<string, (number | null)[]>();
   const now = Date.now();
@@ -100,6 +108,7 @@ export async function getHome(): Promise<HomeData> {
     daemons_total: daemons.length,
     taxonomy: { version: status.taxonomy_version, matches_repo: status.taxonomy_matches_repo },
     detector: { model: det?.model ?? null, family: det?.family ?? null },
+    clips,
   };
   return {
     ts: status.ts,

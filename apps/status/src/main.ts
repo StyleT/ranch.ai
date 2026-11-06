@@ -9,6 +9,7 @@
 //   GET /api/taxonomy[/versions[/<id>]]; POST /api/taxonomy/{validate,score,apply,revert}  the taxonomy editor (docs/TAXONOMY-UI.md)
 //   GET /api/buffer/<cam>?w=   newest frame of the recorder's buffer (thumbnails, posters)
 //   GET /api/live/<cam>/{index.m3u8,init.mp4,segNNNNNN.m4s}   the recorder's HLS output: the live view (docs/WEB-DASHBOARD.md); files only, no camera is touched
+//   GET /api/clips/summary                 the clip pipeline per camera: ring age, motion, candidates -> clips, detector queue
 //   GET /api/clips?camera=&since=&limit=   cut motion clips (docs/CLIPS.md); GET /api/clip/<id>.mp4 the file, with Range (Safari needs 206)
 //   GET /api/bridge            the Wyze bridge's own metrics (:5080/api/metrics), proxied because 5080 is loopback-only since 23 Oct
 // Every JPEG goes through jpeg.ts (read into memory, then sharp): sharp(path) memory-maps and a file still being written
@@ -40,7 +41,7 @@ import type {
   RemediationResponse,
 } from '@ranch/contracts';
 import { connectBus } from '@ranch/bus';
-import { collect, bufferNewestPaths, bufferNameMs, bridgeMetrics, type Status } from './collect.ts';
+import { collect, bufferNewestPaths, bufferNameMs, bridgeMetrics, clipsSummary, type Status } from './collect.ts';
 import { jpegFromFile, firstReadableJpeg } from './jpeg.ts';
 import {
   getTaxonomy,
@@ -590,6 +591,9 @@ const server = createServer(async (req, res) => {
       }
       json(res, 200, withClip(f));
       return;
+    } else if (url.pathname === '/api/clips/summary') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(clipsSummary(store, mqttStatus)));
     } else if (url.pathname === '/api/clips') {
       const p = url.searchParams;
       const rows = store

@@ -155,6 +155,35 @@ export const Clip = z.looseObject({
   frame_id: NullableNum.optional(), // the first sampled frame: the list's poster
 });
 export const ClipsResponse = z.array(Clip);
+/** One camera's clip pipeline over a window: candidates triggered, cut, dropped by reason; `open` and `last_cut_ts`
+ *  are now and all-time. */
+export const ClipFunnelRow = z.looseObject({
+  camera: z.string(),
+  candidates: z.number(),
+  cut: z.number(),
+  single: z.number(),
+  global: z.number(),
+  stale: z.number(),
+  open: z.number(),
+  last_cut_ts: Iso.nullable(),
+});
+/** `/api/clips/summary`: each stage of the clip pipeline (docs/CLIPS.md), so a stalled stage is visible. `ring_age_s`
+ *  is the age of the newest ring segment, written only from stream-copied packets (null: no segment); `motion_max`
+ *  ingest's largest keyframe score in its last minute; `open_oldest_s` the age of the oldest open candidate or clip. */
+export const ClipsSummary = z.looseObject({
+  ts: Iso,
+  cameras: z.array(
+    z.looseObject({
+      camera: z.string(),
+      ring_age_s: NullableNum,
+      motion_max: NullableNum,
+      h1: ClipFunnelRow,
+      h24: ClipFunnelRow,
+    }),
+  ),
+  open_oldest_s: NullableNum,
+  detector: z.looseObject({ inflight: NullableNum, processed: NullableNum, dropped: NullableNum }),
+});
 /** On a card whose head frame was sampled from a clip: enough to show a badge and fetch /api/clip/<id>.mp4. */
 export const ClipRef = z.object({
   id: z.number(),
@@ -393,6 +422,7 @@ export const Wifi = z.looseObject({
 });
 
 export type Status = z.infer<typeof Status>;
+export type ClipsSummary = z.infer<typeof ClipsSummary>;
 export type DaemonRow = z.infer<typeof DaemonRow>;
 export type CameraRow = z.infer<typeof CameraRow>;
 export type FrameHead = z.infer<typeof FrameHead>;

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SystemData, HealthData, BridgeData } from '@/lib/types';
 import { daemonJson, cached } from './daemon.ts';
-import { getStatus, daemonViews } from './home.ts';
+import { getStatus, daemonViews, getClips } from './home.ts';
 
 const started = Date.now();
 export function buildInfo(): Record<string, unknown> | null {
@@ -45,7 +45,7 @@ export async function getSystem(): Promise<SystemData> {
       ping_ms: (p?.ping_ms as number | null | undefined) ?? null,
     };
   });
-  const [ping, bridge, avail, rem] = await Promise.all([
+  const [ping, bridge, avail, rem, clips] = await Promise.all([
     cached('ping', 5000, () => daemonJson(Ping, '/api/ping', { timeoutMs: 1500 })).catch(() => null),
     // the bridge's own metrics via the daemon (5080 is loopback-only); the page renders without them when the bridge is down
     cached('bridge', 10_000, () => daemonJson(BridgeMetrics, '/api/bridge', { timeoutMs: 4000 }))
@@ -57,6 +57,7 @@ export async function getSystem(): Promise<SystemData> {
     cached('remediation:fleet', 10_000, () =>
       daemonJson(RemediationResponse, '/api/remediation?since=24h&limit=50'),
     ).catch(() => []),
+    getClips(),
   ]);
   const remediation = rem.map((r) => ({
     id: r.id,
@@ -81,6 +82,7 @@ export async function getSystem(): Promise<SystemData> {
   const w = webStats();
   return {
     ts: status.ts,
+    clips,
     host: status.host,
     uptime_s: status.uptime_s,
     load: status.load,

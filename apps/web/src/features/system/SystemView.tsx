@@ -12,6 +12,7 @@ import { useTz } from '@/lib/tz';
 import { tid } from '@/lib/testids';
 import { BridgeSection } from './BridgeSection';
 import { Ticker } from './Ticker';
+import { ClipsSection } from './ClipsSection';
 
 export const useSystem = () =>
   useQuery({ queryKey: keys.system(), queryFn: () => apiGet<SystemData>('/api/ui/system'), refetchInterval: 15_000 });
@@ -192,6 +193,7 @@ export function SystemView() {
               {d.availability.length === 0 && <p className="text-dim px-3 py-2 text-xs">no probe history yet</p>}
             </Card>
           </Section>
+          {d.clips && <ClipsSection clips={d.clips} nowMs={Date.parse(d.ts)} />}
           <Section title="Camera supervisor · ledger · 24 h">
             <Card className="p-0" data-testid={tid.remediation}>
               <DataTable

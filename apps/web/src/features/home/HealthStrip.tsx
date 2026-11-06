@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Card } from '@/components/ui';
 import { formatUptime } from '@/lib/format';
 import { tid } from '@/lib/testids';
@@ -30,6 +31,22 @@ export function HealthStrip({ d }: { d: HomeData }) {
       )}
       {tile('daemons', `${h.daemons_up}/${h.daemons_total}`, h.daemons_up === h.daemons_total ? 'ok' : 'bad')}
       {tile('detector', `${h.detector.model ?? '–'} · tax v${h.taxonomy.version ?? '?'}`)}
+      {h.clips && (
+        // the clips pipeline (docs/CLIPS.md): last hour's candidates -> clips; the tone says whether a stage stalled
+        <Link
+          href="/system#clips"
+          data-testid={tid.clipsTile}
+          data-tone={h.clips.tone}
+          title={h.clips.reasons.join('\n') || 'every stage of the clip pipeline is moving'}
+          className="shrink-0"
+        >
+          {tile(
+            'clips 1h',
+            `${h.clips.h1.cut} cut · ${h.clips.h1.candidates} cand`,
+            h.clips.tone === 'ok' ? undefined : h.clips.tone,
+          )}
+        </Link>
+      )}
       {tile('totals', `${d.totals.frames.toLocaleString()} frames · ${d.totals.detections.toLocaleString()} dets`)}
     </Card>
   );

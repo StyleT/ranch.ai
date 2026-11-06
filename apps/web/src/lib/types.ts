@@ -1,5 +1,6 @@
 // UI contracts: what the BFF returns to the pages (docs/WEB-DASHBOARD.md §3). Everything the client renders is one of these.
 import type { Detection, BridgeMetrics } from '@ranch/contracts';
+import type { ClipsHealth } from './clips';
 
 export type Alert = {
   kind:
@@ -100,6 +101,7 @@ export type HomeData = {
     daemons_total: number;
     taxonomy: { version: number | null; matches_repo: boolean };
     detector: { model: string | null; family: string | null };
+    clips: ClipsHealth | null; // null: the daemon did not answer /api/clips/summary
   };
   alerts: Alert[];
   cameras: CameraCard[];
@@ -186,6 +188,7 @@ export type DetectionsPage = {
 
 export type SystemData = {
   ts: string;
+  clips: ClipsHealth | null;
   host: string;
   uptime_s: number;
   load: number[];

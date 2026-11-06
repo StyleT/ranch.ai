@@ -8,6 +8,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeAvailability } from './fixtures/availability.ts';
 import { makeRemediation } from './fixtures/remediation.ts';
+import { makeClipsSummary } from './fixtures/clips-summary.ts';
 
 const FX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const fx = <T = unknown>(name: string): T => JSON.parse(readFileSync(join(FX, 'daemon', `${name}.json`), 'utf8')) as T;
@@ -67,6 +68,9 @@ createServer(async (req, res) => {
   }
   if (p === '/api/bridge') {
     return json(res, 200, fx('bridge'));
+  }
+  if (p === '/api/clips/summary') {
+    return json(res, 200, makeClipsSummary(Date.now()));
   }
   if (p === '/api/remediation') {
     return json(res, 200, makeRemediation(Date.now(), url.searchParams.get('camera')));

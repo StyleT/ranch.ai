@@ -14,7 +14,7 @@ import {
   REPO_TAXONOMY_FILE,
 } from '@ranch/taxonomy';
 import { differsFromRepo } from '@ranch/taxonomy/store';
-import type { Status as StatusContract } from '@ranch/contracts';
+import type { Status as StatusContract, ClipsSummary as ClipsSummaryContract } from '@ranch/contracts';
 const repoTaxonomy = loadTaxonomyFile(REPO_TAXONOMY_FILE);
 import type { EventStore, RanchEvent } from '@ranch/events';
 
@@ -251,6 +251,60 @@ export function liveState(): Record<string, { ageS: number | null }> {
     /* no live dir */
   }
   return out;
+}
+/** Seconds since the recorder last wrote this camera's ring (`<media>/ring/<cam>/*.ts`, stream-copied packets only, so
+ *  unlike a JPEG it cannot be padded or duplicated; docs/CLIPS.md). Null: no segment. */
+export function ringAgeS(camera: string): number | null {
+  try {
+    const dir = join(config.mediaDir, 'ring', camera);
+    const newest = readdirSync(dir)
+      .filter((f) => f.endsWith('.ts'))
+      .sort()
+      .pop();
+    return newest ? Math.max(0, Math.round((Date.now() - statSync(join(dir, newest)).mtimeMs) / 1000)) : null;
+  } catch {
+    return null;
+  }
+}
+/** `/api/clips/summary`: every stage of the clip pipeline per camera (ring input, ingest motion, candidates to clips,
+ *  detector queue), so the dashboard can show which stage stalls (docs/CLIPS.md). */
+export function clipsSummary(
+  store: EventStore,
+  mqttStatus: Map<string, Record<string, unknown>>,
+): ClipsSummaryContract {
+  const now = Date.now();
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const h1 = new Map(store.clipFunnel(iso(now - 3600e3)).map((r) => [r.camera, r]));
+  const h24 = new Map(store.clipFunnel(iso(now - 86400e3)).map((r) => [r.camera, r]));
+  const motion = (mqttStatus.get('ingest')?.motion ?? {}) as Record<string, { max?: number } | undefined>;
+  const det = mqttStatus.get('detector') ?? {};
+  const num = (v: unknown) => (typeof v === 'number' ? v : null);
+  const empty = (camera: string) => ({
+    camera,
+    candidates: 0,
+    cut: 0,
+    single: 0,
+    global: 0,
+    stale: 0,
+    open: 0,
+    last_cut_ts: null,
+  });
+  const cameras = [...new Set([...Object.keys(bufferState()), ...h24.keys()])].sort();
+  const open = store.openClips();
+  return {
+    ts: iso(now),
+    cameras: cameras.map((camera) => ({
+      camera,
+      ring_age_s: ringAgeS(camera),
+      motion_max: num(motion[camera]?.max),
+      h1: h1.get(camera) ?? empty(camera),
+      h24: h24.get(camera) ?? empty(camera),
+    })),
+    open_oldest_s: open.length
+      ? Math.round((now - Math.min(...open.map((c) => Date.parse(c.trigger_ts)))) / 1000)
+      : null,
+    detector: { inflight: num(det.inflight), processed: num(det.processed), dropped: num(det.dropped) },
+  };
 }
 /** Buffer file names are UTC `YYYY-MM-DDTHH-MM-SSZ.jpg`. */
 export const bufferNameMs = (name: string): number => {

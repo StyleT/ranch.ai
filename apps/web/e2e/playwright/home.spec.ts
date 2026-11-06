@@ -18,6 +18,16 @@ test.describe('home', () => {
       await expect(page.getByTestId(`alert-camera_offline-${c.name}`)).toBeVisible();
     }
   });
+  test('the clips tile shows the last hour and links to the pipeline on System', async ({ page }) => {
+    await page.goto('/');
+    const tile = page.getByTestId('clips-tile');
+    await expect(tile).toContainText('6 cut · 18 cand');
+    await expect(tile).toHaveAttribute('data-tone', 'bad'); // mops_cam's ring stopped in the fixture
+    await expect(tile).toHaveAttribute('title', /ring input stalled: mops_cam 95 s/);
+    await tile.click();
+    await expect(page).toHaveURL(/\/system#clips$/);
+    await expect(page.getByTestId('clips-section')).toBeVisible();
+  });
   test('goes live over SSE and shows activity', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveAttribute('data-connection', 'live');

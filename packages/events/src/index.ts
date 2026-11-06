@@ -326,6 +326,33 @@ export class EventStore {
   clipFrames(clipId: number): Frame[] {
     return this.db.prepare('SELECT * FROM frames WHERE clip_id = ? ORDER BY seq').all(clipId) as unknown as Frame[];
   }
+  /** The clip pipeline per camera for candidates triggered since `since` (ISO): how many became clips, how many were
+   *  dropped and why, how many are open; plus each camera's last cut clip of any age (docs/CLIPS.md). */
+  clipFunnel(since: string): {
+    camera: string;
+    candidates: number;
+    cut: number;
+    single: number;
+    global: number;
+    stale: number;
+    open: number;
+    last_cut_ts: string | null;
+  }[] {
+    return this.db
+      .prepare(
+        `SELECT c.camera,
+           SUM(c.trigger_ts >= ?) AS candidates,
+           SUM(c.trigger_ts >= ? AND c.path IS NOT NULL) AS cut,
+           SUM(c.trigger_ts >= ? AND c.dropped IS 'single') AS single,
+           SUM(c.trigger_ts >= ? AND c.dropped IS 'global') AS global,
+           SUM(c.trigger_ts >= ? AND c.dropped IS 'stale') AS stale,
+           SUM(c.end_ts IS NULL) AS open,
+           MAX(CASE WHEN c.path IS NOT NULL THEN c.end_ts END) AS last_cut_ts
+         FROM clips c GROUP BY c.camera ORDER BY c.camera`,
+      )
+      .all(since, since, since, since, since)
+      .map((r) => ({ ...r })) as unknown as ReturnType<EventStore['clipFunnel']>;
+  }
   openClips(): Clip[] {
     return this.db.prepare('SELECT * FROM clips WHERE end_ts IS NULL').all() as unknown as Clip[];
   }

@@ -37,4 +37,7 @@ export const tid = {
   remediationRow: (id: number) => `remediation-row-${id}`,
   evalsRow: (file: string, model: string) => `evals-row-${file}-${model}`,
   healthStrip: 'health-strip',
+  clipsTile: 'clips-tile',
+  clipsSection: 'clips-section',
+  clipsRow: (cam: string) => `clips-row-${cam}`,
 } as const;

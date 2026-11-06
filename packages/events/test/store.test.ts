@@ -248,4 +248,29 @@ test('clip candidates: a drop keeps its scores and never shows as open or cut; a
   });
   assert.equal(s.clipById(b)!.scores, '[[0,0.3,0.1],[2,0.2,0.1]]');
   assert.equal(s.clips({ since: '2026-11-01T00:00:00Z' }).length, 1);
+  s.insertClip({ camera: 'd', trigger_ts: '2026-11-02T03:02:00.000Z', start_ts: '2026-11-02T03:01:55.000Z' });
+  assert.deepEqual(s.clipFunnel('2026-11-02T00:00:00Z'), [
+    {
+      camera: 'c',
+      candidates: 2,
+      cut: 1,
+      single: 1,
+      global: 0,
+      stale: 0,
+      open: 0,
+      last_cut_ts: '2026-11-02T03:01:20.000Z',
+    },
+    { camera: 'd', candidates: 1, cut: 0, single: 0, global: 0, stale: 0, open: 1, last_cut_ts: null },
+  ]);
+  // a window that starts after every trigger counts nothing, but still reports the last cut and what is open now
+  assert.deepEqual(s.clipFunnel('2026-11-03T00:00:00Z')[0], {
+    camera: 'c',
+    candidates: 0,
+    cut: 0,
+    single: 0,
+    global: 0,
+    stale: 0,
+    open: 0,
+    last_cut_ts: '2026-11-02T03:01:20.000Z',
+  });
 });

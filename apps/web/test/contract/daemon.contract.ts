@@ -36,6 +36,14 @@ await check('/api/status invariants', async () => {
 await check('/api/frames', async () => {
   C.parseContract(C.FramesResponse, await get('/api/frames?since=1h&limit=10'), 'frames');
 });
+await check('/api/clips/summary covers every camera', async () => {
+  const s = C.parseContract(C.ClipsSummary, await get('/api/clips/summary'), 'clips summary');
+  const have = new Set(s.cameras.map((c) => c.camera));
+  const missing = status.cameras.map((c) => c.name).filter((n) => !have.has(n));
+  if (missing.length) {
+    throw new Error(`no row for ${missing.join(', ')}`);
+  }
+});
 await check('/api/tracks', async () => {
   C.parseContract(C.Tracks, await get('/api/tracks?since=24h&limit=5'), 'tracks');
 });

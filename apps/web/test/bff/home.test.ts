@@ -29,6 +29,16 @@ describe('/api/ui/home', () => {
     for (const a of d.alerts) {
       expect(a.href).toMatch(/^\//);
     }
+    // the clips pipeline: mops_cam's ring stopped in the fixture, so the tile reads bad and says why
+    expect(d.health.clips?.tone).toBe('bad');
+    expect(d.health.clips?.reasons[0]).toBe('ring input stalled: mops_cam 95 s');
+    expect(d.health.clips?.h1).toEqual({ candidates: 18, cut: 6 });
+  });
+  it('renders home without the clips tile when the summary is unavailable', async () => {
+    server.use(http.get(`${DAEMON}/api/clips/summary`, () => HttpResponse.error()));
+    const res = await homeGET();
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as HomeData).health.clips).toBeNull();
   });
   it('maps an unreachable daemon to 503', async () => {
     server.use(http.get(`${DAEMON}/api/status`, () => HttpResponse.error()));
@@ -80,6 +90,7 @@ describe('/api/ui/system and /api/ui/health', () => {
     expect(d.daemons.some((x) => x.name === 'detector')).toBe(true);
     expect(d.netprobe.length).toBe(fixture<{ cameras: unknown[] }>('status').cameras.length);
     expect(d.web.rss_mb).toBeGreaterThan(0);
+    expect(d.clips?.summary.cameras.map((c) => c.camera)).toContain('mops_cam');
   });
   it('health stays 200 when the daemon is down', async () => {
     server.use(http.get(`${DAEMON}/api/ping`, () => HttpResponse.error()));
