@@ -54,6 +54,7 @@ export function cameraCards(status: Status, spark: Map<string, (number | null)[]
     buffer_frames: c.buffer_frames,
     buffer_age_s: c.buffer_age_s ?? null,
     ring_age_s: c.ring_age_s ?? null,
+    session_held: c.session_held ?? false,
     connected: c.connected ?? null,
     state: c.state ?? 'unknown',
   }));

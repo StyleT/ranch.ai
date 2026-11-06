@@ -257,7 +257,8 @@
       "buffer_age_s": 1,
       "width": 2560,
       "height": 1440,
-      "ring_age_s": 1
+      "ring_age_s": 1,
+      "session_held": true
     },
     {
       "name": "back_yard_cam",
@@ -273,7 +274,8 @@
       "buffer_age_s": 1,
       "width": 2560,
       "height": 1440,
-      "ring_age_s": 1
+      "ring_age_s": 1,
+      "session_held": true
     },
     {
       "name": "donkey_cam",
@@ -289,7 +291,8 @@
       "buffer_age_s": 2,
       "width": 2560,
       "height": 1440,
-      "ring_age_s": 2
+      "ring_age_s": 2,
+      "session_held": true
     },
     {
       "name": "front_porch_cam",
@@ -305,7 +308,8 @@
       "buffer_age_s": 2,
       "width": 1920,
       "height": 1080,
-      "ring_age_s": 2
+      "ring_age_s": 2,
+      "session_held": true
     },
     {
       "name": "mops_cam",
@@ -321,7 +325,8 @@
       "buffer_age_s": null,
       "width": 2560,
       "height": 1440,
-      "ring_age_s": null
+      "ring_age_s": null,
+      "session_held": false
     },
     {
       "name": "tractor_cam",
@@ -337,7 +342,8 @@
       "buffer_age_s": 0,
       "width": 2560,
       "height": 1440,
-      "ring_age_s": 1
+      "ring_age_s": 1,
+      "session_held": true
     },
     {
       "name": "wash_stall",
@@ -353,7 +359,8 @@
       "buffer_age_s": 1,
       "width": 2560,
       "height": 1440,
-      "ring_age_s": 1
+      "ring_age_s": 1,
+      "session_held": true
     }
   ],
   "labels_1h": [

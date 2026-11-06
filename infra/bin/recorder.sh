@@ -55,7 +55,14 @@ ring_mtime() { local f; f=$(ls -t "$1"/*.ts 2>/dev/null | head -1); [ -n "$f" ] 
 # 15 s; consecutive failures wait 30 s, then 60 s, and stay at 60 s. A camera reappearing on the LAN (netprobe's file
 # <lan>/<cam> going from empty to an address) is dialled within 15 s of that, whatever the schedule says.
 RECORDER_LAN_DIR="${RECORDER_LAN_DIR:-/usr/local/ranch/var/lan}"
-REDIAL_OK_S="${REDIAL_OK_S:-60}"   # a run counts as a success only after this many seconds of packets
+REDIAL_OK_S="${REDIAL_OK_S:-60}"
+# <held>/<cam> exists, refreshed every watchdog tick, while THIS jpeg run delivers packets; removed the moment the run
+# ends, and cleared when the recorder starts. A live consumer (HLS here, WebRTC via the status API) attaches only while it
+# exists: ring freshness alone also counts the segments a run that just ended (or a previous recorder) wrote, and an
+# attach in that window is a camera dial (seen right after a recorder restart).
+RECORDER_HELD_DIR="${RECORDER_HELD_DIR:-/usr/local/ranch/var/held}"
+HELD_MAX_AGE_S="${HELD_MAX_AGE_S:-25}"   # two watchdog ticks + slack
+held_fresh() { local f="$RECORDER_HELD_DIR/$1"; [ -f "$f" ] && [ $(( $(date +%s) - $(stat -f %m "$f") )) -le "$HELD_MAX_AGE_S" ]; }   # a run counts as a success only after this many seconds of packets
 redial_delay() { case $1 in 0|1) echo 15;; 2) echo 30;; *) echo 60;; esac; }
 lan_of() { [ -f "$RECORDER_LAN_DIR/$1" ] && cat "$RECORDER_LAN_DIR/$1" 2>/dev/null || echo "?"; }
 # Sleep $2 s in 5 s slices; if the camera's LAN file goes from empty to an address, cut the remaining wait to 15 s.
@@ -95,15 +102,18 @@ pull_jpeg() {
       sleep 10
       # the first packet of this run (a ring segment written after it started) starts the success clock
       [ "$first_pkt" -eq 0 ] && [ "$(ring_mtime "$ring")" -ge "$t0" ] && first_pkt=$(date +%s)
+      if [ "$first_pkt" -gt 0 ] && [ "$(newest_ring_age "$ring" "$t0")" -lt 15 ]; then touch "$RECORDER_HELD_DIR/$cam"; fi
       if [ "$(newest_ring_age "$ring" "$t0")" -ge "$RECORDER_STALL_S" ] && kill -0 "$pipe" 2>/dev/null; then
         ffpid=$(pgrep -f "ffmpeg .*-skip_frame nokey .*${RTSP}/${cam}[[:space:]]" | head -1)
         log "$cam: no packets for >= $RECORDER_STALL_S s (hung dial or dead feed), re-attaching (killing ffmpeg ${ffpid:-?})"
         [ -n "$ffpid" ] && { kill -TERM "$ffpid" 2>/dev/null; sleep 3; kill -KILL "$ffpid" 2>/dev/null; }
         stalled=1
+        rm -f "$RECORDER_HELD_DIR/$cam"
         break
       fi
     done
     wait "$pipe"; rc=$?
+    rm -f "$RECORDER_HELD_DIR/$cam"   # this run no longer holds the producer
     # success = packets flowed for REDIAL_OK_S and the run did not end in a stall; a run that merely lasted long does not count
     if [ "$stalled" -eq 0 ] && [ "$first_pkt" -gt 0 ] && [ $(( $(date +%s) - first_pkt )) -ge "$REDIAL_OK_S" ]; then failures=0; fi
     failures=$((failures + 1))
@@ -124,7 +134,7 @@ pull_hls() {
   if [ "$RECORDER_AUDIO" = "1" ]; then audio=(-map '0:a?' -c:a aac -ar 8000 -ac 1 -b:a 24k); else audio=(-an); fi
   while true; do
     if ! want_live "$demand"; then sleep 2; continue; fi
-    if [ "$(newest_ring_age "$ring" 0)" -gt "$LIVE_ATTACH_MAX_RING_S" ]; then
+    if ! held_fresh "$cam" || [ "$(newest_ring_age "$ring" 0)" -gt "$LIVE_ATTACH_MAX_RING_S" ]; then
       [ "$gated" -eq 0 ] && log "$cam: viewer waiting, no held session (ring stale), live encoder not started"
       gated=1; sleep 2; continue
     fi
@@ -185,6 +195,7 @@ stop_all() { trap - EXIT INT TERM; kill -TERM -- -$$ 2>/dev/null; sleep 3; kill 
 trap stop_all EXIT INT TERM
 stale=$(pgrep -f "ffmpeg .*${RTSP}/" || true)
 if [ -n "$stale" ]; then log "killing stale ffmpeg of a previous recorder instance: $(echo "$stale" | tr '\n' ' ')"; echo "$stale" | xargs kill -KILL 2>/dev/null; sleep 1; fi
+mkdir -p "$RECORDER_HELD_DIR" "$RECORDER_LAN_DIR"; find "$RECORDER_HELD_DIR" -type f -delete 2>/dev/null   # no run holds anything yet
 for cam in $RECORDER_CAMERAS; do pull_jpeg "$cam" & pull_hls "$cam" & done
 prune &
 wait

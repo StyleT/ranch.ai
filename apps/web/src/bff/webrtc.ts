@@ -15,11 +15,11 @@ export const CAMERA_NAME = /^[a-z0-9_]{1,40}$/;
 export async function assertSessionHeld(camera: string): Promise<void> {
   const cam = (await getStatus()).cameras.find((c) => c.name === camera);
   const ring = cam?.ring_age_s ?? null;
-  if (!sessionHeld(ring)) {
+  if (!sessionHeld(ring, cam?.session_held)) {
     throw new UpstreamError(
       409,
       'camera_offline',
-      `${camera}: no held session (ring ${ring === null ? 'none' : `${ring} s`}), not dialling the camera for a viewer`,
+      `${camera}: no held session (held ${cam?.session_held === true}, ring ${ring === null ? 'none' : `${ring} s`}), not dialling the camera for a viewer`,
     );
   }
 }

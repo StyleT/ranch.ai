@@ -29,6 +29,7 @@ export const CameraRow = z.looseObject({
   buffer_frames: z.number(),
   buffer_age_s: NullableNum.optional(),
   ring_age_s: NullableNum.optional(), // packet age: the liveness every gate uses (docs/CAMERA-ARCHITECTURE.md NFR-9)
+  session_held: z.boolean().optional(), // the recorder's current run holds the producer: a viewer may attach
   width: NullableNum.optional(),
   height: NullableNum.optional(),
   live_age_s: NullableNum.optional(), // seconds since the recorder's HLS playlist for this camera last grew (23 Oct)

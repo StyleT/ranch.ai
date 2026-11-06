@@ -3,5 +3,7 @@
 // seconds; otherwise the attach would make go2rtc dial the camera. The recorder's HLS gate uses the same number.
 export const LIVE_ATTACH_MAX_RING_S = 15;
 
-export const sessionHeld = (ringAgeS: number | null | undefined): boolean =>
-  ringAgeS !== null && ringAgeS !== undefined && ringAgeS <= LIVE_ATTACH_MAX_RING_S;
+/** The recorder's current run holds the producer (its held marker is fresh) and packets are arriving. Ring freshness
+ *  alone is not enough: right after a run ends (or the recorder restarts) the ring still looks fresh for up to 15 s. */
+export const sessionHeld = (ringAgeS: number | null | undefined, held: boolean | undefined): boolean =>
+  held === true && ringAgeS !== null && ringAgeS !== undefined && ringAgeS <= LIVE_ATTACH_MAX_RING_S;

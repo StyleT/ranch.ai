@@ -44,6 +44,7 @@ export type CameraRow = {
   buffer_frames: number;
   buffer_age_s: number | null;
   ring_age_s: number | null; // seconds since the ring got packets (liveness, NFR-9); the WebRTC gate reads it
+  session_held: boolean; // the recorder's current jpeg run holds the producer (<varDir>/held/<cam> fresh); live attach needs it
   live_age_s: number | null; // seconds since the recorder last rewrote this camera's HLS playlist (null = no HLS output yet)
   connected: boolean | null; // netprobe: go2rtc holds a live session with the camera (null = no probe yet)
   state: 'connected' | 'degraded' | 'down' | 'unknown'; // connected = JPEG buffer fresh (delivering video) | down = stale | unknown = no buffer yet ('degraded' retired 23 Oct)
@@ -267,6 +268,15 @@ export function ringAgeS(camera: string): number | null {
     return null;
   }
 }
+/** The recorder refreshes <varDir>/held/<cam> every watchdog tick (10 s) while its current jpeg run delivers packets and
+ *  removes it when the run ends; fresh within 25 s means a viewer can attach without dialling the camera (NFR-1/10). */
+export function sessionHeldNow(camera: string): boolean {
+  try {
+    return (Date.now() - statSync(join(config.varDir, 'held', camera)).mtimeMs) / 1000 <= 25;
+  } catch {
+    return false;
+  }
+}
 /** `/api/clips/summary`: every stage of the clip pipeline per camera (ring input, ingest motion, candidates to clips,
  *  detector queue), so the dashboard can show which stage stalls (docs/CLIPS.md). */
 export function clipsSummary(
@@ -392,6 +402,7 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
       buffer_frames: buf?.frames ?? 0,
       buffer_age_s: bufAge === null ? null : Math.round(bufAge),
       ring_age_s: ring,
+      session_held: sessionHeldNow(name),
       live_age_s: liveAge,
       connected,
       state: connected === null ? 'unknown' : connected ? 'connected' : 'down',

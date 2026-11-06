@@ -73,7 +73,7 @@ export function CameraView({ name }: { name: string }) {
             camera={name}
             poster={poster}
             playlist={d.stream.playlist}
-            available={sessionHeld(c.ring_age_s)}
+            available={sessionHeld(c.ring_age_s, c.session_held)}
           />
           <p className="text-dim mt-1 text-xs">
             {c.frames_per_min}/min · {horse}s now <b className="text-fg">{c.equine_now ?? '–'}</b>
