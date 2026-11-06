@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { config } from '@ranch/config';
 import { connectBus, topics } from '@ranch/bus';
 import { EventStore } from '@ranch/events';
-import { statSync, readdirSync } from 'node:fs';
+import { statSync, readdirSync, mkdirSync, writeFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
 const PROBE_S = Number(process.env.RANCH_PROBE_S ?? 15);
@@ -232,6 +232,21 @@ async function recorderSocket(cam: string): Promise<{ ffmpeg_pid: number | null;
   }
 }
 
+/** <varDir>/lan/<camera>: the address the camera's MAC holds on the LAN, empty when it is seen nowhere. Written
+ *  atomically every probe for the recorder, which reads it (bash, no HTTP or MQTT in its loop) to redial a camera within
+ *  15 s of it reappearing (docs/CAMERA-ARCHITECTURE.md, NFR-4). */
+const LAN_DIR = join(config.varDir, 'lan');
+function writeLanFile(cam: string, macSeenAt: string | null): void {
+  try {
+    mkdirSync(LAN_DIR, { recursive: true });
+    const f = join(LAN_DIR, cam);
+    writeFileSync(`${f}.tmp`, macSeenAt ?? '');
+    renameSync(`${f}.tmp`, f);
+  } catch (e) {
+    log('lan file write failed', { camera: cam, error: String(e).slice(0, 120) });
+  }
+}
+
 async function main(): Promise<void> {
   const bus = await connectBus('netprobe');
   // every sample also lands in SQLite (camera_probe): the availability numbers on the dashboard and the supervisor's
@@ -247,6 +262,11 @@ async function main(): Promise<void> {
   for (;;) {
     const t0 = Date.now();
     const cams = await cameras();
+    // while any camera's MAC is missing from the neighbor table, sweep every probe: a camera coming back is seen within
+    // one probe (15 s) instead of the next 5-minute sweep, so the recorder redials it at once (NFR-4)
+    if (cams.some((c) => c.mac && !arp.has(c.mac))) {
+      sweepNow = true;
+    }
     if (sweepNow || tick % SWEEP_EVERY === 0) {
       sweepNow = false;
       await sweep(
@@ -304,6 +324,7 @@ async function main(): Promise<void> {
         };
         log('probe', row);
         snapshot[c.name] = row;
+        writeLanFile(c.name, macSeenAt);
         if (st || framesFresh) {
           try {
             store.insertProbe({

@@ -5,6 +5,8 @@ const env = (name: string, fallback: string): string => process.env[name] ?? fal
 export const config = {
   /** SQLite file holding frames, detections, events. */
   dbPath: env('RANCH_DB', '/usr/local/ranch/var/ranch-events.sqlite'),
+  /** Runtime state files shared between daemons, e.g. <varDir>/lan/<camera> (netprobe -> recorder). */
+  varDir: env('RANCH_VAR', '/usr/local/ranch/var'),
   /** Root for frames, crops, snapshots. */
   mediaDir: env('RANCH_MEDIA', '/usr/local/ranch/media'),
   mqttUrl: env('RANCH_MQTT_URL', 'mqtt://127.0.0.1:1883'),

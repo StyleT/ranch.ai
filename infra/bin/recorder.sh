@@ -46,6 +46,31 @@ free_gb() { df -g "$RECORDER_DIR" | awk 'NR==2{print $4}'; }
 # those would kill the new ffmpeg before its dial completes, a redial loop.
 newest_ring_age() { local d=$1 since=$2 f m; f=$(ls -t "$d"/*.ts 2>/dev/null | head -1); m=$since; [ -n "$f" ] && m=$(stat -f %m "$f"); [ "$m" -lt "$since" ] && m=$since; echo $(( $(date +%s) - m )); }
 want_live() { local m=$1; [ -f "$m" ] && [ $(( $(date +%s) - $(stat -f %m "$m") )) -lt "$RECORDER_DEMAND_TTL" ]; }
+# mtime of the newest ring segment, 0 when there is none
+ring_mtime() { local f; f=$(ls -t "$1"/*.ts 2>/dev/null | head -1); [ -n "$f" ] && stat -f %m "$f" || echo 0; }
+
+# Dial discipline (docs/CAMERA-ARCHITECTURE.md, NFR-3/4): every attach to a camera with no held producer is a camera
+# dial, and a camera waking from a reboot (about 4 min) must not be hammered. The first redial after any drop is within
+# 15 s; consecutive failures wait 30 s, then 60 s, and stay at 60 s. A camera reappearing on the LAN (netprobe's file
+# <lan>/<cam> going from empty to an address) is dialled within 15 s of that, whatever the schedule says.
+RECORDER_LAN_DIR="${RECORDER_LAN_DIR:-/usr/local/ranch/var/lan}"
+REDIAL_OK_S="${REDIAL_OK_S:-60}"   # a run counts as a success only after this many seconds of packets
+redial_delay() { case $1 in 0|1) echo 15;; 2) echo 30;; *) echo 60;; esac; }
+lan_of() { [ -f "$RECORDER_LAN_DIR/$1" ] && cat "$RECORDER_LAN_DIR/$1" 2>/dev/null || echo "?"; }
+# Sleep $2 s in 5 s slices; if the camera's LAN file goes from empty to an address, cut the remaining wait to 15 s.
+# A missing or unreadable file ("?") never shortens or lengthens the wait.
+redial_wait() {
+  local cam=$1 remaining=$2 before now
+  before=$(lan_of "$cam")
+  while [ "$remaining" -gt 0 ]; do
+    sleep $(( remaining < 5 ? remaining : 5 )); remaining=$(( remaining - 5 ))
+    now=$(lan_of "$cam")
+    if [ -z "$before" ] && [ -n "$now" ] && [ "$now" != "?" ] && [ "$remaining" -gt 15 ]; then
+      log "$cam: back on the LAN at $now, redialling within 15 s"; remaining=15
+    fi
+    before=$now
+  done
+}
 
 # Always-on JPEG buffer: decode keyframes only (light, real-time). Holds the go2rtc producer up so cameras never churn.
 # One JPEG per decoded keyframe (-fps_mode passthrough): image2 is a constant-frame-rate output, which padded each
@@ -54,11 +79,11 @@ want_live() { local m=$1; [ -f "$m" ] && [ $(( $(date +%s) - $(stat -f %m "$m") 
 # go2rtc and were dropped at its 60 s read deadline, while the copies kept every file-time freshness check green.
 # Without padding, a file exists only when a keyframe arrived, so every reader's file age is the picture's age.
 pull_jpeg() {
-  local cam=$1 dir="$RECORDER_DIR/$1" ring="$RECORDER_RING_DIR/$1" errf attempt=0 t0 rc delay pipe ffpid
+  local cam=$1 dir="$RECORDER_DIR/$1" ring="$RECORDER_RING_DIR/$1" errf failures=0 t0 rc delay pipe ffpid first_pkt stalled
   mkdir -p "$dir" "$ring"; errf=$(mktemp -t "recorder-jpeg-$1")
   while true; do
     if [ "$(free_gb)" -lt "$RECORDER_MIN_FREE_GB" ]; then log "$cam: free disk $(free_gb) GB < $RECORDER_MIN_FREE_GB GB, paused"; sleep 120; continue; fi
-    t0=$(date +%s); log "$cam: start (jpeg)"
+    t0=$(date +%s); first_pkt=0; stalled=0; log "$cam: start (jpeg)"
     ffmpeg -nostdin -loglevel error -rtsp_transport tcp -timeout 10000000 -use_wallclock_as_timestamps 1 -skip_frame nokey \
       -i "$RTSP/$cam" -map 0:v -q:v "$RECORDER_JPEG_Q" -fps_mode passthrough -f image2 -strftime 1 -atomic_writing 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" \
       -map 0:v -c:v copy -an -f segment -segment_format mpegts -segment_time "$RING_SEG_S" -reset_timestamps 1 -strftime 1 "$ring/%Y-%m-%dT%H-%M-%SZ.ts" 2>&1 \
@@ -67,19 +92,23 @@ pull_jpeg() {
     # Stall watchdog: go2rtc's wyze dial can hang with no error; re-attaching made it redial within 5 s (23 Oct).
     while kill -0 "$pipe" 2>/dev/null; do
       sleep 10
+      # the first packet of this run (a ring segment written after it started) starts the success clock
+      [ "$first_pkt" -eq 0 ] && [ "$(ring_mtime "$ring")" -ge "$t0" ] && first_pkt=$(date +%s)
       if [ "$(newest_ring_age "$ring" "$t0")" -ge "$RECORDER_STALL_S" ] && kill -0 "$pipe" 2>/dev/null; then
         ffpid=$(pgrep -f "ffmpeg .*-skip_frame nokey .*${RTSP}/${cam}[[:space:]]" | head -1)
         log "$cam: no packets for >= $RECORDER_STALL_S s (hung dial or dead feed), re-attaching (killing ffmpeg ${ffpid:-?})"
         [ -n "$ffpid" ] && { kill -TERM "$ffpid" 2>/dev/null; sleep 3; kill -KILL "$ffpid" 2>/dev/null; }
+        stalled=1
         break
       fi
     done
     wait "$pipe"; rc=$?
-    if [ $(( $(date +%s) - t0 )) -ge 60 ]; then attempt=0; fi
-    case $attempt in 0) delay=2;; 1) delay=5;; 2) delay=10;; 3|4|5|6|7|8|9) delay=30;; *) delay=60;; esac
-    attempt=$((attempt + 1))
-    log "$cam: rtsp ended (jpeg, exit $rc: $(cut -c1-120 < "$errf")), reconnect in $delay s"
-    sleep "$delay"
+    # success = packets flowed for REDIAL_OK_S and the run did not end in a stall; a run that merely lasted long does not count
+    if [ "$stalled" -eq 0 ] && [ "$first_pkt" -gt 0 ] && [ $(( $(date +%s) - first_pkt )) -ge "$REDIAL_OK_S" ]; then failures=0; fi
+    failures=$((failures + 1))
+    delay=$(redial_delay "$failures")
+    log "$cam: rtsp ended (jpeg, exit $rc: $(cut -c1-120 < "$errf")), reconnect in $delay s (failures $failures, lan $(lan_of "$cam" | sed 's/^$/none/'))"
+    redial_wait "$cam" "$delay"
   done
 }
 
