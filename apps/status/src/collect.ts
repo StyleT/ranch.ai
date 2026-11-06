@@ -368,11 +368,14 @@ async function collectStatus(store: EventStore, mqttStatus: Map<string, Record<s
     const buf = buffer[name];
     const bufAge = buf?.ageS !== null && buf?.ageS !== undefined && Number.isFinite(buf.ageS) ? buf.ageS : null;
     const liveAge = live[name]?.ageS === null || live[name]?.ageS === undefined ? null : Math.round(live[name]!.ageS!);
-    // "connected" = the camera is delivering video, measured by the JPEG buffer (the recorder always writes it; the HLS
-    // playlist is on-demand since 23 Oct and absent when nobody is watching, so it cannot be the ground truth).
-    const connected = bufAge === null ? null : bufAge < STALE_S;
-    // online = the recorder has a fresh buffered frame; a kept frame in the last minute is the fallback when no buffer exists
-    const online = bufAge !== null ? bufAge < STALE_S : age !== null && age < 60;
+    // "connected" = the camera is delivering video, measured by the ring's packet age: the stream copy writes every packet,
+    // whatever the keyframe interval (some cameras send one keyframe per 40-52 s, so the one-per-keyframe JPEG buffer
+    // looks stale while video flows). The JPEG age is the picture age (buffer_age_s); no ring falls back to it.
+    const ring = ringAgeS(name);
+    const flowAge = ring ?? bufAge;
+    const connected = flowAge === null ? null : flowAge < STALE_S;
+    // online = video is arriving; a kept frame in the last minute is the fallback when neither ring nor buffer exists
+    const online = flowAge !== null ? flowAge < STALE_S : age !== null && age < 60;
     return {
       name,
       online,

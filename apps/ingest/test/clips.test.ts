@@ -111,8 +111,9 @@ test('a global change drops a candidate and neither extends nor closes an open c
 test('stale: a candidate is dropped, an open clip closes where the last keyframe was', () => {
   const st = idle();
   step(st, k(s(0), 0.2));
-  assert.equal(staleCheck(st, s(10), s(0)), null); // 10 s is not stale yet (staleS 30)
-  assert.deepEqual(staleCheck(st, s(31), s(0)), {
+  assert.equal(staleCheck(st, s(10), s(0)), null); // 10 s is not stale yet
+  assert.equal(staleCheck(st, s(52), s(0)), null); // nor the longest keyframe interval seen (52 s, staleS 60)
+  assert.deepEqual(staleCheck(st, s(61), s(0)), {
     type: 'drop',
     reason: 'stale',
     triggerTs: s(0),
@@ -121,7 +122,8 @@ test('stale: a candidate is dropped, an open clip closes where the last keyframe
   });
   const st2 = idle();
   openAt(st2, 0);
-  assert.equal(staleCheck(st2, s(40), s(4))?.type, 'close');
+  assert.equal(staleCheck(st2, s(50), s(4)), null); // 46 s without a keyframe: a long GOP, not a gone camera
+  assert.equal(staleCheck(st2, s(65), s(4))?.type, 'close');
 });
 
 test('extends while motion continues, closes "quiet" on the first keyframe that is quietS after the last motion', () => {

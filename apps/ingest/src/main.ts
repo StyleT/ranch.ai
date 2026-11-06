@@ -33,9 +33,10 @@ const FLOOR_S = Number(process.env.RANCH_FLOOR_S ?? 10);
 const THRESHOLD = Number(process.env.RANCH_CHANGE_THRESHOLD ?? 0.04); // whole-frame mean diff: lighting, large changes
 const MOTION = Number(process.env.RANCH_MOTION_THRESHOLD ?? 0.08); // block-max diff against the last kept frame: something moved
 const RETENTION_D = Number(process.env.RANCH_FRAMES_RETENTION_D ?? 7);
-// A camera is "online" when its buffer has a frame newer than RANCH_STALE_S. Staleness means the recorder is not
-// getting frames (camera down / reconnecting); the sampler just waits — it never touches the camera.
-const STALE_S = Number(process.env.RANCH_STALE_S ?? 30);
+// The sampler calls a camera stale when its buffer has no keyframe newer than STALE_S (the clip rules' staleS: one JPEG
+// per keyframe, and some cameras send one keyframe per 40-52 s). Staleness means the recorder is not getting frames
+// (camera down / reconnecting); the sampler just waits — it never touches the camera.
+const STALE_S = Number(process.env.RANCH_INGEST_STALE_S ?? CLIP.staleS);
 // motion metric of every sample since the last status message, per camera: p50/p90/max tell whether the thresholds fit
 const motionSamples = new Map<string, number[]>();
 const motionSummary = () => {

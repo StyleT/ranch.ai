@@ -19,7 +19,7 @@ export const CLIP = {
   quietS: 8, // a horse pausing mid-walk rarely stands still longer; 4 keyframes of quiet end the clip
   maxS: 60, // the eval's clip length cap; longer motion becomes consecutive clips after the cooldown
   cooldownS: 10, // today's BURST_COOLDOWN_S
-  staleS: 30, // today's RANCH_STALE_S: no buffer keyframe this long means the camera is gone, close what we have
+  staleS: 60, // no buffer keyframe this long means the camera is gone, close what we have; above the longest GOP seen (52 s)
   sampleFps: 2, // detector stride: 7 cameras x 2 fps = 14 fps of the ANE's ~44, and 0.5 s between boxes for the tracker
   sampleWidth: 1280, // the runner scale-fills to 640 anyway; a 720p JPEG is ~120 KB instead of ~500 KB
   minFreeGb: 40, // the recorder pauses at 20; clips stop first so the live buffer never starves

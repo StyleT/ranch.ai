@@ -184,10 +184,8 @@ async function wifi(): Promise<Record<string, unknown> | null> {
 
 const PROBE_KEEP_D = Number(process.env.RANCH_PROBE_KEEP_D ?? 7);
 const FRESH_S = Number(process.env.RANCH_FRESH_S ?? 30);
-/** Seconds since the recorder last wrote this camera's newest JPEG buffer frame. Frames on disk are the ground truth for
- *  "the camera delivers video": the recorder always writes the buffer (the HLS playlist is on-demand since 23 Oct), and
- *  go2rtc's stream list can lie (an orphaned stream object after the bridge re-registers, or a session that reads
- *  connected ~90 s after the packets stop). */
+/** Seconds since the recorder last wrote this camera's newest JPEG buffer frame: the picture's age. One JPEG per
+ *  keyframe, and some cameras send one keyframe per 40-52 s, so this is not the liveness signal (ringAgeS is). */
 function liveAgeS(cam: string): number | null {
   try {
     const dir = join(config.bufferDir, cam);
@@ -279,12 +277,13 @@ async function main(): Promise<void> {
           st && p && st.rx_bytes !== null && p.rx_bytes !== null && st.remote === p.remote
             ? st.rx_bytes - p.rx_bytes
             : null;
-        const liveAge = liveAgeS(c.name);
+        const jpegAge = liveAgeS(c.name);
+        // video is arriving = the ring got packets in the last FRESH_S (the stream copy writes every packet, whatever the
+        // keyframe interval); no ring falls back to the JPEG age. go2rtc's session view is kept as session_visible only:
+        // it stays "connected" for ~90 s after the packets stop and misses orphaned stream objects. With neither ring nor
+        // buffer, the session view is the fallback.
+        const liveAge = ringAgeS(c.name) ?? jpegAge;
         const framesFresh = liveAge !== null && liveAge < FRESH_S;
-        // connected = video is arriving (the recorder wrote this camera's playlist in the last FRESH_S). go2rtc's session
-        // view is kept as session_visible only: it stays "connected" for ~90 s after the packets stop (chaos run 23 Oct:
-        // detection took 95 s while the frames had stopped at 15 s) and it misses orphaned stream objects. When the recorder
-        // has never written a playlist for the camera (no live dir), the session view is the fallback.
         const row = {
           camera: c.name,
           ip: c.ip,
@@ -327,7 +326,7 @@ async function main(): Promise<void> {
             log('consumers dropped', {
               camera: c.name,
               ...(await recorderSocket(c.name)),
-              frames_age_s: liveAge === null ? null : Math.round(liveAge),
+              frames_age_s: jpegAge === null ? null : Math.round(jpegAge),
               ring_age_s: ringAgeS(c.name),
             });
           }

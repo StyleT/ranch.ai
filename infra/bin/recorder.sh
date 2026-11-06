@@ -40,7 +40,11 @@ RECORDER_STALL_S="${RECORDER_STALL_S:-45}"
 RTSP="${RTSP_BASE:-rtsp://127.0.0.1:8554}"
 log() { echo "$(date -u '+%FT%TZ') $*"; }
 free_gb() { df -g "$RECORDER_DIR" | awk 'NR==2{print $4}'; }
-newest_jpeg_age() { local d=$1 f; f=$(ls -t "$d"/*.jpg 2>/dev/null | head -1); [ -n "$f" ] && echo $(( $(date +%s) - $(stat -f %m "$f") )) || echo 99999; }
+# Packet age: the ring's stream copy writes every packet, so its newest segment's mtime says "video is arriving" whatever
+# the keyframe interval (some cameras send one keyframe per 40-52 s; the one-per-keyframe JPEGs would read as a stall).
+# Counted from this ffmpeg's start at the earliest ($2): a reconnect after a stall finds only old segments, and judging
+# those would kill the new ffmpeg before its dial completes, a redial loop.
+newest_ring_age() { local d=$1 since=$2 f m; f=$(ls -t "$d"/*.ts 2>/dev/null | head -1); m=$since; [ -n "$f" ] && m=$(stat -f %m "$f"); [ "$m" -lt "$since" ] && m=$since; echo $(( $(date +%s) - m )); }
 want_live() { local m=$1; [ -f "$m" ] && [ $(( $(date +%s) - $(stat -f %m "$m") )) -lt "$RECORDER_DEMAND_TTL" ]; }
 
 # Always-on JPEG buffer: decode keyframes only (light, real-time). Holds the go2rtc producer up so cameras never churn.
@@ -63,9 +67,9 @@ pull_jpeg() {
     # Stall watchdog: go2rtc's wyze dial can hang with no error; re-attaching made it redial within 5 s (23 Oct).
     while kill -0 "$pipe" 2>/dev/null; do
       sleep 10
-      if [ "$(newest_jpeg_age "$dir")" -ge "$RECORDER_STALL_S" ] && kill -0 "$pipe" 2>/dev/null; then
+      if [ "$(newest_ring_age "$ring" "$t0")" -ge "$RECORDER_STALL_S" ] && kill -0 "$pipe" 2>/dev/null; then
         ffpid=$(pgrep -f "ffmpeg .*-skip_frame nokey .*${RTSP}/${cam}[[:space:]]" | head -1)
-        log "$cam: no frames for >= $RECORDER_STALL_S s (hung dial or dead feed), re-attaching (killing ffmpeg ${ffpid:-?})"
+        log "$cam: no packets for >= $RECORDER_STALL_S s (hung dial or dead feed), re-attaching (killing ffmpeg ${ffpid:-?})"
         [ -n "$ffpid" ] && { kill -TERM "$ffpid" 2>/dev/null; sleep 3; kill -KILL "$ffpid" 2>/dev/null; }
         break
       fi
