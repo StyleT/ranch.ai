@@ -56,6 +56,14 @@ fiftyone-import:  ## Import a set (+labels, +predictions) into FiftyOne: make fi
 	@test -n "$(SET)" || (echo "usage: make fiftyone-import SET=evals/baseline/<date> [LABELS=<jsonl>:<field>] [MODELS=a,b]"; exit 2)
 	$(FO_RUN) import_jsonl.py --set $(CURDIR)/$(SET) $(if $(LABELS),--labels $(CURDIR)/$(LABELS),) $(if $(MODELS),--predictions $(MODELS),) --overwrite
 
+fiftyone-import-clips: ## Import a clip set into a FiftyOne video dataset for review: make fiftyone-import-clips SET=evals/baseline/2026-11-06
+	@test -n "$(SET)" || (echo "usage: make fiftyone-import-clips SET=evals/baseline/<date>"; exit 2)
+	$(FO_RUN) import_clips.py --set $(CURDIR)/$(SET) --overwrite
+
+fiftyone-review:  ## Write the review tags of a clip dataset back into its set directory: make fiftyone-review NAME=clips-ranch-pool-v1 SET=evals/baseline/2026-11-06
+	@test -n "$(NAME)" -a -n "$(SET)" || (echo "usage: make fiftyone-review NAME=<dataset> SET=evals/baseline/<date>"; exit 2)
+	$(FO_RUN) review_tags.py --name $(NAME) --set $(CURDIR)/$(SET)
+
 fiftyone-push:    ## Push a FiftyOne dataset to the Hub (private, native format) and tag the revision: make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=claude-v1
 	$(FO_RUN) hub.py push --name $(NAME) --repo $(REPO) $(if $(TAG),--tag $(TAG),)
 

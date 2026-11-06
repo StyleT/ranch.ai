@@ -31,6 +31,8 @@ make fiftyone NAME=frames-ranch-bursts-v1               # the App, bursts groupe
 make fiftyone NAME=frames-ranch-bursts-v1 MODE=annotate # only for an older flat dataset; a grouped one ignores MODE
 make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=claude-v1
 make fiftyone REPO=ranch-frames-bursts-v1 REV=claude-v1 # load that exact revision from the Hub, then the App
+make fiftyone-import-clips SET=evals/baseline/2026-11-06 # a clip set as a video dataset for review (tags)
+make fiftyone-review NAME=clips-ranch-pool-v1 SET=evals/baseline/2026-11-06 # review tags -> review.jsonl, rejected-clips.txt
 ```
 
 ## Data model
@@ -69,6 +71,21 @@ schema" once to make the existing label fields and their attributes editable.
    Python (`fo.load_dataset(...)`, read the detection's `bounding_box`) before annotating in earnest.
 3. `make fiftyone-push NAME=frames-ranch-bursts-v1 REPO=ranch-frames-bursts-v1 TAG=revised-vlad-v1`, then the row in
    `evals/DATASETS.md`. The revision is scored in phase 2 (`evaluate.py`).
+
+## Reviewing a clip set
+
+A clip set (`snapshot.ts --clips`, docs/CLIPS.md) is imported as a **video dataset**, one sample per mp4 with
+`clip_id`, `camera`, `period`, `start_ts`, `duration_s`, `stopped`, `preroll_s`, `mini_path`. The App plays the clip;
+the Annotate tab does not apply to video here, the review is sample tags:
+
+1. `make frames-pull DATE=<date>` (the mp4s land under `evals/baseline/<date>/frames/clips/<camera>/`, the sampled
+   frames beside them), then `make fiftyone-import-clips SET=evals/baseline/<date>` and `make fiftyone NAME=<set id>`.
+2. For each clip, tag the sample (sidebar, "Tags"): `keep`, or `reject:empty` (nothing there), `reject:still`
+   (something there, nothing moves), `reject:insect`, `reject:lighting`, `reject:shake`, `reject:other`. A free note
+   is a tag too (`note:two horses at the trough`). Untagged means not reviewed.
+3. `make fiftyone-review NAME=<set id> SET=evals/baseline/<date>` writes `review.jsonl` (every clip with its tags)
+   and `rejected-clips.txt` (the ids with a `reject:*` tag) into the set directory, which `snapshot.ts --clips N
+   --exclude-clips <that file>` reads when the frozen set is picked. Commit both with the set.
 
 ## Store of truth
 
