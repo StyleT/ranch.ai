@@ -201,6 +201,39 @@ function liveAgeS(cam: string): number | null {
   }
 }
 
+/** Seconds since the recorder last wrote a ring segment for this camera (stream-copied packets only). */
+function ringAgeS(cam: string): number | null {
+  try {
+    const dir = join(config.mediaDir, 'ring', cam);
+    const f = readdirSync(dir)
+      .filter((x) => x.endsWith('.ts'))
+      .sort()
+      .pop();
+    return f ? Math.round((Date.now() - statSync(join(dir, f)).mtimeMs) / 1000) : null;
+  } catch {
+    return null;
+  }
+}
+/** The recorder's ffmpeg for this camera and the state of its RTSP socket to go2rtc (none: no :8554 socket at all). */
+async function recorderSocket(cam: string): Promise<{ ffmpeg_pid: number | null; rtsp_socket: string | null }> {
+  try {
+    const { stdout } = await run('/usr/bin/pgrep', ['-f', `ffmpeg .*-skip_frame nokey .*8554/${cam}[[:space:]]`], {
+      timeout: 3000,
+    });
+    const pid = Number(stdout.trim().split('\n')[0]);
+    if (!pid) {
+      return { ffmpeg_pid: null, rtsp_socket: null };
+    }
+    const lsof = await run('/usr/sbin/lsof', ['-nP', '-a', '-p', String(pid), '-iTCP:8554'], { timeout: 3000 }).catch(
+      () => ({ stdout: '' }),
+    );
+    const state = /\((\w+)\)\s*$/m.exec(lsof.stdout)?.[1] ?? 'none';
+    return { ffmpeg_pid: pid, rtsp_socket: state };
+  } catch {
+    return { ffmpeg_pid: null, rtsp_socket: null };
+  }
+}
+
 async function main(): Promise<void> {
   const bus = await connectBus('netprobe');
   // every sample also lands in SQLite (camera_probe): the availability numbers on the dashboard and the supervisor's
@@ -288,6 +321,15 @@ async function main(): Promise<void> {
         if (st) {
           if (p && p.producer !== st.producer) {
             log('producer changed', { camera: c.name, producer: st.producer });
+          }
+          if (p && p.consumers > 0 && st.consumers === 0) {
+            // go2rtc lost its last consumer without us asking: record what the recorder's ffmpeg looks like at that moment
+            log('consumers dropped', {
+              camera: c.name,
+              ...(await recorderSocket(c.name)),
+              frames_age_s: liveAge === null ? null : Math.round(liveAge),
+              ring_age_s: ringAgeS(c.name),
+            });
           }
           if (p && p.connected !== st.connected) {
             log('session changed', {

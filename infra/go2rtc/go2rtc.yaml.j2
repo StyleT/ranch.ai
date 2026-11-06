@@ -5,7 +5,7 @@ log:
   level: info
   streams: debug      # producer connect/disconnect, keyframe waits: the evidence for camera dropouts
   api: {{ go2rtc_api_log }}   # trace while measuring which API paths the bridge calls (for api.allow_paths; requests log only at trace), warn otherwise
-  rtsp: info
+  rtsp: debug         # consumer connect/close with its error: the evidence for why the recorder's session is dropped
   webrtc: warn
 # Loopback only (23 Oct): go2rtc dials a camera whenever a consumer attaches, so any LAN or tailnet device that could
 # reach these ports could make it dial. Only processes on the mini may talk to go2rtc; the recorder is the single
