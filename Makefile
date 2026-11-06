@@ -1,7 +1,7 @@
 ANSIBLE_PLAYBOOK ?= $(HOME)/.local/bin/ansible-playbook
 HOST ?= ranch@ranch-ai.tail6d04cd.ts.net
 
-.PHONY: bootstrap provision check verify snapshot logs logs-last dataset-push taxonomy-pull web-dev web-build web-health fixtures-record contract-test e2e e2e-ai
+.PHONY: camera-dials bootstrap provision check verify snapshot logs logs-last dataset-push taxonomy-pull web-dev web-build web-health fixtures-record contract-test e2e e2e-ai
 
 bootstrap:        ## One-time: Xcode CLT + Homebrew on a freshly erased mini
 	ssh $(HOST) 'bash -s' < infra/bootstrap.sh
@@ -86,6 +86,9 @@ tunnel:           ## ssh -L to the mini's loopback-only ports: status API 5091, 
 
 camera-owners:    ## Who consumes camera streams right now (go2rtc consumers, :8554 sockets, buffer writers); the single-consumer rule, measured
 	@ssh $(HOST) /usr/local/ranch/bin/camera-owners.sh
+
+camera-dials:     ## Who dialled the cameras and how often, per 10 min (H hours, CAM one camera); ASSERT=1 fails on any dial not caused by the recorder's jpeg role
+	@ssh $(HOST) /usr/local/ranch/bin/camera-dials.sh --hours $(or $(H),1) $(if $(CAM),--cam $(CAM)) $(if $(ASSERT),--assert)
 
 verify-live:      ## Live-view soak on the mini: every connected camera's ring (packets) stays fresh for MINUTES (default 30); crash reports, web errors, CPU, owners asserted at the end
 	@ssh $(HOST) /usr/local/ranch/bin/verify-live.sh $(or $(MINUTES),30)

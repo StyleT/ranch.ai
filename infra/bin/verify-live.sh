@@ -5,7 +5,7 @@
 # frame per keyframe, and some cameras send a keyframe per 40-52 s, so it is the picture's age, not liveness. The
 # on-demand HLS playlist is deliberately only fresh while someone is watching over HLS, so it is not what we soak.
 # At the end it asserts: buffer stayed fresh, no new node crash reports, no web socket errors, the single-consumer rule
-# holds, and the on-demand transcode invariant (NO pull_hls encoder runs unless a camera has a fresh .demand marker --
+# holds, only the recorder's jpeg role dialled a camera (camera-dials.sh --assert), and the on-demand transcode invariant (NO pull_hls encoder runs unless a camera has a fresh .demand marker --
 # a stuck encoder with no viewer is exactly the saturation the on-demand design removed). The steady-state JPEG-decode
 # CPU is reported as a number and warned (not failed) over CPU_BUDGET: it is a pre-existing per-camera cost, not a
 # transport regression. Runs under the mini's /bin/bash (3.2): no associative arrays, no bash-4 features.
@@ -44,5 +44,8 @@ say "checks: $checked camera-ticks over $ticks ticks; stale (> $MAX_AGE s): $sta
 if [ "$hls_enc" -gt 0 ] && [ "$watched" -eq 0 ]; then say "FAIL: $hls_enc pull_hls encoder(s) running with no fresh .demand (stuck transcode)"; fail=1; else say "ok: on-demand transcode (pull_hls encoders=$hls_enc, cameras watched=$watched)"; fi
 [ "${jpeg_cpu:-0}" -le "$CPU_BUDGET" ] && say "ok: recorder JPEG-decode CPU ${jpeg_cpu}% (budget $CPU_BUDGET%)" || say "WARN: recorder JPEG-decode CPU ${jpeg_cpu}% over budget $CPU_BUDGET% (pre-existing per-camera decode cost, not a transport regression)"
 echo "$owners" | grep -q '^OK' && say "ok: $owners" || { say "FAIL: $owners"; fail=1; }
+# the single-dialler rule over the soak (NFR-1): every camera dial was caused by the recorder's jpeg role
+dials=$(/usr/local/ranch/bin/camera-dials.sh --since "$(date -r "$t0" '+%Y-%m-%d %H:%M:%S')" --assert 2>&1); drc=$?
+[ "$drc" -eq 0 ] && say "ok: $(echo "$dials" | tail -1)" || { echo "$dials" | grep VIOLATION | head -10; say "FAIL: $(echo "$dials" | tail -1)"; fail=1; }
 say "result=$([ $fail -eq 0 ] && echo PASS || echo FAIL)"
 exit $fail
