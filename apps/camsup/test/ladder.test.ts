@@ -248,18 +248,10 @@ test('defaults are the documented ladder', () => {
   });
 });
 
-test('rung 1 re-attaches an orphaned consumer after two ticks and cools for two minutes', () => {
+test('fresh frames with no go2rtc consumer is not acted on (no rung kills the recorder ffmpeg)', () => {
   const states = new Map<string, CamState>([['back_yard_cam', fresh()]]);
-  const orphan: CamFacts = { camera: 'back_yard_cam', connected: true, pingOk: true, framesFresh: true, consumers: 0 };
-  assert.deepEqual(decide(T0, [orphan], states, [], null), []); // first tick: wait
-  const d = decide(T0 + 15e3, [orphan], states, [], null);
-  assert.deepEqual(
-    d.map((x) => [x.rung, x.action]),
-    [[1, 'reattach']],
-  );
-  assert.deepEqual(decide(T0 + 30e3, [orphan], states, [], null), []); // one tick after: counting again
-  assert.deepEqual(decide(T0 + 45e3, [orphan], states, [], null), []); // two ticks but cooling
-  assert.equal(decide(T0 + 15e3 + 120e3 + 15e3 * 2, [orphan], states, [], null).length, 1);
-  const healthy: CamFacts = { camera: 'back_yard_cam', connected: true, pingOk: true, framesFresh: true, consumers: 1 };
-  assert.deepEqual(decide(T0 + 600e3, [healthy], new Map([['back_yard_cam', fresh()]]), [], null), []);
+  const f: CamFacts = { camera: 'back_yard_cam', connected: true, pingOk: true, framesFresh: true, consumers: 0 };
+  for (let t = 0; t <= 600e3; t += 15e3) {
+    assert.deepEqual(decide(T0 + t, [f], states, [], null), []);
+  }
 });

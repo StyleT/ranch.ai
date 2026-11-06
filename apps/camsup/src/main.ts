@@ -162,7 +162,7 @@ async function main(): Promise<void> {
   const record = (
     camera: string,
     rung: number,
-    action: 'down' | 'reattach' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert',
+    action: 'down' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert',
     reason: string,
   ) => {
     const ts = new Date().toISOString();
@@ -245,28 +245,6 @@ async function main(): Promise<void> {
         );
       }
       for (const d of decide(now, facts, states, fleetReboots, lastGo2rtcRestartMs, cfg)) {
-        if (d.action === 'reattach') {
-          // rung 1 never touches a camera (it restarts our own ffmpeg), so it is not dry-run gated
-          const ts = new Date().toISOString();
-          const id = store.insertRemediation({
-            ts,
-            camera: d.camera,
-            rung: 1,
-            action: 'reattach',
-            reason: d.reason,
-            dry_run: false,
-          });
-          log('remediation', { id, camera: d.camera, rung: 1, action: 'reattach', reason: d.reason });
-          try {
-            await run('/usr/bin/pkill', ['-TERM', '-f', `ffmpeg .*rtsp://127.0.0.1:8554/${d.camera}[[:space:]]`], {
-              timeout: 5000,
-            });
-            store.resolveRemediation(id, 'reattached', new Date().toISOString(), null);
-          } catch (e) {
-            store.resolveRemediation(id, `pkill failed: ${String(e).slice(0, 80)}`, new Date().toISOString(), null);
-          }
-          continue;
-        }
         if (d.action === 'stream_restart' || d.action === 'reregister') {
           // rungs 1b/1c never touch a camera (the bridge re-registers one stream, go2rtc redials that camera once), so they are not dry-run gated
           const ts = new Date().toISOString();

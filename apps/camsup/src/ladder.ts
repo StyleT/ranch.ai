@@ -1,12 +1,10 @@
 // The remediation ladder, pure (docs/CAMERA-ARCHITECTURE.md, 23 Oct; address facts 1 Nov). Facts in, decisions out;
 // main.ts owns the clock, the ledger and the side effects.
 //
-//   rung 1   re-attach the recorder's ffmpeg          frames are flowing but go2rtc shows no consumer for the stream for
-//            (software only, never dry-run gated)     two ticks: the bridge re-registered the stream (DELETE+PUT) and ffmpeg
-//                                                     is consuming an orphaned stream object; the new object will dial the
-//                                                     camera a second time on the next attach. Re-attaching moves ffmpeg
-//                                                     onto the new object and lets the orphan (and its camera session) die.
-//                                                     (A hung dial is rung 1 too, but the recorder's own watchdog handles it.)
+//   (no rung re-attaches the recorder's ffmpeg: "frames fresh, go2rtc shows no consumer" read as an orphan from a
+//   re-register, but the measured cases had no re-register, and killing the only consumer made go2rtc drop and re-dial
+//   the camera, recreating the same facts two minutes later: 14x the camera dials. The recorder's stall watchdog is the
+//   one place that restarts our ffmpeg.)
 //   rung 1b  bridge stream restart                    down ≥ streamRestartAfterS, the camera answers ping at the address the
 //            (software only, one camera)              bridge dials, address not moved, not yet tried this outage: the bridge's
 //                                                     own health check cannot see a producer that never connects (it counts a
@@ -51,7 +49,6 @@ export interface CamState {
   lastRebootMs: number | null;
   rebootsThisOutage: number;
   alertedThisOutage: boolean;
-  orphanTicks?: number;
   lastReattachMs?: number | null;
   streamRestartTried?: boolean;
   lastBlindRebootMs?: number | null;
@@ -70,7 +67,6 @@ export interface LadderConfig {
   blindRebootCooldownS?: number;
 }
 export type Decision =
-  | { rung: 1; action: 'reattach'; camera: string; reason: string }
   | { rung: 1.5; action: 'stream_restart'; camera: string; reason: string }
   | { rung: 1; action: 'reregister'; camera: string; reason: string }
   | { rung: 2; action: 'camera_reboot'; camera: string; reason: string; moved: boolean; blind: boolean }
@@ -140,27 +136,6 @@ export function decide(
     const s = states.get(f.camera);
     if (!s) {
       continue;
-    }
-    // rung 1: orphaned consumer (frames flow, go2rtc sees no consumer) for two consecutive ticks
-    if (f.framesFresh === true && f.consumers === 0) {
-      s.orphanTicks = (s.orphanTicks ?? 0) + 1;
-      const cooled =
-        s.lastReattachMs === null ||
-        s.lastReattachMs === undefined ||
-        nowMs - s.lastReattachMs >= (cfg.reattachCooldownS ?? 120) * 1000;
-      if (s.orphanTicks >= 2 && cooled) {
-        s.lastReattachMs = nowMs;
-        s.orphanTicks = 0;
-        out.push({
-          rung: 1,
-          action: 'reattach',
-          camera: f.camera,
-          reason:
-            'frames flowing but go2rtc shows no consumer: the stream was re-registered and ffmpeg is on an orphaned object; re-attaching so the orphan and its camera session can die',
-        });
-      }
-    } else {
-      s.orphanTicks = 0;
     }
     if (s.downSinceMs === null) {
       continue;
