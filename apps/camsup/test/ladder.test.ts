@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { advance, decide, DEFAULTS, type CamState, type CamFacts } from '../src/ladder.ts';
+import { advance, decide, noteRejoin, DEFAULTS, type CamState, type CamFacts } from '../src/ladder.ts';
 
 const T0 = Date.parse('2026-10-23T18:00:00Z');
 const fresh = (): CamState => ({
@@ -245,6 +245,7 @@ test('defaults are the documented ladder', () => {
     blindRebootAfterS: 3600,
     blindRebootCooldownS: 21600,
     fleetWindowS: 300,
+    rejoinGraceS: 300,
   });
 });
 
@@ -254,4 +255,38 @@ test('fresh frames with no go2rtc consumer is not acted on (no rung kills the re
   for (let t = 0; t <= 600e3; t += 15e3) {
     assert.deepEqual(decide(T0 + t, [f], states, [], null), []);
   }
+});
+
+test('a camera that reappears gets 300 s of grace: no stream restart or reboot, then the ladder resumes', () => {
+  const s = fresh();
+  const states = new Map<string, CamState>([['mops_cam', s]]);
+  const off: CamFacts = { camera: 'mops_cam', connected: false, pingOk: false, macSeenAt: null, bridgeKnown: true };
+  advance(s, off, T0);
+  assert.equal(noteRejoin(s, off, T0), false); // first observation sets the baseline, no rejoin
+  const back: CamFacts = {
+    ...off,
+    pingOk: true,
+    macSeenAt: '192.168.1.236',
+    ip: '192.168.1.236',
+    dialIp: '192.168.1.236',
+  };
+  const tBack = T0 + 3600e3; // back after an hour off the LAN: 1b and 2 would fire at once without the grace
+  assert.equal(noteRejoin(s, back, tBack), true);
+  assert.equal(noteRejoin(s, back, tBack + 15e3), false); // only the transition counts
+  assert.deepEqual(decide(tBack + 15e3, [back], states, [], null), []);
+  assert.deepEqual(decide(tBack + 299e3, [back], states, [], null), []);
+  const d = decide(tBack + 300e3, [back], states, [], null);
+  assert.deepEqual(
+    d.map((x) => x.action),
+    ['stream_restart'],
+  ); // grace over, still down: the ladder resumes at 1b
+});
+
+test('rung 4 says a reboot cannot reach an off-Wi-Fi camera and a power cycle is needed', () => {
+  const s = fresh();
+  const states = new Map<string, CamState>([['mops_cam', s]]);
+  const off: CamFacts = { camera: 'mops_cam', connected: false, pingOk: false, macSeenAt: null, bridgeKnown: true };
+  advance(s, off, T0);
+  const d = decide(T0 + 601e3, [off], states, [], null).find((x) => x.rung === 4);
+  assert.match(d!.reason, /off Wi-Fi and offline in the cloud.*power cycle/);
 });

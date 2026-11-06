@@ -52,6 +52,10 @@ export interface CamState {
   lastReattachMs?: number | null;
   streamRestartTried?: boolean;
   lastBlindRebootMs?: number | null;
+  /** when the camera last reappeared (MAC seen again, or ping back); the ladder holds its actions for rejoinGraceS */
+  rejoinedAtMs?: number | null;
+  lastMacSeenAt?: string | null;
+  lastPingOk?: boolean | null;
 }
 export interface LadderConfig {
   rebootAfterS: number;
@@ -65,6 +69,9 @@ export interface LadderConfig {
   streamRestartAfterS?: number;
   blindRebootAfterS?: number;
   blindRebootCooldownS?: number;
+  /** after a camera reappears, no 1b/1c/2/2b/3 for this long: it is booting and the recorder redials it within 15 s.
+   *  300 s = the slowest return measured (227 s) + the recorder's first two redials (15 + 30 s). */
+  rejoinGraceS?: number;
 }
 export type Decision =
   | { rung: 1.5; action: 'stream_restart'; camera: string; reason: string }
@@ -85,6 +92,7 @@ export const DEFAULTS: LadderConfig = {
   blindRebootAfterS: 3600,
   blindRebootCooldownS: 21600,
   fleetWindowS: 300,
+  rejoinGraceS: 300,
 };
 
 /** Advance a camera's state with a new fact. Returns the transition, if any. */
@@ -104,6 +112,24 @@ export function advance(state: CamState, f: CamFacts, nowMs: number): 'went_down
     return 'went_down';
   }
   return null;
+}
+
+/** Record a reappearance: the camera's MAC is seen again after being nowhere, or it answers ping again after not
+ *  answering. Returns true on the tick it happens (main.ts writes a `rejoined` ledger note). */
+export function noteRejoin(state: CamState, f: CamFacts, nowMs: number): boolean {
+  const macBack = f.macSeenAt !== undefined && !!f.macSeenAt && state.lastMacSeenAt === null;
+  const pingBack = f.pingOk === true && state.lastPingOk === false;
+  if (f.macSeenAt !== undefined) {
+    state.lastMacSeenAt = f.macSeenAt ?? null;
+  }
+  if (f.pingOk !== null) {
+    state.lastPingOk = f.pingOk;
+  }
+  if ((macBack || pingBack) && state.downSinceMs !== null) {
+    state.rejoinedAtMs = nowMs;
+    return true;
+  }
+  return false;
 }
 
 export function decide(
@@ -141,6 +167,14 @@ export function decide(
       continue;
     }
     const downS = (nowMs - s.downSinceMs) / 1000;
+    // a camera that just reappeared is booting: leave it to the recorder's redial (NFR-8)
+    if (
+      s.rejoinedAtMs !== null &&
+      s.rejoinedAtMs !== undefined &&
+      nowMs - s.rejoinedAtMs < (cfg.rejoinGraceS ?? 300) * 1000
+    ) {
+      continue;
+    }
     const bridgeReady = f.bridgeKnown !== false; // unknown counts as ready (older netprobe rows); false waits for the next tick
     const dial = f.dialIp ?? f.ip ?? null;
     const stale = !!f.macSeenAt && !!dial && dial !== f.macSeenAt; // go2rtc dials where the camera is not
@@ -214,7 +248,7 @@ export function decide(
           rung: 4,
           action: 'alert',
           camera: f.camera,
-          reason: `down ${Math.round(downS)} s, no ping, MAC seen nowhere on the LAN: off the network, nothing on the mini can help`,
+          reason: `down ${Math.round(downS)} s, no ping, MAC seen nowhere on the LAN: off Wi-Fi and offline in the cloud, a reboot cannot reach it; needs a power cycle if it does not return by its scheduled restart`,
         });
       }
       const blindCooled =

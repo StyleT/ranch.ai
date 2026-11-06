@@ -147,7 +147,7 @@ export interface NewProbe {
   consumers: number | null;
 }
 export type RemediationAction =
-  'down' | 'reattach' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert';
+  'down' | 'reattach' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert' | 'rejoined';
 export type RemediationRow = {
   id: number;
   ts: string;

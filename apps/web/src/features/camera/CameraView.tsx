@@ -185,7 +185,9 @@ export function CameraView({ name }: { name: string }) {
                                     ? 'camera reboot'
                                     : r.action === 'go2rtc_restart'
                                       ? 'go2rtc restart'
-                                      : 'alert'}{' '}
+                                      : r.action === 'rejoined'
+                                        ? 'rejoined'
+                                        : 'alert'}{' '}
                           · rung {r.rung}
                           {r.dry_run ? ' · dry run' : ''}
                         </Badge>

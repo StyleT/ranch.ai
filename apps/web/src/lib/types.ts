@@ -22,7 +22,8 @@ export type RemediationRow = {
   ts: string;
   camera: string;
   rung: number;
-  action: 'down' | 'reattach' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert';
+  action:
+    'down' | 'reattach' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert' | 'rejoined';
   reason: string;
   dry_run: boolean;
   outcome: string | null;

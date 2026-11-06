@@ -159,7 +159,7 @@ async function main(): Promise<void> {
               ? `address moved ${r.ip} -> ${r.mac_seen_at}; the supervisor reboots it so the cloud learns the new one`
               : r.mac_seen_at
                 ? `answers at ${r.mac_seen_at}, no stream`
-                : 'not on the LAN';
+                : 'not on the LAN: off Wi-Fi, a reboot cannot reach it; power-cycle it if it does not return by its scheduled restart';
           await post(`${c} down ${fmtDur((now - since) / 1000)}`, where, 'default');
         }
       }

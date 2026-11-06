@@ -19,7 +19,7 @@ import { promisify } from 'node:util';
 import { config } from '@ranch/config';
 import { connectBus, topics } from '@ranch/bus';
 import { EventStore } from '@ranch/events';
-import { advance, decide, DEFAULTS, type CamFacts, type CamState, type LadderConfig } from './ladder.ts';
+import { advance, decide, noteRejoin, DEFAULTS, type CamFacts, type CamState, type LadderConfig } from './ladder.ts';
 
 const TICK_S = Number(process.env.RANCH_CAMSUP_TICK_S ?? 15);
 const DRY_RUN = process.env.RANCH_CAMSUP_DRY_RUN === '1';
@@ -37,6 +37,7 @@ const cfg: LadderConfig = {
   streamRestartAfterS: Number(process.env.RANCH_CAMSUP_STREAM_RESTART_AFTER_S ?? DEFAULTS.streamRestartAfterS),
   blindRebootAfterS: Number(process.env.RANCH_CAMSUP_BLIND_REBOOT_AFTER_S ?? DEFAULTS.blindRebootAfterS),
   blindRebootCooldownS: Number(process.env.RANCH_CAMSUP_BLIND_REBOOT_COOLDOWN_S ?? DEFAULTS.blindRebootCooldownS),
+  rejoinGraceS: Number(process.env.RANCH_CAMSUP_REJOIN_GRACE_S ?? DEFAULTS.rejoinGraceS),
 };
 // after any reboot: from WATCH_FROM_S on, every WATCH_EVERY_S, ask the bridge to rediscover until its address for the camera is
 // where the MAC is seen, then stop/start the stream; give up at WATCH_UNTIL_S and let the ladder escalate
@@ -162,7 +163,7 @@ async function main(): Promise<void> {
   const record = (
     camera: string,
     rung: number,
-    action: 'down' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert',
+    action: 'down' | 'stream_restart' | 'reregister' | 'camera_reboot' | 'go2rtc_restart' | 'alert' | 'rejoined',
     reason: string,
   ) => {
     const ts = new Date().toISOString();
@@ -212,6 +213,19 @@ async function main(): Promise<void> {
             .set(f.camera, { downSinceMs: null, lastRebootMs: null, rebootsThisOutage: 0, alertedThisOutage: false })
             .get(f.camera)!;
         const downSince = s.downSinceMs;
+        if (noteRejoin(s, f, now)) {
+          // a note, not an action: resolved at once so it never reads as in flight
+          const id = store.insertRemediation({
+            ts: new Date(now).toISOString(),
+            camera: f.camera,
+            rung: 0,
+            action: 'rejoined',
+            reason: `back on the LAN (${f.macSeenAt ?? 'ping answers'}): no stream restart or reboot for ${cfg.rejoinGraceS ?? 300} s, the recorder redials it`,
+            dry_run: false,
+          });
+          store.resolveRemediation(id, 'noted', new Date(now).toISOString(), null);
+          log('rejoined', { camera: f.camera, mac_seen_at: f.macSeenAt ?? null, grace_s: cfg.rejoinGraceS });
+        }
         const t = advance(s, f, now);
         if (t === 'went_down' && !(openRows.get(f.camera) ?? []).length) {
           record(

@@ -36,7 +36,8 @@ export function deriveAlerts(i: {
       r.action !== 'down' &&
       r.action !== 'reattach' &&
       r.action !== 'stream_restart' &&
-      r.action !== 'reregister'
+      r.action !== 'reregister' &&
+      r.action !== 'rejoined'
     ) {
       out.push({
         kind: 'remediating',
