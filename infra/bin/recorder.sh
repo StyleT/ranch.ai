@@ -37,6 +37,7 @@ RECORDER_HLS_BITRATE="${RECORDER_HLS_BITRATE:-2000k}"
 RECORDER_LIVE_HEIGHT="${RECORDER_LIVE_HEIGHT:-720}"
 RECORDER_DEMAND_TTL="${RECORDER_DEMAND_TTL:-20}"
 RECORDER_STALL_S="${RECORDER_STALL_S:-45}"
+LIVE_ATTACH_MAX_RING_S="${LIVE_ATTACH_MAX_RING_S:-15}"   # a live consumer may attach only while the ring got packets this recently
 RTSP="${RTSP_BASE:-rtsp://127.0.0.1:8554}"
 log() { echo "$(date -u '+%FT%TZ') $*"; }
 free_gb() { df -g "$RECORDER_DIR" | awk 'NR==2{print $4}'; }
@@ -112,15 +113,22 @@ pull_jpeg() {
   done
 }
 
-# On-demand HLS: a controller that starts one transcoder ffmpeg while the camera is watched and stops it otherwise. The
-# always-on jpeg consumer keeps the producer up, so this transcoder's RTSP open succeeds at once and starting/stopping
-# it never touches the camera.
+# On-demand HLS: a controller that starts one transcoder ffmpeg while the camera is watched and stops it otherwise. It
+# starts only while the jpeg role holds the producer (ring packets within LIVE_ATTACH_MAX_RING_S), so its RTSP open
+# shares that session and never dials the camera (NFR-1). Without that gate a stale .demand on a camera with no session
+# restarted the encoder every ~7 s, each start a dial: 69 failed dials at mops_cam in 20 min while it was waking.
+# A run that writes no segment is a failure and the next start waits 15 / 30 / 60 s (the jpeg role's schedule).
 pull_hls() {
-  local cam=$1 live="$RECORDER_LIVE_DIR/$1" demand="$RECORDER_LIVE_DIR/$1/.demand" errf run pipe ffpid audio
+  local cam=$1 live="$RECORDER_LIVE_DIR/$1" demand="$RECORDER_LIVE_DIR/$1/.demand" ring="$RECORDER_RING_DIR/$1" errf run pipe ffpid audio failures=0 gated=0 delay
   mkdir -p "$live"; errf=$(mktemp -t "recorder-hls-$1")
   if [ "$RECORDER_AUDIO" = "1" ]; then audio=(-map '0:a?' -c:a aac -ar 8000 -ac 1 -b:a 24k); else audio=(-an); fi
   while true; do
     if ! want_live "$demand"; then sleep 2; continue; fi
+    if [ "$(newest_ring_age "$ring" 0)" -gt "$LIVE_ATTACH_MAX_RING_S" ]; then
+      [ "$gated" -eq 0 ] && log "$cam: viewer waiting, no held session (ring stale), live encoder not started"
+      gated=1; sleep 2; continue
+    fi
+    gated=0
     run=$(date +%s)
     find "$live" -type f ! -name '.demand' -delete 2>/dev/null   # fresh playlist; new init so a restart never mixes with old segments
     log "$cam: live encoder start"
@@ -150,9 +158,15 @@ pull_hls() {
       fi
     done
     wait "$pipe"
+    # a run that wrote a segment resets the schedule; one that wrote none (a failed or hung attach) backs off
+    if ls "$live"/seg"$run"-*.m4s >/dev/null 2>&1; then failures=0; else failures=$((failures + 1)); fi
     find "$live" -type f ! -name '.demand' -delete 2>/dev/null   # leave no stale playlist once the encoder stops
     [ "$(tail -c 200 "$errf" 2>/dev/null)" ] && log "$cam: live encoder ended ($(cut -c1-120 < "$errf"))"
-    sleep 1
+    if [ "$failures" -gt 0 ]; then
+      delay=$(redial_delay "$failures"); log "$cam: live encoder wrote nothing, next start in $delay s (failures $failures)"; sleep "$delay"
+    else
+      sleep 1
+    fi
   done
 }
 
