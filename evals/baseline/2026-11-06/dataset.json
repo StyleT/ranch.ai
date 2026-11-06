@@ -1,0 +1,29 @@
+{
+  "id": "clips-ranch-pool-v1",
+  "kind": "clips",
+  "version": 1,
+  "created": "2026-11-06T01:18:07.948Z",
+  "parent": null,
+  "n": 260,
+  "frames": 18024,
+  "sha256": {
+    "clips.jsonl": "db101e9d4f941697f9e80245bfa901e28528b429b75e9b0e7ad810bd7b1bcec8",
+    "frames.jsonl": "30790faf07b04a3b2617b9f00ef93359c2c59c56316c97a3528e64d4a0cb91c8"
+  },
+  "source": {
+    "query": "clips table",
+    "since": "4d",
+    "seed": 20261020,
+    "stratify": "camera x day/night x duration tercile",
+    "terciles_s": [
+      22.609789,
+      46.509356
+    ],
+    "exclude": "living_room_cam",
+    "rejected": 0
+  },
+  "host": "ranch-ai",
+  "commit": null,
+  "media_dir": "/usr/local/ranch/media/baseline/2026-11-06",
+  "preds": {}
+}

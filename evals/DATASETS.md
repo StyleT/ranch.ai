@@ -36,6 +36,7 @@ rows further down remain the record of what the TypeScript tools on the mini pro
 | preds-frames-ranch-bursts-v1-yolo26n-b4693414 | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 20e533b6d648f755… | `evals/baseline/2026-10-24/predictions.yolo26n.jsonl` | same repo and tag |
 | preds-frames-ranch-bursts-v1-yolo26s-01e03dff | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 029af01153979b54… | `evals/baseline/2026-10-24/predictions.yolo26s.jsonl` | same repo and tag |
 | labels-ranch-bursts-claude-v1 | labels | 2026-10-24 | 156 (50 bursts) | frames-ranch-bursts-v1 | e11bc8f1086efddd… | `evals/golden/labels-ranch-bursts-claude-v1.jsonl` | [tag labels-ranch-bursts-claude-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-bursts-claude-v1) `labels/` |
+| clips-ranch-pool-v1 | clips | 2026-11-06 | 260 clips (18,024 sampled frames) | – | db101e9d4f941697… (clips.jsonl), 30790faf07b04a3b… (frames.jsonl) | `evals/baseline/2026-11-06/`, mp4s and frames `/usr/local/ranch/media/baseline/2026-11-06/` on ranch-ai | not pushed: the review pool, not a frozen set |
 
 Notes on `labels-ranch-claude-v1` (smoke-verified 20 Oct, see LEADERBOARD.md): reliable at labeler confidence ≥ 0.7;
 boxes at 0.25–0.45 are hedged guesses on dark blobs and include a static patch on front_porch_cam boxed as a cat in
@@ -43,6 +44,15 @@ four frames. Score with `--min-label-conf 0.5` until the human labels (`labels-r
 `friendly` person kind is never set by Claude by design.
 
 `labels-ranch-claude-revised-vlad-v1`: Vlad reviewed Claude's labels in the frame browser (20 Oct) and removed every cat box (5; shadows and a static patch); all other boxes accepted. This is the labels dataset to score against until `labels-ranch-vlad-v1` exists.
+
+`clips-ranch-pool-v1`: the review pool for the clip set (docs/CLIPS.md, docs/EVALUATION.md §2). `snapshot.ts --clips 260
+--since 4d`, seed 20261020, no predictions (`--models` at an empty directory; predictions are run on the frozen set,
+not the pool): 260 of the 1,303 clips cut between 2 Nov and 6 Nov 01:00 UTC, stratified camera × day/night × duration
+tercile (terciles at 22.6 s and 46.5 s), floor 6 per stratum then round-robin fill, so thin strata (tractor_cam 11
+clips in the pool, back_yard night 18, mops day 9) are taken whole. A human reviews every clip in FiftyOne
+(`evals/fiftyone/README.md`, "Reviewing a clip set"); the frozen `clips-ranch-v1` is picked from the same pool with
+`--exclude-clips evals/baseline/2026-11-06/rejected-clips.txt`. The mp4s on the mini expire 7 days after their
+trigger; the copies under `media/baseline/` do not.
 
 `frames-ranch-bursts-v1` (24 Oct): the first dataset of whole bursts, for the bursts-vs-no-bursts question
 (docs/EVALUATION.md §3, §4.1 "Burst track policies"). `snapshot.ts --bursts 50 --since 7d`, seed 20261020: 50 burst

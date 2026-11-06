@@ -1,0 +1,11 @@
+{
+  "date": "2026-11-06",
+  "host": "ranch-ai",
+  "n": 18024,
+  "clips": 260,
+  "seed": 20261020,
+  "since": "4d",
+  "threshold": 0.05,
+  "media_dir": "/usr/local/ranch/media/baseline/2026-11-06",
+  "models": {}
+}
