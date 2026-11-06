@@ -8,10 +8,11 @@
 # Report: per camera and 10-min bucket, the triggers (jpeg = recorder jpeg role start, hls = live encoder start,
 # webrtc = viewer offer, put = stream (re-)registration by the bridge/supervisor) and the dials (ok / fail), plus the
 # most dials in any minute.
-# --assert: attributes every dial to its trigger: a started dial to the nearest trigger in [t-6 s, t+1 s]; a failed
-# dial to the trigger nearest t-5 s within [t-16 s, t-2 s] (DTLS failures can take ~14 s) (the attach that began it). Allowed triggers: jpeg, put,
-# and any dial within 60 s of a go2rtc start (its preload). A dial attributed to hls or webrtc, or to nothing, is a
-# violation of "only the recorder's jpeg role dials a camera"; each is printed and the script exits 1.
+# --assert: attributes every dial to the attach that began it: the trigger for that camera nearest t-5 s within
+# [t-16 s, t+1 s] (go2rtc logs a dial when it ends: discovery done, or given up, typically ~5 s and up to ~14 s after
+# the attach). Allowed triggers: jpeg, put, and any dial within 60 s of a go2rtc start (its preload). A dial attributed to
+# hls or webrtc, or to nothing, is a violation of "only the recorder's jpeg role dials a camera"; each is printed and the
+# script exits 1.
 # Runs under the mini's /bin/bash 3.2 and the system log binary; parsing in python3 -I.
 set -u
 HOURS=1; SINCE=""; UNTIL=""; CAM=""; ASSERT=0
@@ -78,10 +79,8 @@ for t, k, c in ev:
         continue
     if any(0 <= t - s <= 60 for s in starts):
         continue  # go2rtc start: preload and every stream re-attach at once
-    if k == "dial_ok":
-        cands = [(abs(t - tt), kk) for tt, kk, cc in ev if cc == c and kk in TRIG and -6 <= tt - t <= 1]
-    else:
-        cands = [(abs((t - 5) - tt), kk) for tt, kk, cc in ev if cc == c and kk in TRIG and 2 <= t - tt <= 16]
+    # both are logged when the dial ends (discovery done, or given up), ~5 s after the attach that began it
+    cands = [(abs((t - 5) - tt), kk) for tt, kk, cc in ev if cc == c and kk in TRIG and -1 <= t - tt <= 16]
     trig = min(cands)[1] if cands else None
     if trig not in ("jpeg", "put"):
         viol.append((t, c, k, trig or "none"))
