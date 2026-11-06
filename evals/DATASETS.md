@@ -14,6 +14,7 @@ rows further down remain the record of what the TypeScript tools on the mini pro
 | frames-ranch-bursts-v1 | `vladlenfedosov/ranch-frames-bursts-v1` | `claude-v1` | `gt_claude` (= labels-ranch-bursts-claude-v1, 236 boxes), `pred_yolo26s` (248), `pred_yolo11n` (237) | 156 (50 bursts) | 1 Nov: `hub.py load --revision claude-v1` → `hub.py check`: 0 differences over every field and detection attribute |
 | frames-ranch-bursts-v1 | same | `claude-v1-grouped` | same fields; the dataset is grouped (group field `burst`, one image slice per frame named by `seq`) so the Annotate tab edits per slice; supersedes `claude-v1` (flat), which stays as the record of the first push | 156 (50 bursts) | 1 Nov |
 | frames-ranch-bursts-v1 | same | `revised-vlad-v1` | adds `gt_vlad`: Vlad's revision of `gt_claude` in the App (first push 1 Nov; see the git history of this row for the diff when it is scored) | 156 (50 bursts) | 1 Nov: tag listed by `hub.py ls`; not yet loaded back and checked |
+| clips-ranch-v1 | `vladlenfedosov/ranch-clips-v1` | `clips-v1` | no label fields yet; the 260 mp4s under `data/` with `clip_id`, `camera`, `period`, `start_ts`, `duration_s`, `stopped`, `preroll_s`, `mini_path` (video dataset, one sample per clip) | 260 clips | pushed at Hub sha `b1beae8475`, 266 files; round trip: see the git history of this row |
 
 ## JSONL datasets (produced on the mini; imported into FiftyOne)
 
@@ -37,6 +38,7 @@ rows further down remain the record of what the TypeScript tools on the mini pro
 | preds-frames-ranch-bursts-v1-yolo26s-01e03dff | preds | 2026-10-24 | 156 | frames-ranch-bursts-v1 | 029af01153979b54… | `evals/baseline/2026-10-24/predictions.yolo26s.jsonl` | same repo and tag |
 | labels-ranch-bursts-claude-v1 | labels | 2026-10-24 | 156 (50 bursts) | frames-ranch-bursts-v1 | e11bc8f1086efddd… | `evals/golden/labels-ranch-bursts-claude-v1.jsonl` | [tag labels-ranch-bursts-claude-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-bursts-claude-v1) `labels/` |
 | clips-ranch-pool-v1 | clips | 2026-11-06 | 260 clips (18,024 sampled frames) | – | db101e9d4f941697… (clips.jsonl), 30790faf07b04a3b… (frames.jsonl) | `evals/baseline/2026-11-06/`, mp4s and frames `/usr/local/ranch/media/baseline/2026-11-06/` on ranch-ai | not pushed: the review pool, not a frozen set |
+| clips-ranch-v1 | clips | 2026-11-06 | 260 clips (18,024 sampled frames) | clips-ranch-pool-v1 | db101e9d4f941697… (clips.jsonl), 30790faf07b04a3b… (frames.jsonl) | `evals/baseline/2026-11-06/` (the pool's files, frozen after review), media as the pool | `vladlenfedosov/ranch-clips-v1` (FiftyOne native, private), see the FiftyOne table |
 
 Notes on `labels-ranch-claude-v1` (smoke-verified 20 Oct, see LEADERBOARD.md): reliable at labeler confidence ≥ 0.7;
 boxes at 0.25–0.45 are hedged guesses on dark blobs and include a static patch on front_porch_cam boxed as a cat in
@@ -51,8 +53,13 @@ not the pool): 260 of the 1,303 clips cut between 2 Nov and 6 Nov 01:00 UTC, str
 tercile (terciles at 22.6 s and 46.5 s), floor 6 per stratum then round-robin fill, so thin strata (tractor_cam 11
 clips in the pool, back_yard night 18, mops day 9) are taken whole. A human reviews every clip in FiftyOne
 (`evals/fiftyone/README.md`, "Reviewing a clip set"); the frozen `clips-ranch-v1` is picked from the same pool with
-`--exclude-clips evals/baseline/2026-11-06/rejected-clips.txt`. The mp4s on the mini expire 7 days after their
-trigger; the copies under `media/baseline/` do not.
+`--exclude-clips` when any clip is rejected. The mp4s on the mini expire 7 days after their trigger; the copies under
+`media/baseline/` do not.
+
+`clips-ranch-v1`: the pool after human review, every one of the 260 clips played in the App and kept, none rejected,
+so the frozen set is the pool's files unchanged (same hashes; `dataset.json` carries the new id, the parent and the
+review outcome). Labels and predictions name this id. Per camera: back_pasture 48, donkey 48, front_porch 45,
+wash_stall 42, back_yard 35, mops 31, tractor 11; 123 day, 137 night; durations 6 to 63 s.
 
 `frames-ranch-bursts-v1` (24 Oct): the first dataset of whole bursts, for the bursts-vs-no-bursts question
 (docs/EVALUATION.md §3, §4.1 "Burst track policies"). `snapshot.ts --bursts 50 --since 7d`, seed 20261020: 50 burst

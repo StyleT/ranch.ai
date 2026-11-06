@@ -1,9 +1,9 @@
 {
-  "id": "clips-ranch-pool-v1",
+  "id": "clips-ranch-v1",
   "kind": "clips",
   "version": 1,
   "created": "2026-11-06T01:18:07.948Z",
-  "parent": null,
+  "parent": "clips-ranch-pool-v1",
   "n": 260,
   "frames": 18024,
   "sha256": {
@@ -25,5 +25,11 @@
   "host": "ranch-ai",
   "commit": null,
   "media_dir": "/usr/local/ranch/media/baseline/2026-11-06",
-  "preds": {}
+  "preds": {},
+  "review": {
+    "by": "human",
+    "kept": 260,
+    "rejected": 0,
+    "method": "every clip played in the FiftyOne App"
+  }
 }
