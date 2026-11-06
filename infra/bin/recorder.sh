@@ -44,6 +44,11 @@ newest_jpeg_age() { local d=$1 f; f=$(ls -t "$d"/*.jpg 2>/dev/null | head -1); [
 want_live() { local m=$1; [ -f "$m" ] && [ $(( $(date +%s) - $(stat -f %m "$m") )) -lt "$RECORDER_DEMAND_TTL" ]; }
 
 # Always-on JPEG buffer: decode keyframes only (light, real-time). Holds the go2rtc producer up so cameras never churn.
+# One JPEG per decoded keyframe (-fps_mode passthrough): image2 is a constant-frame-rate output, which padded each
+# keyframe to the stream's 20 fps, ~20 full-size JPEG encodes per second per camera, nearly all copies (a 62 s replay:
+# 33 keyframes, 117 JPEGs, 84 duplicates). Seven of those ran below real time, fell minutes behind, stopped reading
+# go2rtc and were dropped at its 60 s read deadline, while the copies kept every file-time freshness check green.
+# Without padding, a file exists only when a keyframe arrived, so every reader's file age is the picture's age.
 pull_jpeg() {
   local cam=$1 dir="$RECORDER_DIR/$1" ring="$RECORDER_RING_DIR/$1" errf attempt=0 t0 rc delay pipe ffpid
   mkdir -p "$dir" "$ring"; errf=$(mktemp -t "recorder-jpeg-$1")
@@ -51,7 +56,7 @@ pull_jpeg() {
     if [ "$(free_gb)" -lt "$RECORDER_MIN_FREE_GB" ]; then log "$cam: free disk $(free_gb) GB < $RECORDER_MIN_FREE_GB GB, paused"; sleep 120; continue; fi
     t0=$(date +%s); log "$cam: start (jpeg)"
     ffmpeg -nostdin -loglevel error -rtsp_transport tcp -timeout 10000000 -use_wallclock_as_timestamps 1 -skip_frame nokey \
-      -i "$RTSP/$cam" -map 0:v -q:v "$RECORDER_JPEG_Q" -f image2 -strftime 1 -atomic_writing 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" \
+      -i "$RTSP/$cam" -map 0:v -q:v "$RECORDER_JPEG_Q" -fps_mode passthrough -f image2 -strftime 1 -atomic_writing 1 "$dir/%Y-%m-%dT%H-%M-%SZ.jpg" \
       -map 0:v -c:v copy -an -f segment -segment_format mpegts -segment_time "$RING_SEG_S" -reset_timestamps 1 -strftime 1 "$ring/%Y-%m-%dT%H-%M-%SZ.ts" 2>&1 \
       | { last=""; while IFS= read -r l; do echo "$cam: ffmpeg: $l"; last=$l; done; printf '%s' "$last" > "$errf"; } &
     pipe=$!
