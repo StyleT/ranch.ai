@@ -23,6 +23,7 @@ const exec = promisify(execFile);
 export type DaemonRow = {
   label: string;
   pid: number | null;
+  up: boolean;
   last_exit: number;
   rss_mb: number | null;
   log: string;
@@ -107,14 +108,35 @@ async function lastLogLines(): Promise<Map<string, string>> {
   return lines;
 }
 
+/** com.ranch.pf is a RunAtLoad one-shot (it enables pf and loads /etc/pf.conf, then exits), so launchd never holds a
+ *  pid for it; its health is pf's own state: enabled, with the com.ranch anchor loaded. Cached 60 s. */
+let pfCache: { at: number; up: boolean } = { at: 0, up: false };
+async function pfUp(): Promise<boolean> {
+  if (Date.now() - pfCache.at < 60_000) {
+    return pfCache.up;
+  }
+  const up = await Promise.all([
+    exec('sudo', ['-n', '/sbin/pfctl', '-s', 'info'], { timeout: 5000 }),
+    exec('sudo', ['-n', '/sbin/pfctl', '-a', 'com.ranch', '-s', 'rules'], { timeout: 5000 }),
+  ]).then(
+    ([info, rules]) => info.stdout.includes('Status: Enabled') && rules.stdout.trim().length > 0,
+    () => false,
+  );
+  pfCache = { at: Date.now(), up };
+  return up;
+}
+
 /** launchctl list for com.ranch.* plus each pid's RSS from ps (the measurement for every daemon, web and bridge included). */
-async function launchd(): Promise<{ label: string; pid: number | null; last_exit: number; rss_mb: number | null }[]> {
+async function launchd(): Promise<
+  { label: string; pid: number | null; up: boolean; last_exit: number; rss_mb: number | null }[]
+> {
   try {
     // launchd holds the bash wrapper's pid; the daemon's node process and its logger are in that process group, so
     // the RSS of a daemon is the sum over its group.
-    const [{ stdout }, ps] = await Promise.all([
+    const [{ stdout }, ps, pf] = await Promise.all([
       exec('sudo', ['-n', 'launchctl', 'list'], { timeout: 5000 }),
       exec('/bin/ps', ['-axo', 'pgid=,rss='], { timeout: 5000 }).catch(() => ({ stdout: '' })),
+      pfUp(),
     ]);
     const rss = new Map<number, number>();
     for (const l of ps.stdout.split('\n')) {
@@ -132,6 +154,7 @@ async function launchd(): Promise<{ label: string; pid: number | null; last_exit
         return {
           label: label ?? '',
           pid: p,
+          up: label === 'com.ranch.pf' ? pf : p !== null,
           last_exit: Number(exit ?? 0),
           rss_mb: p === null || !rss.has(p) ? null : Math.round(rss.get(p)! / 1024),
         };

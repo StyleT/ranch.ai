@@ -123,6 +123,11 @@ Root `npm run typecheck` and `npm test` chain the web app. Lint: `npm -w apps/we
   passes 5090 only from `100.64.0.0/10` / `fd7a:115c:a1e0::/48` to the node's tailnet addresses and refuses it on every
   other interface; loopback stays open for `ssh -L`. The agentic e2e `live` target uses the MagicDNS name. The Wyze
   bridge's UI and go2rtc's ports are loopback-only; the bridge's metrics page is re-homed on `/system`.
+- Daemon alerts on the home page: a daemon is down when launchd holds no pid for it, except `com.ranch.pf`, a boot
+  one-shot that enables pf and exits; the status daemon measures that one with `pfctl` (enabled, `com.ranch` anchor
+  loaded) and reports it as `up`. A running daemon whose last exit was SIGTERM (-15) does not alert: that is the
+  signal launchd sends on `kickstart -k` and `bootout`, so it records a provision restart, not a crash. Any other
+  non-zero last exit warns until the next clean restart.
 - Availability on the pages: the camera page shows a probe-derived session state badge and a 24 h availability strip
   with outage statistics, `/system` the fleet table. Source: netprobe samples in SQLite via the daemon's
   `/api/availability` (docs/CAMERA-ARCHITECTURE.md).

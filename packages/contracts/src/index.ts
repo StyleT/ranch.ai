@@ -10,6 +10,7 @@ const NullableNum = z.number().nullable();
 export const DaemonRow = z.looseObject({
   label: z.string(),
   pid: NullableNum,
+  up: z.boolean().optional(), // measured; absent = pid !== null (com.ranch.pf is a boot one-shot, measured with pfctl)
   last_exit: z.number(),
   log: z.string(),
   rss_mb: NullableNum.optional(),

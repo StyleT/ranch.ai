@@ -47,7 +47,9 @@ export function deriveAlerts(i: {
     }
   }
   for (const d of i.daemons) {
-    if (!d.up || d.last_exit !== 0) {
+    // -15 is the SIGTERM launchd sends on `kickstart -k` / `bootout`: the previous instance was stopped on purpose by
+    // provision and this one is up, so it is not an incident. Any other non-zero exit (1, 78, -9 jetsam, -11) warns.
+    if (!d.up || (d.last_exit !== 0 && d.last_exit !== -15)) {
       out.push({
         kind: 'daemon_down',
         text: `${d.name} ${d.up ? `exited ${d.last_exit} last time` : 'down'}`,

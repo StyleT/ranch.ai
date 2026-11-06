@@ -74,7 +74,7 @@ export function SystemView() {
                 <Card className="p-2">
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <b>{x.name}</b>
-                    <Badge tone={x.up ? 'ok' : 'bad'}>{x.up ? `pid ${x.pid}` : 'down'}</Badge>
+                    <Badge tone={x.up ? 'ok' : 'bad'}>{!x.up ? 'down' : x.pid !== null ? `pid ${x.pid}` : 'ok'}</Badge>
                     <span className="text-dim">exit {x.last_exit}</span>
                     {x.rss_mb !== null && <span className="text-dim">rss {x.rss_mb} MB</span>}
                   </div>

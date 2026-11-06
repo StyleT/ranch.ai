@@ -9,7 +9,7 @@ export function daemonViews(status: Status): DaemonView[] {
   return status.daemons.map((d) => ({
     name: d.label.replace('com.ranch.', ''),
     label: d.label,
-    up: d.pid !== null,
+    up: d.up ?? d.pid !== null,
     pid: d.pid,
     last_exit: d.last_exit,
     rss_mb: d.rss_mb ?? null,
