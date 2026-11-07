@@ -15,5 +15,14 @@ for i in $(seq 1 120); do
   sleep 2
 done
 echo "{\"server_ready_s\": $((i * 2)), \"memory_pressure_before\": \"$(memory_pressure | grep -i 'percentage' | tr -d '\n')\", \"swap_before\": \"$(sysctl -n vm.swapusage)\"}"
+# The server's resident set, sampled once a second over every mlx_vlm.server process (the uv wrapper and the python
+# child), summed; the peak is the number the memory bar is read against.
+RSS_LOG=/tmp/vlm-rss.log; : > "$RSS_LOG"
+( while kill -0 $SERVER 2>/dev/null; do
+    ps -o rss= -p "$(pgrep -f mlx_vlm.server | tr '\n' ',' | sed 's/,$//')" 2>/dev/null | awk '{s+=$1} END {print int(s/1024)}' >> "$RSS_LOG"
+    sleep 1
+  done ) &
+SAMPLER=$!
 "$UV" run python run.py --model "$MODEL" --escalations "$ESC" --prompt "$PROMPT"
-echo "{\"memory_pressure_after\": \"$(memory_pressure | grep -i 'percentage' | tr -d '\n')\", \"swap_after\": \"$(sysctl -n vm.swapusage)\", \"server_rss_mb\": $(ps -o rss= -p $(pgrep -f mlx_vlm.server | tail -1) 2>/dev/null | awk '{print int($1/1024)}' || echo null)}"
+kill $SAMPLER 2>/dev/null || true
+echo "{\"memory_pressure_after\": \"$(memory_pressure | grep -i 'percentage' | tr -d '\n')\", \"swap_after\": \"$(sysctl -n vm.swapusage)\", \"server_rss_mb_peak\": $(sort -n "$RSS_LOG" | tail -1 | grep . || echo null), \"server_rss_mb_samples\": $(wc -l < "$RSS_LOG" | tr -d ' ')}"
