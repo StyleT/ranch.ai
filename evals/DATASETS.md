@@ -39,6 +39,7 @@ rows further down remain the record of what the TypeScript tools on the mini pro
 | labels-ranch-bursts-claude-v1 | labels | 2026-10-24 | 156 (50 bursts) | frames-ranch-bursts-v1 | e11bc8f1086efddd… | `evals/golden/labels-ranch-bursts-claude-v1.jsonl` | [tag labels-ranch-bursts-claude-v1](https://huggingface.co/datasets/vladlenfedosov/ranch-frames/tree/labels-ranch-bursts-claude-v1) `labels/` |
 | clips-ranch-pool-v1 | clips | 2026-11-06 | 260 clips (18,024 sampled frames) | – | db101e9d4f941697… (clips.jsonl), 30790faf07b04a3b… (frames.jsonl) | `evals/baseline/2026-11-06/`, mp4s and frames `/usr/local/ranch/media/baseline/2026-11-06/` on ranch-ai | not pushed: the review pool, not a frozen set |
 | clips-ranch-v1 | clips | 2026-11-06 | 260 clips (18,024 sampled frames) | clips-ranch-pool-v1 | db101e9d4f941697… (clips.jsonl), 30790faf07b04a3b… (frames.jsonl) | `evals/baseline/2026-11-06/` (the pool's files, frozen after review), media as the pool | `vladlenfedosov/ranch-clips-v1` (FiftyOne native, private), see the FiftyOne table |
+| frames-ranch-clips-v1 | frames | 2026-11-06 | 9,010 frames (260 clips at 1 fps) | clips-ranch-v1 | c16e8c8952a86fb3… (frames.jsonl) | `evals/baseline/2026-11-06-1fps/` (JSONL committed; JPEGs git-ignored on the laptop, 7 GB, decoded from the pulled mp4s by `make clips-frames`) | `vladlenfedosov/ranch-frames-clips-v1` (FiftyOne native, private), see the FiftyOne table |
 
 Notes on `labels-ranch-claude-v1` (smoke-verified 20 Oct, see LEADERBOARD.md): reliable at labeler confidence ≥ 0.7;
 boxes at 0.25–0.45 are hedged guesses on dark blobs and include a static patch on front_porch_cam boxed as a cat in
@@ -60,6 +61,12 @@ clips in the pool, back_yard night 18, mops day 9) are taken whole. A human revi
 so the frozen set is the pool's files unchanged (same hashes; `dataset.json` carries the new id, the parent and the
 review outcome). Labels and predictions name this id. Per camera: back_pasture 48, donkey 48, front_porch 45,
 wash_stall 42, back_yard 35, mops 31, tractor 11; 123 day, 137 night; durations 6 to 63 s.
+
+`frames-ranch-clips-v1`: the golden frames set of the clip evaluation: every clip of `clips-ranch-v1` decoded at
+1 fps and native resolution (2560x1440 or 1920x1080) with ffmpeg's `fps=1` filter, which yields round(duration)
+frames per clip (checked on all 260); `frame_id = clip_id * 1000 + frame_idx`, rows carry `burst_id = clip_id` and
+`seq = frame_idx` so the grouped FiftyOne import, `bench.ts --bursts` and the labelers' burst reader take it
+unchanged. This is the set the four labeling stages label and both tiers are scored on.
 
 `frames-ranch-bursts-v1` (24 Oct): the first dataset of whole bursts, for the bursts-vs-no-bursts question
 (docs/EVALUATION.md §3, §4.1 "Burst track policies"). `snapshot.ts --bursts 50 --since 7d`, seed 20261020: 50 burst

@@ -27,7 +27,15 @@ class Moondream:
     def __init__(self, max_objects: int = 20, threshold: float | None = None):
         import moondream as md
 
-        self.model = md.vl(local=True, model="moondream3.1-9B-A2B")
+        # Photon's engine (kestrel) compares torch devices by identity and PyTorch reports MPS tensors on `mps:0` while a
+        # bare "mps" resolves to an unindexed device (m87-labs/moondream#391: "preallocated k_scale_tensor must be a
+        # device FP32 scalar"); asking for the indexed device keeps the pool, the runtime and the tensors equal.
+        import torch
+
+        # The "generated" decode path (the CUDA megakernel) asks torch.cuda for device properties, so MPS runs the
+        # native decode path.
+        opts = {"device": "mps:0", "decode_path": "native"} if torch.backends.mps.is_available() else {}
+        self.model = md.vl(local=True, model="moondream3.1-9B-A2B", **opts)
         self.max_objects = max_objects
         self.threshold = threshold
         self.variant = f"@t{threshold}" if threshold is not None else ""
