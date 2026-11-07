@@ -28,11 +28,45 @@ export interface RunnerInfo {
   outputs: string[];
   rss_mb: number;
   compiled_ms?: number;
+  decoder?: string;
+  scale?: string;
+  input?: { name: string; w: number; h: number };
+}
+/** One processed frame of a video run (the runner's --video / {"video"} lines). */
+export interface RunnerVideoFrame {
+  frame_no: number;
+  pts_s: number;
+  decode_ms: number;
+  ms: number;
+  width: number;
+  height: number;
+  detections: RunnerDetection[];
+}
+export interface RunnerVideoDone {
+  frames: number;
+  processed: number;
+  stride: number;
+  wall_s: number;
+  fps_wall: number;
+  nominal_fps: number;
+  decode_ms: { p50: number; p95: number };
+  ms: { p50: number; p95: number };
+  rss_mb: number;
+  error: string | null;
 }
 
 export class Runner {
   private proc: ChildProcessByStdio<Writable, Readable, null>;
-  private pending = new Map<string, { resolve: (r: RunnerResult) => void; reject: (e: Error) => void }>();
+  private pending = new Map<
+    string,
+    {
+      resolve: (r: RunnerResult) => void;
+      reject: (e: Error) => void;
+      /** Video runs collect their frame lines here until the runner's done line. */
+      frames?: RunnerVideoFrame[];
+      video?: { resolve: (r: { frames: RunnerVideoFrame[]; done: RunnerVideoDone }) => void };
+    }
+  >();
   private seq = 0;
   private chain: Promise<unknown> = Promise.resolve();
   readonly info: Promise<RunnerInfo>;
@@ -87,6 +121,18 @@ export class Runner {
         if (!p) {
           return;
         }
+        if (p.video && p.frames) {
+          if (msg.done) {
+            this.pending.delete(String(msg.id));
+            p.video.resolve({ frames: p.frames, done: msg as unknown as RunnerVideoDone });
+          } else if (msg.error && msg.frame_no === undefined) {
+            this.pending.delete(String(msg.id));
+            p.reject(new Error(String(msg.error)));
+          } else if (msg.detections) {
+            p.frames.push(msg as unknown as RunnerVideoFrame);
+          }
+          return;
+        }
         this.pending.delete(String(msg.id));
         if (msg.error) {
           p.reject(new Error(String(msg.error)));
@@ -112,6 +158,20 @@ export class Runner {
         const id = String(++this.seq);
         this.pending.set(id, { resolve, reject });
         this.proc.stdin.write(JSON.stringify({ id, path }) + '\n');
+      });
+    const next = this.chain.then(run, run);
+    this.chain = next.catch(() => undefined);
+    return next;
+  }
+
+  /** Run a video file through the runner's --video path at a stride: every processed frame's detections and the
+   *  summary line. Serialized with detect() calls. */
+  video(path: string, stride = 1): Promise<{ frames: RunnerVideoFrame[]; done: RunnerVideoDone }> {
+    const run = () =>
+      new Promise<{ frames: RunnerVideoFrame[]; done: RunnerVideoDone }>((resolve, reject) => {
+        const id = String(++this.seq);
+        this.pending.set(id, { resolve: () => undefined, reject, frames: [], video: { resolve } });
+        this.proc.stdin.write(JSON.stringify({ id, video: path, stride }) + '\n');
       });
     const next = this.chain.then(run, run);
     this.chain = next.catch(() => undefined);
