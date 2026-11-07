@@ -12,6 +12,7 @@ evals/golden/batches/
 evals/baseline/*/frames/
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 apps/web/.next/
 apps/web/test-results/
 apps/web/playwright-report/
