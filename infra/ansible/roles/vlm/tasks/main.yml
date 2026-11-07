@@ -1,0 +1,18 @@
+---
+# Tier-2 bench prerequisites on the mini (plan A3): the evals/vlm uv project (mlx-vlm server + OpenAI client) and the
+# candidate model files, so `make vlm-bench` can measure latency and memory where they count. Nothing here runs on its
+# own: the sidecar daemon is Phase 2 work and will be registered in roles/services like every other daemon.
+- name: evals/vlm uv project synced (mlx-vlm, openai)
+  ansible.builtin.command: "{{ brew_prefix }}/bin/uv sync --directory {{ ranch_app_dir }}/evals/vlm"
+  register: vlm_sync
+  changed_when: "'Installed' in vlm_sync.stderr or 'Installed' in vlm_sync.stdout"
+  environment: { HOME: "/Users/{{ ranch_user }}" }
+
+- name: Candidate model files in the Hugging Face cache
+  ansible.builtin.command: >
+    {{ brew_prefix }}/bin/uv run --directory {{ ranch_app_dir }}/evals/vlm python -c
+    "from huggingface_hub import snapshot_download; snapshot_download('{{ item }}')"
+  args:
+    creates: "/Users/{{ ranch_user }}/.cache/huggingface/hub/models--{{ item | replace('/', '--') }}"
+  loop: "{{ vlm_candidates }}"
+  environment: { HOME: "/Users/{{ ranch_user }}" }

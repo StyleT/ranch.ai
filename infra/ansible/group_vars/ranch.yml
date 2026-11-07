@@ -230,3 +230,8 @@ web_heap_mb: 256
 # Taxonomy editor (docs/TAXONOMY-UI.md): reference datasets the "Score draft" button uses; write token is generated on the mini.
 status_reference_frames: evals/baseline/2026-10-20
 status_reference_labels: labels-ranch-claude-revised-vlad-v1
+
+# Tier-2 candidates (roles/vlm): model files pre-fetched into the ranch user's Hugging Face cache for `make vlm-bench`.
+# The sidecar is not a daemon yet; docs/PLAN.md Phase 2.
+vlm_candidates:
+  - mlx-community/Qwen3-VL-4B-Instruct-3bit

@@ -74,6 +74,12 @@ vlm-run:          ## Send an escalation set through the served model: make vlm-r
 	@test -n "$(MODEL)" -a -n "$(ESC)" || (echo "usage: make vlm-run MODEL=<hf id> ESC=<escalations.jsonl> [PROMPT=v1] [LIMIT=n]"; exit 2)
 	$(VLM_RUN) run.py --model $(MODEL) --escalations $(CURDIR)/$(ESC) --prompt $(or $(PROMPT),v1) $(if $(LIMIT),--limit $(LIMIT),)
 
+vlm-bench:        ## Tier-2 latency and memory on the mini: serve MODEL there, run the escalation set, pull the answers back: make vlm-bench MODEL=<hf id> ESC=evals/baseline/<set>/escalations-<m> [PROMPT=v1]
+	@test -n "$(MODEL)" -a -n "$(ESC)" || (echo "usage: make vlm-bench MODEL=<hf id> ESC=<escalations dir> [PROMPT=v1]"; exit 2)
+	rsync -a --delete $(ESC)/ ranch:/usr/local/ranch/var/escalations/$(notdir $(ESC))/
+	ssh ranch '/usr/local/ranch/app/infra/bin/vlm-bench.sh $(MODEL) /usr/local/ranch/var/escalations/$(notdir $(ESC))/escalations.jsonl $(or $(PROMPT),v1)'
+	rsync -a ranch:/usr/local/ranch/var/escalations/$(notdir $(ESC))/predictions.vlm.*.jsonl $(ESC)/
+
 fiftyone-install: ## Create evals/fiftyone/.venv (FiftyOne, open source) with uv
 	uv sync --directory $(FO_DIR)
 
