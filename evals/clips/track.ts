@@ -65,7 +65,7 @@ for (const n of a['min-streak'].map(Number)) {
     frames.sort((u, v) => u.frame_no - v.frame_no);
     const stride = frames[0]?.stride ?? 1;
     const g = gateClip(frames, n);
-    tracks += g.tracks.length;
+    tracks += g.tracks.filter((t) => t.activated).length; // ultralytics' count: singletons never get an id
     qualified += g.qualified.size;
     for (const t of g.tracks) {
       (g.qualified.has(t.track_id) ? kept : dropped)[t.label] =

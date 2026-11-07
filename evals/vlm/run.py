@@ -80,9 +80,10 @@ def main() -> None:
     a = ap.parse_args()
     esc_path = Path(a.escalations).resolve()
     set_dir = esc_path.parent
-    prompt_path = Path(__file__).parent / "prompts" / f"{a.prompt}.md"
-    template = prompt_path.read_text()
-    prompt_sha = hashlib.sha256(template.encode()).hexdigest()[:12]
+    # One prompt per request type: objects (verify, attributes) and the scene (gate, trough); both versioned together.
+    prompts_dir = Path(__file__).parent / "prompts"
+    templates = {"object": (prompts_dir / f"{a.prompt}.md").read_text(), "scene": (prompts_dir / f"scene-{a.prompt}.md").read_text()}
+    prompt_sha = hashlib.sha256((templates["object"] + templates["scene"]).encode()).hexdigest()[:12]
     requests = [json.loads(l) for l in esc_path.read_text().splitlines() if l.strip()]
     if a.limit:
         requests = requests[: a.limit]
@@ -94,7 +95,7 @@ def main() -> None:
     with out_path.open("w") as out:
         for i, r in enumerate(requests):
             ctx = r["context"]
-            text = template.format(
+            text = templates["scene" if r["type"] == "scene" else "object"].format(
                 camera=ctx["camera"], label=ctx["label"], confidence=f"{ctx['confidence']:.2f}", label_hint=HINTS.get(ctx["label"], ctx["label"]),
                 kinds=", ".join(k for k in KINDS if k != "none"), postures=", ".join(POSTURES), gates=", ".join(GATES), troughs=", ".join(TROUGHS),
             )

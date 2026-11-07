@@ -227,17 +227,20 @@ for (const f of frames) {
       });
     }
   }
+  // A scene request needs a gold value a model can be right or wrong about: visible and not `unknown`.
   const gate = g.gate ?? g.label?.gate,
     trough = g.trough ?? g.label?.trough;
-  if (gate?.visible || trough?.visible) {
+  const gateGold = gate?.visible && gate.state !== 'unknown' ? gate.state : undefined;
+  const troughGold = trough?.visible && trough.level !== 'unknown' ? trough.level : undefined;
+  if (gateGold !== undefined || troughGold !== undefined) {
     push(
       f,
       'scene',
       { x: 0, y: 0, w: 1, h: 1 },
       { camera: f.camera, period: f.period, label: 'scene', confidence: 1 },
       {
-        ...(gate?.visible ? { gate: gate.state } : {}),
-        ...(trough?.visible ? { trough: trough.level } : {}),
+        ...(gateGold !== undefined ? { gate: gateGold } : {}),
+        ...(troughGold !== undefined ? { trough: troughGold } : {}),
       },
     );
   }

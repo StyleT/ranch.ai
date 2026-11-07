@@ -36,6 +36,9 @@ export interface TrackSummary {
   max_streak: number; // longest run of consecutive matched frames
   first_frame: number;
   last_frame: number;
+  /** ultralytics reports a track only once it is activated (matched on a second frame, or born on the first frame);
+   *  a one-frame track that never activated is a singleton and never an id in its output. */
+  activated: boolean;
 }
 
 // ---- linear algebra on small dense matrices (row-major number[][]) ----
@@ -369,6 +372,7 @@ export class ByteTracker {
         max_streak: t.maxStreak,
         first_frame: t.start,
         last_frame: t.frame,
+        activated: t.activated,
       }));
   }
 }
