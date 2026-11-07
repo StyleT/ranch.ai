@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { hostname } from 'node:os';
 import { Runner } from './runner.ts';
-import { scoreSet, type Scored, type Pred, type Box } from './score.ts';
+import { scoreSet, throughput, type Scored, type Pred, type Box } from './score.ts';
 import { associate, isStable, isMoving, MOVING_MIN, ASSOC_IOU, ASSOC_DIST, ASSOC_GATE } from './tracks.ts';
 import { mapDetection, thresholdFor, interestLabels, getTaxonomy, getTaxonomyVersionId } from '@ranch/taxonomy';
 
@@ -69,8 +69,18 @@ interface FrameRow {
   frame_id?: number;
   burst_id?: number | null;
   seq?: number | null;
+  // clip frames sets (frames-ranch-clips-v1): the clip, the time in it, the native size
+  clip_id?: number;
+  frame_idx?: number;
+  t_s?: number;
+  width?: number;
+  height?: number;
 }
 const frames = readJsonl<FrameRow>(a.frames);
+const framesByClip = Map.groupBy(
+  frames.filter((f) => f.clip_id !== undefined),
+  (f) => f.clip_id!,
+);
 const labelsFile = a.labels;
 const minLabelConf = a['min-label-conf'] ? Number(a['min-label-conf']) : 0;
 const threshold = Number(a.threshold),
@@ -81,8 +91,10 @@ if (family && !getTaxonomy().mappings[family]) {
   process.exit(2);
 }
 interface LabelRow {
-  path: string;
-  boxes: Box[];
+  path?: string; // absent on a clip-level row of the golden clip format
+  clip_id?: number;
+  motion_source?: string;
+  boxes?: Box[];
   label?: {
     animals?: { box: Box; confidence: number }[];
     people?: { box: Box; confidence: number }[];
@@ -91,15 +103,22 @@ interface LabelRow {
 }
 const goldBoxes = (r: LabelRow): Box[] => {
   if (!minLabelConf || !r.label) {
-    return r.boxes;
+    return r.boxes ?? [];
   }
   const conf = new Map<string, number>();
   for (const g of [...(r.label.animals ?? []), ...(r.label.people ?? []), ...(r.label.vehicles ?? [])]) {
     conf.set(`${g.box.x},${g.box.y},${g.box.w},${g.box.h}`, g.confidence);
   }
-  return r.boxes.filter((b) => (conf.get(`${b.x},${b.y},${b.w},${b.h}`) ?? 1) >= minLabelConf);
+  return (r.boxes ?? []).filter((b) => (conf.get(`${b.x},${b.y},${b.w},${b.h}`) ?? 1) >= minLabelConf);
 };
-const gold = labelsFile ? new Map(readJsonl<LabelRow>(labelsFile).map((r) => [r.path, goldBoxes(r)])) : undefined;
+const labelRows = labelsFile ? readJsonl<LabelRow>(labelsFile) : [];
+const gold = labelsFile ? new Map(labelRows.filter((r) => r.path).map((r) => [r.path!, goldBoxes(r)])) : undefined;
+// The golden clip format's per-clip rows carry what moved (animal, lighting, insect ...): the clip-level false alarms slice.
+const motionSource = new Map(
+  labelRows
+    .filter((r) => !r.path && r.clip_id !== undefined && r.motion_source)
+    .map((r) => [r.clip_id!, r.motion_source!]),
+);
 // With --taxonomy, predictions are mapped like production does (unmapped classes dropped, labels renamed) but kept
 // at every confidence so AP still sweeps; the per-label thresholds then act as the operating point.
 const mergePred = (ps: Pred[]): Pred[] =>
@@ -185,12 +204,70 @@ const runs: {
   provenance: Record<string, unknown>;
 }[] = [];
 
+interface PredRow {
+  path?: string;
+  model?: string;
+  detections?: Pred[];
+  // video rows (the runner's --video): the clip and the decoded frame's time; timings for the throughput table
+  clip_id?: number;
+  pts_s?: number;
+  stride?: number;
+  decode_ms?: number;
+  ms?: number;
+}
+/** Video rows attach to the golden frame nearest in time within half a second (one frame interval at 1 fps);
+ *  several decoded frames can be near one golden frame, the nearest wins. Image rows join by path. */
+function predsByFrame(rows: PredRow[]): Map<string, Pred[]> {
+  const out = new Map<string, Pred[]>();
+  const nearest = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.detections) {
+      continue;
+    }
+    if (r.path) {
+      out.set(r.path, mergePred(r.detections));
+      continue;
+    }
+    if (r.clip_id === undefined || r.pts_s === undefined) {
+      continue;
+    }
+    let best: FrameRow | undefined;
+    for (const f of framesByClip.get(r.clip_id) ?? []) {
+      if (
+        f.t_s !== undefined &&
+        Math.abs(f.t_s - r.pts_s) <= 0.5 &&
+        (!best || Math.abs(f.t_s - r.pts_s) < Math.abs(best.t_s! - r.pts_s))
+      ) {
+        best = f;
+      }
+    }
+    if (!best) {
+      continue;
+    }
+    const d = Math.abs(best.t_s! - r.pts_s);
+    if (!nearest.has(best.path) || d < nearest.get(best.path)!) {
+      nearest.set(best.path, d);
+      out.set(best.path, mergePred(r.detections));
+    }
+  }
+  return out;
+}
+
 for (const p of a.predictions ?? []) {
-  const rows = readJsonl<{ path: string; model: string; detections: Pred[] }>(p);
+  const rows = readJsonl<PredRow>(p);
+  const videoRows = rows.filter((r) => r.decode_ms !== undefined && r.ms !== undefined && r.pts_s !== undefined);
+  const stride = videoRows[0]?.stride;
   runs.push({
-    name: rows[0]?.model ?? basename(p),
-    preds: new Map(rows.map((r) => [r.path, mergePred(r.detections)])),
-    provenance: { predictions_file: p, sha256: sha(p) },
+    name: (rows.find((r) => r.model)?.model ?? basename(p)) + (stride !== undefined ? `@s${stride}` : ''),
+    preds: predsByFrame(rows),
+    provenance: {
+      predictions_file: p,
+      sha256: sha(p),
+      ...(stride !== undefined ? { stride, video_frames: videoRows.length } : {}),
+    },
+    ...(videoRows.length
+      ? { latency: throughput(videoRows as { decode_ms: number; ms: number }[]) as unknown as Record<string, unknown> }
+      : {}),
   });
 }
 for (const model of a.model ?? []) {
@@ -246,6 +323,7 @@ for (const run of runs) {
       iou: iouMin,
       ...(thresholdsByLabel ? { thresholdsByLabel } : {}),
       ...(family ? { family } : {}),
+      ...(motionSource.size ? { motionSource } : {}),
     };
     const toScored = (fs: FrameRow[]): Scored[] =>
       fs.map((f) => ({ frame: f, gold: gold.get(f.path) ?? [], pred: predOf.get(f.path) ?? [] }));
@@ -282,7 +360,9 @@ for (const run of runs) {
           ? `  person gold ${pe.gold} P ${pe.precision.toFixed(2)} (tp ${pe.tp} fp ${pe.fp}) R ${pe.recall.toFixed(2)}`
           : '') +
         `  FPPF(all) ${all.fppf_all.toFixed(2)}  count-exact ${all.horse_count.exact.toFixed(2)}  R@FPPF≤0.1 ${op.r_at_fppf01.recall.toFixed(2)}@${op.r_at_fppf01.threshold}  R@P90 ${op.r_at_p90.recall.toFixed(2)}` +
-        (run.latency ? `  p50 ${(run.latency.p50_ms as number).toFixed(1)} ms` : ''),
+        (run.latency
+          ? `  p50 ${((run.latency.p50_ms as number | undefined) ?? (run.latency.infer_ms as { p50: number } | undefined)?.p50 ?? 0).toFixed(1)} ms`
+          : ''),
     );
   } else if (a.bursts) {
     // No labels: a label-free preview of what the policy removes from the head frames, per camera and label, so a
