@@ -33,8 +33,11 @@ class Moondream:
         # properties; with decode_path="native" it loads, and then decodes garbage for moondream2 and 3.1 alike
         # (one-token captions, repeated words, detect() empty on the first call and different boxes on the second;
         # unchanged by an explicit fp16 dtype or by turning the prefix cache off). The CPU path dispatches to CUDA
-        # layernorm kernels. The settings below are the only ones that load; the self-check after them refuses to run
-        # a bench on garbage and lifts itself when an upstream release decodes correctly.
+        # layernorm kernels. Not torch's fault: on this Mac (macOS 26.7, torch 2.14) F.linear and torch.mv on MPS match
+        # the CPU within rounding at every row count from 1 to 64 in fp16 / bf16 / fp32, and routing them through an
+        # explicit matmul before the engine starts leaves the garbage byte-identical; the fault is in the engine's own
+        # Metal kernels. The settings below are the only ones that load; the self-check after them refuses to run a
+        # bench on garbage and lifts itself when an upstream release decodes correctly.
         import torch
 
         opts = {"device": "mps:0", "decode_path": "native"} if torch.backends.mps.is_available() else {}
