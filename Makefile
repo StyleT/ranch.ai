@@ -45,6 +45,35 @@ dataset-push:     ## Upload a dataset to the Hub and tag it: make dataset-push I
 # ---- FiftyOne: review, sharing (Hub) and scoring surface for the eval datasets; laptop only (evals/fiftyone/README.md) ----
 FO_DIR = $(CURDIR)/evals/fiftyone
 FO_RUN = uv run --directory $(FO_DIR) python
+PL_DIR = $(CURDIR)/evals/prelabel
+PL_RUN = uv run --directory $(PL_DIR) python
+prelabel-install: ## Create evals/prelabel/.venv (Moondream through Photon, Florence-2 through transformers) with uv
+	uv sync --directory $(PL_DIR)
+
+prelabel-bench:   ## Pre-label a frames set's labeled frames with a local model, for bench.ts: make prelabel-bench MODEL=moondream|florence SET=evals/baseline/2026-10-20 LABELS=evals/golden/<labels>.jsonl [THRESHOLD=0.30]
+	@test -n "$(MODEL)" -a -n "$(SET)" || (echo "usage: make prelabel-bench MODEL=moondream|florence SET=evals/baseline/<date> [LABELS=<jsonl>] [THRESHOLD=t]"; exit 2)
+	$(PL_RUN) bench.py --model $(MODEL) --set $(CURDIR)/$(SET) $(if $(LABELS),--only-labeled $(CURDIR)/$(LABELS),) $(if $(THRESHOLD),--threshold $(THRESHOLD),)
+
+prelabel-run:     ## Stage 1: pre-label every frame of a clip frames set (resumable): make prelabel-run MODEL=moondream SET=evals/baseline/2026-11-06-1fps [LIMIT_CLIPS=5]
+	@test -n "$(MODEL)" -a -n "$(SET)" || (echo "usage: make prelabel-run MODEL=moondream|florence SET=evals/baseline/<date>-1fps [LIMIT_CLIPS=n]"; exit 2)
+	$(PL_RUN) prelabel.py --model $(MODEL) --set $(CURDIR)/$(SET) $(if $(LIMIT_CLIPS),--limit-clips $(LIMIT_CLIPS),) $(if $(THRESHOLD),--threshold $(THRESHOLD),)
+
+prelabel-sample:  ## The stratified review sample (7 cameras x day/night x 10 frames) of a clip frames set: make prelabel-sample SET=evals/baseline/2026-11-06-1fps
+	$(PL_RUN) prelabel.py --review-sample --set $(CURDIR)/$(SET)
+
+VLM_DIR = $(CURDIR)/evals/vlm
+VLM_RUN = uv run --directory $(VLM_DIR) python
+vlm-install:      ## Create evals/vlm/.venv (mlx-vlm server + OpenAI client) with uv
+	uv sync --directory $(VLM_DIR)
+
+vlm-serve:        ## Serve a tier-2 candidate with mlx-vlm on :8080 (foreground): make vlm-serve MODEL=mlx-community/Qwen3-VL-4B-Instruct-3bit
+	@test -n "$(MODEL)" || (echo "usage: make vlm-serve MODEL=<hf id>"; exit 2)
+	$(VLM_RUN) -m mlx_vlm.server --model $(MODEL) --port 8080
+
+vlm-run:          ## Send an escalation set through the served model: make vlm-run MODEL=<hf id> ESC=evals/baseline/<set>/escalations-<m>/escalations.jsonl [PROMPT=v1] [LIMIT=n]
+	@test -n "$(MODEL)" -a -n "$(ESC)" || (echo "usage: make vlm-run MODEL=<hf id> ESC=<escalations.jsonl> [PROMPT=v1] [LIMIT=n]"; exit 2)
+	$(VLM_RUN) run.py --model $(MODEL) --escalations $(CURDIR)/$(ESC) --prompt $(or $(PROMPT),v1) $(if $(LIMIT),--limit $(LIMIT),)
+
 fiftyone-install: ## Create evals/fiftyone/.venv (FiftyOne, open source) with uv
 	uv sync --directory $(FO_DIR)
 
