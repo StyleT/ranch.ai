@@ -130,7 +130,7 @@ for (const members of byBurst.values()) {
     members.map((f, i) => ({
       id: i,
       dets: mapped(preds.get(f.path) ?? []).map((p) => {
-        const d = { id: id++, ...p };
+        const d = { ...p, id: id++ }; // the track id, not the gold object id a labeled box may carry
         owner.set(d.id, { seq: f.seq ?? i, box: p });
         return d;
       }),

@@ -8,6 +8,11 @@ export interface Box {
   y: number;
   w: number;
   h: number;
+  /** Taxonomy subclass (horse, donkey, tractor ...) and posture, when the labeler or the model gives them. */
+  kind?: string;
+  posture?: string;
+  /** Object id, the same across the frames of a clip; what interpolation and the clip-level objects table key on. */
+  id?: string;
 }
 export interface Pred extends Box {
   confidence: number;
@@ -16,6 +21,14 @@ export interface FrameRef {
   path: string;
   camera: string;
   period: string;
+  /** Clip frames: the clip they belong to and their time in it; clips are the resampling unit of the bootstrap. */
+  clip_id?: number;
+  t_s?: number;
+  /** Native frame size, for object-size slices in pixels. */
+  width?: number;
+  height?: number;
+  /** Video predictions: every Nth decoded frame; a slice key. */
+  stride?: number;
 }
 export interface Scored {
   frame: FrameRef;
@@ -38,17 +51,18 @@ export function iou(a: Box, b: Box): number {
   return union > 0 ? inter / union : 0;
 }
 
-/** Greedy one-to-one matching per class; predictions sorted by confidence. Returns per-prediction hit flags and FN count. */
+/** Greedy one-to-one matching per class; predictions sorted by confidence. Returns per-prediction hit flags, the gold
+ *  box each hit matched (`pairs[i]`, null for a false positive), the class's gold boxes and the FN count. */
 export function matchFrame(
   gold: Box[],
   pred: Pred[],
   label: string,
   iouMin: number,
-): { hits: boolean[]; preds: Pred[]; fn: number } {
+): { hits: boolean[]; pairs: (Box | null)[]; preds: Pred[]; golds: Box[]; fn: number } {
   const g = gold.filter((b) => b.label === label);
   const used = new Set<number>();
   const preds = pred.filter((p) => p.label === label).sort((u, v) => v.confidence - u.confidence);
-  const hits = preds.map((p) => {
+  const pairs = preds.map((p) => {
     let best = -1;
     let bestIou = iouMin;
     for (let i = 0; i < g.length; i++) {
@@ -63,11 +77,242 @@ export function matchFrame(
     }
     if (best >= 0) {
       used.add(best);
-      return true;
+      return g[best]!;
     }
-    return false;
+    return null;
   });
-  return { hits, preds, fn: g.length - used.size };
+  return { hits: pairs.map((q) => q !== null), pairs, preds, golds: g, fn: g.length - used.size };
+}
+
+/** Agreement on an attribute (kind, posture) over the matched pairs where both sides carry it: accuracy and the
+ *  confusion matrix gold value -> predicted value -> count. Tier 2 and the labeling-agreement table read this. */
+export function attributeAgreement(
+  frames: Scored[],
+  label: string,
+  attr: 'kind' | 'posture',
+  threshold: number | ThresholdFn,
+  iouMin: number,
+): { pairs: number; agree: number; accuracy: number; confusion: Record<string, Record<string, number>> } {
+  const confusion: Record<string, Record<string, number>> = {};
+  let pairs = 0,
+    agree = 0;
+  for (const f of frames) {
+    const m = matchFrame(
+      f.gold,
+      f.pred.filter((p) => p.confidence >= thr(threshold, label)),
+      label,
+      iouMin,
+    );
+    m.pairs.forEach((g, i) => {
+      const gv = g?.[attr],
+        pv = m.preds[i]![attr];
+      if (gv === undefined || pv === undefined) {
+        return;
+      }
+      pairs++;
+      if (gv === pv) {
+        agree++;
+      }
+      (confusion[gv] ??= {})[pv] = (confusion[gv]![pv] ?? 0) + 1;
+    });
+  }
+  return { pairs, agree, accuracy: pairs ? agree / pairs : 0, confusion };
+}
+
+/** Recall of one class per group of gold boxes (object size bucket, posture ...): how many gold boxes of each group a
+ *  prediction above the threshold matched. The grouping function sees the box and its frame. */
+export function recallByGoldGroup(
+  frames: Scored[],
+  label: string,
+  threshold: number | ThresholdFn,
+  iouMin: number,
+  group: (b: Box, f: FrameRef) => string | null,
+): Record<string, { gold: number; tp: number; recall: number }> {
+  const out: Record<string, { gold: number; tp: number; recall: number }> = {};
+  for (const f of frames) {
+    const m = matchFrame(
+      f.gold,
+      f.pred.filter((p) => p.confidence >= thr(threshold, label)),
+      label,
+      iouMin,
+    );
+    const matched = new Set(m.pairs.filter((g): g is Box => g !== null));
+    for (const g of m.golds) {
+      const k = group(g, f.frame);
+      if (k === null) {
+        continue;
+      }
+      const o = (out[k] ??= { gold: 0, tp: 0, recall: 0 });
+      o.gold++;
+      if (matched.has(g)) {
+        o.tp++;
+      }
+    }
+  }
+  for (const o of Object.values(out)) {
+    o.recall = o.gold ? o.tp / o.gold : 0;
+  }
+  return out;
+}
+
+/** Object size bucket from the gold box's long edge in native pixels: "far" under `farPx` (a horse at the back fence
+ *  is ~64 px on a 2560-wide frame), "near" otherwise; null when the frame size is unknown. */
+export const sizeBucket =
+  (farPx = 64) =>
+  (b: Box, f: FrameRef): string | null =>
+    f.width && f.height ? (Math.max(b.w * f.width, b.h * f.height) < farPx ? 'far' : 'near') : null;
+
+/** Posture grouped into the pair the alerts care about. */
+export const postureGroup = (b: Box): string | null =>
+  b.posture === undefined ? null : b.posture.startsWith('lying') ? 'lying' : 'upright';
+
+/** Clip-level verdicts: a clip with a gold box of an interest class counts as found when any of its frames has a
+ *  prediction of that class above the threshold matching a gold box; a clip with no interest-class gold counts as a
+ *  false alarm when any frame has an interest-class prediction above the threshold. `motionSource` (from the golden
+ *  per-clip rows) slices the false alarms by what moved. Frames without a clip_id are ignored. */
+export function clipLevel(
+  frames: Scored[],
+  threshold: number | ThresholdFn,
+  iouMin: number,
+  labels: readonly string[],
+  motionSource?: Map<number, string>,
+): {
+  clips: number;
+  with_gold: number;
+  found: number;
+  recall: number;
+  without_gold: number;
+  false_alarms: number;
+  false_alarm_rate: number;
+  by_motion_source: Record<string, { clips: number; fired: number }>;
+} {
+  const byClip = new Map<number, Scored[]>();
+  for (const f of frames) {
+    if (f.frame.clip_id !== undefined) {
+      (byClip.get(f.frame.clip_id) ?? byClip.set(f.frame.clip_id, []).get(f.frame.clip_id)!).push(f);
+    }
+  }
+  let withGold = 0,
+    found = 0,
+    withoutGold = 0,
+    falseAlarms = 0;
+  const bySource: Record<string, { clips: number; fired: number }> = {};
+  for (const [id, fs] of byClip) {
+    const hasGold = fs.some((f) => f.gold.some((b) => labels.includes(b.label)));
+    const fired = fs.some((f) =>
+      f.pred.some((p) => labels.includes(p.label) && p.confidence >= thr(threshold, p.label)),
+    );
+    const hit = fs.some((f) =>
+      labels.some((l) =>
+        matchFrame(
+          f.gold,
+          f.pred.filter((p) => p.confidence >= thr(threshold, l)),
+          l,
+          iouMin,
+        ).hits.some(Boolean),
+      ),
+    );
+    if (hasGold) {
+      withGold++;
+      if (hit) {
+        found++;
+      }
+    } else {
+      withoutGold++;
+      if (fired) {
+        falseAlarms++;
+      }
+      const src = motionSource?.get(id) ?? 'unknown';
+      const s = (bySource[src] ??= { clips: 0, fired: 0 });
+      s.clips++;
+      if (fired) {
+        s.fired++;
+      }
+    }
+  }
+  return {
+    clips: byClip.size,
+    with_gold: withGold,
+    found,
+    recall: withGold ? found / withGold : 0,
+    without_gold: withoutGold,
+    false_alarms: falseAlarms,
+    false_alarm_rate: withoutGold ? falseAlarms / withoutGold : 0,
+    by_motion_source: bySource,
+  };
+}
+
+/** Gold boxes at time t inside a clip, interpolated linearly per object id between the two labeled frames around t
+ *  (the same id present in both); an object labeled on one side only is absent at t. `labeled` is the clip's labeled
+ *  frames with their times; at a labeled time the boxes are returned as they are. */
+export function interpolateGold(labeled: { t_s: number; boxes: Box[] }[], t: number): Box[] {
+  const sorted = [...labeled].sort((u, v) => u.t_s - v.t_s);
+  const exact = sorted.find((l) => Math.abs(l.t_s - t) < 1e-9);
+  if (exact) {
+    return exact.boxes;
+  }
+  const before = [...sorted].reverse().find((l) => l.t_s < t);
+  const after = sorted.find((l) => l.t_s > t);
+  if (!before || !after) {
+    return [];
+  }
+  const a = (t - before.t_s) / (after.t_s - before.t_s);
+  const out: Box[] = [];
+  for (const b0 of before.boxes) {
+    if (b0.id === undefined) {
+      continue;
+    }
+    const b1 = after.boxes.find((b) => b.id === b0.id && b.label === b0.label);
+    if (!b1) {
+      continue;
+    }
+    out.push({
+      ...b0,
+      x: b0.x + (b1.x - b0.x) * a,
+      y: b0.y + (b1.y - b0.y) * a,
+      w: b0.w + (b1.w - b0.w) * a,
+      h: b0.h + (b1.h - b0.h) * a,
+    });
+  }
+  return out;
+}
+
+/** Throughput of a video run from its per-frame timings: decode and inference percentiles, frames per second the
+ *  pipeline sustained, and how many cameras at a native rate fit under the headroom rule (the bottleneck stage bounds
+ *  the pipeline). */
+export function throughput(
+  rows: { decode_ms: number; ms: number }[],
+  opts: { headroom?: number; camera_fps?: number[]; wall_s?: number } = {},
+): {
+  frames: number;
+  decode_ms: { p50: number; p95: number };
+  infer_ms: { p50: number; p95: number };
+  fps_pipeline: number;
+  fps_wall: number | null;
+  cameras_at_native: Record<string, number>;
+} {
+  const headroom = opts.headroom ?? 0.7;
+  const pct = (xs: number[], p: number) => {
+    const s = [...xs].sort((u, v) => u - v);
+    return s[Math.min(s.length - 1, Math.floor(p * s.length))] ?? 0;
+  };
+  const dec = rows.map((r) => r.decode_ms),
+    inf = rows.map((r) => r.ms);
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : 0);
+  const bottleneck = Math.max(mean(dec), mean(inf));
+  const fpsPipeline = bottleneck > 0 ? 1000 / bottleneck : 0;
+  const fpsWall = opts.wall_s ? rows.length / opts.wall_s : null;
+  const capacity = fpsWall !== null ? Math.min(fpsPipeline, fpsWall) : fpsPipeline;
+  return {
+    frames: rows.length,
+    decode_ms: { p50: pct(dec, 0.5), p95: pct(dec, 0.95) },
+    infer_ms: { p50: pct(inf, 0.5), p95: pct(inf, 0.95) },
+    fps_pipeline: fpsPipeline,
+    fps_wall: fpsWall,
+    cameras_at_native: Object.fromEntries(
+      (opts.camera_fps ?? [15, 20]).map((f) => [`${f}fps`, Math.floor((headroom * capacity) / f)]),
+    ),
+  };
 }
 
 export interface ClassMetrics {
@@ -188,7 +433,9 @@ export function countAccuracy(
   return { mae: err / frames.length, exact: exact / frames.length };
 }
 
-/** 95 % bootstrap interval over frames for a statistic of the frame list. */
+/** 95 % bootstrap interval for a statistic of the frame list. The resampling unit is the clip when every frame has a
+ *  clip_id (frames of one clip are correlated; resampling them one by one understates the interval), the frame
+ *  otherwise. */
 export function bootstrap(
   frames: Scored[],
   stat: (fs: Scored[]) => number,
@@ -203,9 +450,13 @@ export function bootstrap(
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  const byClip = frames.every((f) => f.frame.clip_id !== undefined);
+  const units: Scored[][] = byClip
+    ? [...Map.groupBy(frames, (f) => f.frame.clip_id!).values()]
+    : frames.map((f) => [f]);
   const vals: number[] = [];
   for (let i = 0; i < n; i++) {
-    const sample = Array.from({ length: frames.length }, () => frames[Math.floor(rand() * frames.length)]!);
+    const sample = Array.from({ length: units.length }, () => units[Math.floor(rand() * units.length)]!).flat();
     vals.push(stat(sample));
   }
   vals.sort((a, b) => a - b);
@@ -240,6 +491,9 @@ export function slices(frames: Scored[]): Record<string, Scored[]> {
   for (const f of frames) {
     (out[`period:${f.frame.period}`] ??= []).push(f);
     (out[`camera:${f.frame.camera}`] ??= []).push(f);
+    if (f.frame.stride !== undefined) {
+      (out[`stride:${f.frame.stride}`] ??= []).push(f);
+    }
   }
   return out;
 }
@@ -252,9 +506,15 @@ export function scoreSet(
     labels?: string[];
     thresholdsByLabel?: Record<string, number>;
     family?: string;
+    /** Per-clip `motion_source` from the golden clip rows, for the clip-level false alarms. */
+    motionSource?: Map<number, string>;
   },
 ): Record<string, unknown> {
   const labels = opts.labels ?? [...new Set(frames.flatMap((f) => f.gold.map((b) => b.label)))].sort();
+  const hasAttr = (attr: 'kind' | 'posture') =>
+    frames.some((f) => f.gold.some((b) => b[attr] !== undefined)) &&
+    frames.some((f) => f.pred.some((p) => p[attr] !== undefined));
+  const hasClips = frames.some((f) => f.frame.clip_id !== undefined);
   const bySlice: Record<string, unknown> = {};
   for (const [name, fs] of Object.entries(slices(frames))) {
     const horse = classMetrics(fs, 'horse', opts.threshold, opts.iou);
@@ -269,6 +529,15 @@ export function scoreSet(
           ? bootstrap(fs, (s) => classMetrics(s, 'horse', opts.threshold, opts.iou).recall)
           : null,
       horse_ap: horse.ap,
+      horse_recall_by_size: recallByGoldGroup(fs, 'horse', opts.threshold, opts.iou, sizeBucket()),
+      horse_recall_by_posture: recallByGoldGroup(fs, 'horse', opts.threshold, opts.iou, postureGroup),
+      ...(hasAttr('kind') ? { kind_agreement: attributeAgreement(fs, 'horse', 'kind', opts.threshold, opts.iou) } : {}),
+      ...(hasAttr('posture')
+        ? { posture_agreement: attributeAgreement(fs, 'horse', 'posture', opts.threshold, opts.iou) }
+        : {}),
+      ...(hasClips && (name === 'all' || !name.startsWith('stride'))
+        ? { clips: clipLevel(fs, opts.threshold, opts.iou, interest(opts.family), opts.motionSource) }
+        : {}),
     };
   }
   return {
@@ -276,6 +545,7 @@ export function scoreSet(
     thresholds_by_label: opts.thresholdsByLabel ?? null,
     iou: opts.iou,
     labels,
+    bootstrap_unit: frames.every((f) => f.frame.clip_id !== undefined) ? 'clip' : 'frame',
     operating_points: operatingPoints(frames, opts.iou),
     slices: bySlice,
   };
