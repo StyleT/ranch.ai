@@ -1,0 +1,10 @@
+[project]
+name = "ranch-vlm"
+version = "0.0.1"
+description = "Tier-2 harness: serves a candidate vision-language model with mlx-vlm (OpenAI-compatible, JSON-schema outputs) and runs the escalation set through it. Runs on the laptop for accuracy rows and on the mini for latency and memory rows."
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "mlx-vlm>=0.3",
+  "openai>=1.50",
+  "pillow",
+]

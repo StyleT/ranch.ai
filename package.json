@@ -12,7 +12,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && npm -w apps/web run typecheck",
-    "test": "node --test --experimental-strip-types 'packages/*/test/*.test.ts' 'apps/*/test/*.test.ts' && npm -w apps/web test",
+    "test": "node --test --experimental-strip-types 'packages/*/test/*.test.ts' 'apps/*/test/*.test.ts' 'evals/*/test/*.test.ts' && npm -w apps/web test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check \"**/*.{ts,tsx,js,mjs,css}\"",
