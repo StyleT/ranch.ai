@@ -85,6 +85,11 @@ clips-frames:     ## Decode a frozen clip set to a frames set at a fixed rate (l
 	@test -n "$(SET)" -a -n "$(ID)" || (echo "usage: make clips-frames SET=evals/baseline/<date> ID=frames-<name>-vN [FPS=1]"; exit 2)
 	node --experimental-strip-types evals/clips/frames.ts --set $(SET) --id $(ID) --fps $(or $(FPS),1)
 
+clips-predict:    ## Tier-1 predictions on the clip videos, on the mini: make clips-predict MODELS=yolo26s,yolo26s-e2e-384x640 [STRIDE=1,2,4,8] [SET=evals/baseline/2026-11-06] [OUT=evals/baseline/2026-11-06-1fps]
+	@test -n "$(MODELS)" || (echo "usage: make clips-predict MODELS=a,b [STRIDE=1,2,4,8] [SET=...] [OUT=...]"; exit 2)
+	ssh ranch 'cd /usr/local/ranch/app && /usr/local/ranch/bin/node --experimental-strip-types evals/clips/predict.ts --set $(or $(SET),evals/baseline/2026-11-06) --out /usr/local/ranch/var/predict/$(notdir $(or $(OUT),evals/baseline/2026-11-06-1fps)) --models $(MODELS) --stride $(or $(STRIDE),1) --bin /usr/local/ranch/var/build/detector'
+	rsync -a ranch:/usr/local/ranch/var/predict/$(notdir $(or $(OUT),evals/baseline/2026-11-06-1fps))/ $(or $(OUT),evals/baseline/2026-11-06-1fps)/
+
 fiftyone-import:  ## Import a set (+labels, +predictions) into FiftyOne: make fiftyone-import SET=evals/baseline/2026-10-24 LABELS=evals/golden/x.jsonl:gt_claude MODELS=yolo26s,yolo11n
 	@test -n "$(SET)" || (echo "usage: make fiftyone-import SET=evals/baseline/<date> [LABELS=<jsonl>:<field>] [MODELS=a,b]"; exit 2)
 	$(FO_RUN) import_jsonl.py --set $(CURDIR)/$(SET) $(if $(LABELS),--labels $(CURDIR)/$(LABELS),) $(if $(MODELS),--predictions $(MODELS),) --overwrite
