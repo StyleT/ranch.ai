@@ -27,19 +27,35 @@ class Moondream:
     def __init__(self, max_objects: int = 20, threshold: float | None = None):
         import moondream as md
 
-        # Photon's engine (kestrel) compares torch devices by identity and PyTorch reports MPS tensors on `mps:0` while a
-        # bare "mps" resolves to an unindexed device (m87-labs/moondream#391: "preallocated k_scale_tensor must be a
-        # device FP32 scalar"); asking for the indexed device keeps the pool, the runtime and the tensors equal.
+        # Photon's engine (kestrel 0.9.1, pinned by moondream 2.6.1) runs correctly on CUDA only. On Apple silicon,
+        # as shipped, it fails its own device identity check (m87-labs/moondream#391: the KV pool resolves to "mps",
+        # its scale tensors report "mps:0"); with device="mps:0" the default decode planner asks torch.cuda for device
+        # properties; with decode_path="native" it loads, and then decodes garbage for moondream2 and 3.1 alike
+        # (one-token captions, repeated words, detect() empty on the first call and different boxes on the second;
+        # unchanged by an explicit fp16 dtype or by turning the prefix cache off). The CPU path dispatches to CUDA
+        # layernorm kernels. The settings below are the only ones that load; the self-check after them refuses to run
+        # a bench on garbage and lifts itself when an upstream release decodes correctly.
         import torch
 
-        # The "generated" decode path (the CUDA megakernel) asks torch.cuda for device properties, so MPS runs the
-        # native decode path.
         opts = {"device": "mps:0", "decode_path": "native"} if torch.backends.mps.is_available() else {}
         self.model = md.vl(local=True, model="moondream3.1-9B-A2B", **opts)
+        self._self_check()
         self.max_objects = max_objects
         self.threshold = threshold
         self.variant = f"@t{threshold}" if threshold is not None else ""
         self.prompts = {"presence": PRESENCE_QUESTION, "detect": "<class name>"}
+
+    def _self_check(self) -> None:
+        """One caption of a flat grey image must come back as words, not a single token: the engine's broken Apple
+        silicon decode gives '' or 'A' here while the CUDA path gives a sentence."""
+        probe = Image.new("RGB", (448, 448), (128, 128, 128))
+        caption = self.model.caption(self.model.encode_image(probe), length="short")["caption"].strip()
+        if len(caption.split()) < 3:
+            raise SystemExit(
+                f"moondream3.1 through Photon decodes garbage on this machine (probe caption {caption!r}); see the note in "
+                "models.py and m87-labs/moondream#391. Not a usable pre-labeler here until the engine's Apple silicon "
+                "path is fixed upstream."
+            )
 
     def present(self, enc) -> list[str]:
         ans = self.model.query(enc, PRESENCE_QUESTION, reasoning=False, settings={"temperature": 0, "max_tokens": 64})["answer"]
