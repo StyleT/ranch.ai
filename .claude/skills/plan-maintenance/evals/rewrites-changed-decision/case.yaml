@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: rewrites-changed-decision
+expected_outcome: |
+  The labeling decision is rewritten to the new one (Haiku synchronous on every frame, Opus only on disagreements) with
+  no trace of the old one as strikethrough, "previously" or "no longer"; the steps that assumed Batch are rewritten; the
+  fine-tune step is removed from Remaining work (at most a deferred note with its condition); the appendix gains at most
+  one bullet for the change; check-plan.mjs passes.
+context:
+  scaffold_script: place-files.sh

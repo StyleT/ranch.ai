@@ -75,6 +75,14 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   no `EnterWorktree`, unless Vlad asks for one by name. Edit, commit and provision from `main`; push to `origin main`.
   If a session finds itself inside a worktree, say so and move to the main checkout before touching anything.
   (Vlad, 1 Nov 2026, after a day's work landed on a worktree branch while the App, the mini and his terminal were on main.)
+- **A plan is the current state of the work, never a ledger.** Two levels: the master plan `docs/PLAN.md` (the project,
+  its phases and decisions; also a doc under writing-docs) and the piece plans Claude Code keeps while implementing one
+  piece of it (`~/.claude/plans/<slug>.md`, named after the master-plan item they implement). Both hold what is known,
+  what is decided and what remains, in order. A finished step is deleted and its result folded in as a fact; a changed
+  decision is rewritten; history goes to the appendix at the end and nowhere else; when a piece lands, the master plan
+  moves in the same session (during implementation: plan mode writes only the plan file and never touches the repo). `.claude/skills/plan-maintenance` is mandatory before creating or editing either (plan
+  mode, after a step lands, after compaction, at session end); its checker runs on every write to a plan file
+  (PostToolUse hook in `.claude/settings.json`) and on a staged `docs/PLAN.md` (pre-commit), and refuses a ledger.
 - **A question is answered, never acted on.** When Vlad asks something ("why is X like this?", "am I right that...?",
   "how do I...?"), the deliverable is the answer: no edits, no scripts against the data, no commits, no fixes on the
   side. Answer, propose in one line if there is something to do, and wait for his decision. Work already running in the

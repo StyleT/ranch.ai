@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: folds-finished-step
+expected_outcome: |
+  The finished step disappears from Remaining work; its results (the Moondream numbers, Florence rejected) become
+  facts in Where things stand and a decision in Decisions in force; one dated appendix bullet carries the commit;
+  the remaining steps are renumbered and the dependency sentence matches them; the plan still passes check-plan.mjs
+  and contains no "done", tick or strikethrough above the appendix.
+context:
+  scaffold_script: place-files.sh

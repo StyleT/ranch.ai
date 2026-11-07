@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: cleans-up-ledger-plan
+expected_outcome: |
+  One title; the finished steps gone and their results stated as facts (the export, the decoder, the 41 ms latency,
+  the 3-of-20-boxes compute-unit finding); a single Remaining work section holding only the unfinished steps in their
+  revised form (20-frame equivalence with the per-box diff, preds, bench with the gate, threshold re-fit, the swap as a
+  gated step); the dated narration and the previous plan reduced to appendix bullets; check-plan.mjs passes.
+context:
+  scaffold_script: place-files.sh

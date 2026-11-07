@@ -37,7 +37,8 @@
       "prettier --write"
     ],
     "*.css": "prettier --write",
-    "docs/**/*.md": "node .claude/skills/writing-docs/scripts/check-doc.mjs"
+    "docs/**/*.md": "node .claude/skills/writing-docs/scripts/check-doc.mjs",
+    "docs/PLAN.md": "node .claude/skills/plan-maintenance/scripts/check-plan.mjs"
   },
   "overrides": {
     "eslint": "$eslint"
