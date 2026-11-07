@@ -34,6 +34,8 @@ export function StreamPlayer({
   const lastTime = useRef(0);
   const [visible, setVisible] = useState(true);
   const [muted, setMuted] = useState(true);
+  // the user's mute choice survives a re-attach (a WebRTC -> HLS fallback right after "unmute" used to re-mute)
+  const mutedRef = useRef(true);
   const [transport, setTransport] = useState<Transport>('webrtc');
   const [attach, setAttach] = useState(0);
   const [failures, setFailures] = useState(0);
@@ -88,8 +90,8 @@ export function StreamPlayer({
     setLastProgressMs(null);
     setStartedMs(Date.now());
     setError(false);
-    video.muted = true;
-    video.defaultMuted = true;
+    video.muted = mutedRef.current;
+    video.defaultMuted = mutedRef.current;
     const play = () => {
       if (!cancelled) {
         video.play().catch(() => undefined);
@@ -299,6 +301,7 @@ export function StreamPlayer({
   // badge + mode: WebRTC is sub-second, so LIVE while the picture advances; otherwise reuse the HLS state machine
   let mode: string;
   let badge: string;
+  let latencyS: number | null = null; // HLS only: playhead-to-edge gap + source write age; WebRTC is sub-second
   if (!visible) {
     mode = 'paused';
     badge = 'PAUSED';
@@ -321,6 +324,7 @@ export function StreamPlayer({
     const s = deriveLiveState({ ...hlsFacts, nowMs: now, visible, startedMs, lastProgressMs, error });
     mode = s.kind;
     badge = badgeText(s, now);
+    latencyS = s.kind === 'live' ? s.latencyS : null;
   }
   const live = mode === 'live' || mode === 'stalled';
 
@@ -330,6 +334,7 @@ export function StreamPlayer({
       return;
     }
     v.muted = !v.muted;
+    mutedRef.current = v.muted;
     setMuted(v.muted);
     if (!v.muted) {
       v.play().catch(() => undefined);
@@ -340,6 +345,7 @@ export function StreamPlayer({
       data-testid={tid.streamPlayer}
       data-mode={mode}
       data-transport={transport}
+      data-latency-s={latencyS ?? undefined}
       className="rounded-card relative aspect-video overflow-hidden bg-black"
     >
       <video
