@@ -1,7 +1,7 @@
 [project]
 name = "ranch-prelabel"
 version = "0.0.1"
-description = "Local pre-labeling of the clip frames (Moondream 3.1 through Photon, Florence-2 through transformers) and its bench on the acceptance set. Tooling only, runs on the laptop; the mini never needs it."
+description = "Local pre-labeling of the clip frames (Florence-2 through transformers, Qwen3-VL through mlx_vlm.server; Moondream 3.1 kept as the record of its triage) and its bench on the acceptance set. Tooling only, runs on the laptop; the mini never needs it."
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "moondream>=1.3",
@@ -9,4 +9,5 @@ dependencies = [
   "torch>=2.6,<2.15",  # kestrel-mps-torch-ext ships native libraries for torch 2.9 to 2.14 only
   "pillow",
   "numpy",
+  "openai>=1.50",  # Qwen3-VL through mlx_vlm.server (evals/vlm), OpenAI-compatible
 ]

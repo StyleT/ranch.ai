@@ -1,11 +1,15 @@
-"""The two local pre-labelers behind one interface: `Labeler.detect(image) -> list[box_row]`.
+"""The local pre-labelers behind one interface: `Labeler.detect(image) -> list[box_row]`.
 
-Moondream 3.1 9B-A2B through Photon (Metal on Apple silicon; weights from Hugging Face on first run; no API key for a
-base model): one presence `query` naming the taxonomy classes, then one `detect` per class the answer names. Boxes
-carry no confidence (written as 1.0); the model's own detect threshold (0.30 by default) is the operating point.
 Florence-2 Large through transformers (native class, MPS fp16): one `<CAPTION_TO_PHRASE_GROUNDING>` call with every
-class phrase; boxes carry no confidence either.
+class phrase; boxes carry no confidence (written as 1.0).
+Qwen3-VL (an MLX build behind `mlx_vlm.server`, the tier-2 harness's server): one grounding request per frame naming the
+taxonomy classes, answered under a JSON schema of `{label, bbox_2d}` objects in Qwen3-VL's relative 0..1000 coordinates;
+no confidence either.
+Moondream 3.1 9B-A2B through Photon stays as the record of its triage: its engine decodes garbage on Apple silicon and
+the wrapper refuses to bench on it.
 """
+import base64
+import io
 import json
 import re
 
@@ -129,9 +133,86 @@ class Florence:
         pass
 
 
+QWEN_PROMPT = (
+    "This is a frame from a ranch security camera. Find every " + ", ".join(CLASSES) + " in the image. "
+    "Answer with JSON only: {\"objects\": [{\"label\": <one of those names>, \"bbox_2d\": [x1, y1, x2, y2]}]}, "
+    "coordinates relative to the image in the range 0 to 1000, one tight box per object, nothing for shadows, "
+    "reflections or parts of the scene. {\"objects\": []} if none of them is visible."
+)
+QWEN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "objects": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "enum": CLASSES},
+                    "bbox_2d": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 1000}, "minItems": 4, "maxItems": 4},
+                },
+                "required": ["label", "bbox_2d"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["objects"],
+    "additionalProperties": False,
+}
+
+
+class Qwen3VL:
+    """A Qwen3-VL Instruct build served by mlx_vlm.server (`make vlm-serve MODEL=<hf id>`); `temperature 0` so a run is
+    one operating point. `name` carries the build (`qwen3vl-8b-4bit`), so each build is its own predictions file."""
+
+    def __init__(self, server_model: str = "mlx-community/Qwen3-VL-8B-Instruct-4bit", server: str = "http://localhost:8080/v1", max_tokens: int = 512):
+        from openai import OpenAI
+
+        self.client = OpenAI(base_url=server, api_key="not-needed")
+        self.server_model = server_model
+        m = re.search(r"-(\d+B)-Instruct-(\d+bit)", server_model)
+        self.variant = f"-{m.group(1).lower()}-{m.group(2)}" if m else "-" + server_model.split("/")[-1].lower()
+        self.name = "qwen3vl"
+        self.max_tokens = max_tokens
+        self.prompts = {"grounding": QWEN_PROMPT, "schema": QWEN_SCHEMA, "server_model": server_model, "temperature": 0, "max_tokens": max_tokens}
+        self.invalid = 0  # answers that were not the schema's JSON (a refusal, a cut-off at max_tokens, a server error)
+
+    def detect(self, image: Image.Image, classes: list[str] | None = None) -> list[dict]:
+        buf = io.BytesIO()
+        image.save(buf, format="JPEG", quality=90)
+        url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.server_model,
+                messages=[{"role": "user", "content": [{"type": "image_url", "image_url": {"url": url}}, {"type": "text", "text": QWEN_PROMPT}]}],
+                response_format={"type": "json_schema", "json_schema": {"name": "Grounding", "strict": True, "schema": QWEN_SCHEMA}},
+                temperature=0,
+                max_tokens=self.max_tokens,
+            )
+            objects = json.loads(resp.choices[0].message.content)["objects"]
+        except Exception as e:  # a bad answer is an empty frame in the row, not a crash of the run
+            self.invalid += 1
+            print(f"qwen3vl: invalid answer ({str(e)[:120]})", flush=True)
+            return []
+        out = []
+        for o in objects:
+            kind, bb = o.get("label"), o.get("bbox_2d")
+            if kind not in CLASSES or not isinstance(bb, list) or len(bb) != 4:
+                continue
+            x1, y1, x2, y2 = (float(v) / 1000 for v in bb)
+            b = box_row(scoring_label(kind), kind, x1, y1, x2, y2)
+            if b:
+                out.append(b)
+        return out
+
+    def close(self):
+        pass
+
+
 def make(name: str, **kw):
     if name == "moondream":
         return Moondream(**kw)
     if name == "florence":
         return Florence(**kw)
+    if name == "qwen3vl":
+        return Qwen3VL(**kw)
     raise SystemExit(f"unknown model {name}")

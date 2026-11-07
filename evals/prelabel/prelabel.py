@@ -3,7 +3,7 @@ model. Writes predictions.<model>.jsonl beside frames.jsonl with clip_id / frame
 plus one clip-level row per clip ({"clip_id", "classes": [...]}, no detections) listing the classes seen in any frame.
 Resumable: frames already in the output are skipped, so a run survives a sleep or a crash.
 
-  uv run prelabel.py --model moondream|florence --set <repo>/evals/baseline/2026-11-06-1fps [--limit-clips N] [--threshold 0.30]
+  uv run prelabel.py --model florence|qwen3vl --set <repo>/evals/baseline/2026-11-06-1fps [--limit-clips N] [--server-model <hf id>]
   uv run prelabel.py --review-sample --set ... [--per-cell 10]   # 7 cameras x day/night x N frames for the human check
 """
 import argparse
@@ -34,10 +34,11 @@ def review_sample(set_dir: Path, per_cell: int, seed: int = 20261106) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", choices=["moondream", "florence"])
+    ap.add_argument("--model", choices=["florence", "qwen3vl", "moondream"])
     ap.add_argument("--set", required=True)
     ap.add_argument("--limit-clips", type=int)
     ap.add_argument("--threshold", type=float)
+    ap.add_argument("--server-model", help="qwen3vl: the Hugging Face id mlx_vlm.server was started with")
     ap.add_argument("--review-sample", action="store_true")
     ap.add_argument("--per-cell", type=int, default=10)
     a = ap.parse_args()
@@ -54,6 +55,8 @@ def main() -> None:
         keep = sorted({f["clip_id"] for f in frames})[: a.limit_clips]
         frames = [f for f in frames if f["clip_id"] in keep]
     kw = {"threshold": a.threshold} if (a.model == "moondream" and a.threshold is not None) else {}
+    if a.model == "qwen3vl" and a.server_model:
+        kw["server_model"] = a.server_model
     model = make(a.model, **kw)
     name = model.name + model.variant
     out_path = set_dir / f"predictions.{a.model}{model.variant}.jsonl"

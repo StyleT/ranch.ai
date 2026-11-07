@@ -47,16 +47,16 @@ FO_DIR = $(CURDIR)/evals/fiftyone
 FO_RUN = uv run --directory $(FO_DIR) python
 PL_DIR = $(CURDIR)/evals/prelabel
 PL_RUN = uv run --directory $(PL_DIR) python
-prelabel-install: ## Create evals/prelabel/.venv (Moondream through Photon, Florence-2 through transformers) with uv
+prelabel-install: ## Create evals/prelabel/.venv (Florence-2 through transformers, the OpenAI client for Qwen3-VL via mlx_vlm.server) with uv
 	uv sync --directory $(PL_DIR)
 
-prelabel-bench:   ## Pre-label a frames set's labeled frames with a local model, for bench.ts: make prelabel-bench MODEL=moondream|florence SET=evals/baseline/2026-10-20 LABELS=evals/golden/<labels>.jsonl [THRESHOLD=0.30]
-	@test -n "$(MODEL)" -a -n "$(SET)" || (echo "usage: make prelabel-bench MODEL=moondream|florence SET=evals/baseline/<date> [LABELS=<jsonl>] [THRESHOLD=t]"; exit 2)
-	$(PL_RUN) bench.py --model $(MODEL) --set $(CURDIR)/$(SET) $(if $(LABELS),--only-labeled $(CURDIR)/$(LABELS),) $(if $(THRESHOLD),--threshold $(THRESHOLD),)
+prelabel-bench:   ## Pre-label a frames set's labeled frames with a local model, for bench.ts: make prelabel-bench MODEL=florence|qwen3vl SET=evals/baseline/2026-10-20 LABELS=evals/golden/<labels>.jsonl [SERVER_MODEL=<hf id served by make vlm-serve>]
+	@test -n "$(MODEL)" -a -n "$(SET)" || (echo "usage: make prelabel-bench MODEL=florence|qwen3vl SET=evals/baseline/<date> [LABELS=<jsonl>] [SERVER_MODEL=<hf id>] [THRESHOLD=t]"; exit 2)
+	$(PL_RUN) bench.py --model $(MODEL) --set $(CURDIR)/$(SET) $(if $(LABELS),--only-labeled $(CURDIR)/$(LABELS),) $(if $(SERVER_MODEL),--server-model $(SERVER_MODEL),) $(if $(THRESHOLD),--threshold $(THRESHOLD),)
 
-prelabel-run:     ## Stage 1: pre-label every frame of a clip frames set (resumable): make prelabel-run MODEL=moondream SET=evals/baseline/2026-11-06-1fps [LIMIT_CLIPS=5]
-	@test -n "$(MODEL)" -a -n "$(SET)" || (echo "usage: make prelabel-run MODEL=moondream|florence SET=evals/baseline/<date>-1fps [LIMIT_CLIPS=n]"; exit 2)
-	$(PL_RUN) prelabel.py --model $(MODEL) --set $(CURDIR)/$(SET) $(if $(LIMIT_CLIPS),--limit-clips $(LIMIT_CLIPS),) $(if $(THRESHOLD),--threshold $(THRESHOLD),)
+prelabel-run:     ## Stage 1: pre-label every frame of a clip frames set (resumable): make prelabel-run MODEL=qwen3vl SET=evals/baseline/2026-11-06-1fps [LIMIT_CLIPS=5] [SERVER_MODEL=<hf id>]
+	@test -n "$(MODEL)" -a -n "$(SET)" || (echo "usage: make prelabel-run MODEL=florence|qwen3vl SET=evals/baseline/<date>-1fps [LIMIT_CLIPS=n] [SERVER_MODEL=<hf id>]"; exit 2)
+	$(PL_RUN) prelabel.py --model $(MODEL) --set $(CURDIR)/$(SET) $(if $(LIMIT_CLIPS),--limit-clips $(LIMIT_CLIPS),) $(if $(SERVER_MODEL),--server-model $(SERVER_MODEL),) $(if $(THRESHOLD),--threshold $(THRESHOLD),)
 
 prelabel-sample:  ## The stratified review sample (7 cameras x day/night x 10 frames) of a clip frames set: make prelabel-sample SET=evals/baseline/2026-11-06-1fps
 	$(PL_RUN) prelabel.py --review-sample --set $(CURDIR)/$(SET)
