@@ -1,0 +1,24 @@
+{
+  "id": "frames-ranch-clips-v1",
+  "kind": "frames",
+  "version": 1,
+  "created": "2026-11-07T02:22:05.911Z",
+  "parent": "clips-ranch-v1",
+  "n": 9010,
+  "clips": 260,
+  "sha256": {
+    "frames.jsonl": "c16e8c8952a86fb35144a8403a3724fc57362486ffc0a4c6f00a69f1e72132be",
+    "clips.jsonl": "db101e9d4f941697f9e80245bfa901e28528b429b75e9b0e7ad810bd7b1bcec8"
+  },
+  "source": {
+    "set": "evals/baseline/2026-11-06",
+    "fps": 1,
+    "filter": "fps=1",
+    "resolution": "native",
+    "ffmpeg": "ffmpeg version 8.0 Copyright (c) 2000-2025 the FFmpeg developers",
+    "frame_id": "clip_id * 1000 + frame_idx"
+  },
+  "host": "EPUSPRIW0E2A",
+  "commit": "72ce187",
+  "preds": {}
+}

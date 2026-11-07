@@ -52,6 +52,10 @@ frames-pull:      ## Copy a baseline set's images from the mini into the git-ign
 	@test -n "$(DATE)" || (echo "usage: make frames-pull DATE=<evals/baseline date>"; exit 2)
 	rsync -a --delete $(HOST):/usr/local/ranch/media/baseline/$(DATE)/ evals/baseline/$(DATE)/frames/
 
+clips-frames:     ## Decode a frozen clip set to a frames set at a fixed rate (laptop; ffmpeg): make clips-frames SET=evals/baseline/2026-11-06 ID=frames-ranch-clips-v1 [FPS=1]
+	@test -n "$(SET)" -a -n "$(ID)" || (echo "usage: make clips-frames SET=evals/baseline/<date> ID=frames-<name>-vN [FPS=1]"; exit 2)
+	node --experimental-strip-types evals/clips/frames.ts --set $(SET) --id $(ID) --fps $(or $(FPS),1)
+
 fiftyone-import:  ## Import a set (+labels, +predictions) into FiftyOne: make fiftyone-import SET=evals/baseline/2026-10-24 LABELS=evals/golden/x.jsonl:gt_claude MODELS=yolo26s,yolo11n
 	@test -n "$(SET)" || (echo "usage: make fiftyone-import SET=evals/baseline/<date> [LABELS=<jsonl>:<field>] [MODELS=a,b]"; exit 2)
 	$(FO_RUN) import_jsonl.py --set $(CURDIR)/$(SET) $(if $(LABELS),--labels $(CURDIR)/$(LABELS),) $(if $(MODELS),--predictions $(MODELS),) --overwrite
