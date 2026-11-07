@@ -1,9 +1,10 @@
 """Run a local pre-labeler over a frames set and write its predictions file beside frames.jsonl, so bench.ts scores it
 like any model's (`--predictions evals/baseline/<date>/predictions.<model>[@variant].jsonl`).
 
-  uv run bench.py --model florence|qwen3vl|moondream --set <repo>/evals/baseline/2026-10-20 [--limit N] [--threshold 0.30]
+  uv run bench.py --model qwen3vl|rexomni|florence|moondream --set <repo>/evals/baseline/2026-10-20 [--limit N]
                   [--only-labeled <labels.jsonl>]   # the acceptance frames only: the rows of that labels file
-                  [--server-model mlx-community/Qwen3-VL-8B-Instruct-4bit]   # qwen3vl: the build mlx_vlm.server is serving
+                  [--server-model mlx-community/Qwen3-VL-4B-Instruct-3bit]   # qwen3vl: the build mlx_vlm.server is serving
+                  [--weights bf16|awq]              # rexomni: the checkpoint
 
 Prints seconds per frame (p50 / p95), peak RSS and the box count; the prompts and settings go into the file's first
 row as provenance.
@@ -19,13 +20,14 @@ from models import make
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True, choices=["florence", "qwen3vl", "moondream"])
+    ap.add_argument("--model", required=True, choices=["qwen3vl", "rexomni", "florence", "moondream"])
     ap.add_argument("--set", required=True)
     ap.add_argument("--limit", type=int)
     ap.add_argument("--threshold", type=float, help="moondream: the detect threshold (model default 0.30)")
     ap.add_argument("--task", default=None, help="florence: <CAPTION_TO_PHRASE_GROUNDING> (default) or <OPEN_VOCABULARY_DETECTION>")
     ap.add_argument("--server-model", help="qwen3vl: the Hugging Face id mlx_vlm.server was started with")
     ap.add_argument("--server", help="qwen3vl: the server's base URL (default http://localhost:8080/v1)")
+    ap.add_argument("--weights", choices=["bf16", "awq"], help="rexomni: the checkpoint, IDEA-Research/Rex-Omni (bf16, default) or Rex-Omni-AWQ dequantized")
     ap.add_argument("--only-labeled", help="a labels.jsonl: run on its frames only")
     a = ap.parse_args()
     set_dir = Path(a.set).resolve()
@@ -42,6 +44,8 @@ def main() -> None:
         kw["task"] = a.task
     if a.model == "qwen3vl":
         kw.update({k: v for k, v in (("server_model", a.server_model), ("server", a.server)) if v})
+    if a.model == "rexomni" and a.weights:
+        kw["weights"] = a.weights
     model = make(a.model, **kw)
     name = model.name + model.variant
     out_path = set_dir / f"predictions.{a.model}{model.variant}.jsonl"

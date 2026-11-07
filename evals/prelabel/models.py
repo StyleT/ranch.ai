@@ -1,10 +1,13 @@
 """The local pre-labelers behind one interface: `Labeler.detect(image) -> list[box_row]`.
 
-Florence-2 Large through transformers (native class, MPS fp16): one `<CAPTION_TO_PHRASE_GROUNDING>` call with every
-class phrase; boxes carry no confidence (written as 1.0).
+None of them returns a confidence; boxes are written at 1.0.
 Qwen3-VL (an MLX build behind `mlx_vlm.server`, the tier-2 harness's server): one grounding request per frame naming the
 taxonomy classes, answered under a JSON schema of `{label, bbox_2d}` objects in Qwen3-VL's relative 0..1000 coordinates;
 no confidence either.
+Rex-Omni (IDEA-Research, Qwen2.5-VL-3B fine-tuned for detection, bf16 or the AWQ checkpoint dequantized) through
+transformers on MPS: one detection request naming the classes, the answer's 1,000-bin coordinate tokens parsed to boxes.
+Florence-2 Large through transformers (native class, MPS fp16): one `<CAPTION_TO_PHRASE_GROUNDING>` call with every
+class phrase.
 Moondream 3.1 9B-A2B through Photon stays as the record of its triage: its engine decodes garbage on Apple silicon and
 the wrapper refuses to bench on it.
 """
@@ -12,6 +15,7 @@ import base64
 import io
 import json
 import re
+from pathlib import Path
 
 from PIL import Image
 
@@ -208,6 +212,165 @@ class Qwen3VL:
         pass
 
 
+REX_REPOS = {"bf16": "IDEA-Research/Rex-Omni", "awq": "IDEA-Research/Rex-Omni-AWQ"}
+REX_SYSTEM = "You are a helpful assistant"
+REX_PROMPT = "Detect {categories}. Output the bounding box coordinates in [x0, y0, x1, y1] format."
+REX_ANSWER = re.compile(r"<\|object_ref_start\|>(.*?)<\|object_ref_end\|><\|box_start\|>(.*?)<\|box_end\|>", re.S)
+REX_BIN = re.compile(r"<(\d+)>")
+AWQ_REVERSE_ORDER = [0, 4, 1, 5, 2, 6, 3, 7]  # AutoAWQ's gemm packing order of eight 4-bit values in one int32
+
+
+def dequantize_awq(src: str, dst: str) -> str:
+    """Rex-Omni-AWQ as a plain bf16 checkpoint under dst (once): the 4-bit gemm weights unpacked and rebuilt as
+    (q - zero) * scale per group of 128 inputs, everything else copied, quantization_config dropped from config.json.
+    The AWQ kernels (autoawq, vLLM) are CUDA-only, so on the Mac the AWQ checkpoint's weights run this way: the same
+    numbers it computes with, at the bf16 model's memory and speed."""
+    import shutil
+    from pathlib import Path
+
+    import torch
+    from safetensors.torch import load_file, save_file
+
+    src_dir, dst_dir = Path(src), Path(dst)
+    if (dst_dir / "model.safetensors").exists():
+        return str(dst_dir)
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    cfg = json.loads((src_dir / "config.json").read_text())
+    q = cfg.pop("quantization_config")
+    assert q["quant_method"] == "awq" and q["version"] == "gemm" and q["bits"] == 4, q
+    group = q["group_size"]
+    cfg["torch_dtype"] = "bfloat16"
+    cfg.pop("use_cache", None)
+    (dst_dir / "config.json").write_text(json.dumps(cfg, indent=2))
+    for f in src_dir.iterdir():
+        if f.suffix == ".json" and f.name != "config.json" or f.suffix in (".txt", ".jinja", ".model"):
+            shutil.copy(f, dst_dir / f.name)
+    tensors = {}
+    for f in sorted(src_dir.glob("*.safetensors")):
+        tensors.update(load_file(str(f)))
+    out = {}
+    shifts = torch.arange(0, 32, 4, dtype=torch.int32)
+    for k, v in tensors.items():
+        if k.endswith(".qweight"):
+            base = k[: -len(".qweight")]
+            qweight, qzeros, scales = v, tensors[base + ".qzeros"], tensors[base + ".scales"]  # [in, out/8] int32, [in/g, out/8] int32, [in/g, out] fp16
+            def unpack(t):
+                u = (t.unsqueeze(-1) >> shifts) & 0xF  # [rows, out/8, 8]
+                return u[..., AWQ_REVERSE_ORDER].reshape(t.shape[0], -1)  # [rows, out]
+            w = unpack(qweight).to(torch.float32)
+            z = unpack(qzeros).to(torch.float32).repeat_interleave(group, dim=0)[: w.shape[0]]
+            s = scales.to(torch.float32).repeat_interleave(group, dim=0)[: w.shape[0]]
+            out[base + ".weight"] = ((w - z) * s).T.contiguous().to(torch.bfloat16)  # Linear wants [out, in]
+        elif k.endswith(".qzeros") or k.endswith(".scales"):
+            continue
+        else:
+            out[k] = v.to(torch.bfloat16) if v.is_floating_point() else v
+    save_file(out, str(dst_dir / "model.safetensors"), metadata={"format": "pt"})
+    return str(dst_dir)
+
+
+def rex_tokenizer_dir(bf16_dir: str, awq_dir: str, dst: str) -> str:
+    """A processor directory whose tokenizer puts the 1,000 coordinate bins where the model was trained with them.
+    Rex-Omni repurposes the last 1,000 entries of Qwen2.5's vocabulary (ids 150643 to 151642) as <0> to <999>; the
+    bf16 repository says so in tokenizer_config.json (added_tokens_decoder) but ships no tokenizer.json, and both the
+    slow and the fast tokenizer of transformers 5 append the bins as new ids instead, pushing <|image_pad|> past the
+    embedding table (the AWQ repository's tokenizer.json has the same shifted ids). Built once: the AWQ tokenizer.json's
+    pipeline with the bins written into the BPE vocabulary at their ids (the merges producing the displaced tokens
+    dropped) and every added token at the id of the bf16 added_tokens_decoder."""
+    import shutil
+    from pathlib import Path
+
+    src, awq, out = Path(bf16_dir), Path(awq_dir), Path(dst)
+    if (out / "tokenizer.json").exists():
+        return str(out)
+    out.mkdir(parents=True, exist_ok=True)
+    tc = json.loads((src / "tokenizer_config.json").read_text())
+    ids = {v["content"]: int(k) for k, v in tc.pop("added_tokens_decoder").items()}
+    tj = json.loads((awq / "tokenizer.json").read_text())
+    vocab = tj["model"]["vocab"]
+    displaced = {t for t, i in vocab.items() if i in set(ids.values())}
+    for t in displaced:
+        del vocab[t]
+    for content, i in ids.items():
+        if i < len(vocab) + len(displaced):  # a bin inside the original vocabulary; the specials sit past it
+            vocab[content] = i
+    merges = tj["model"]["merges"]
+    pairs = [(m.split(" ") if isinstance(m, str) else m) for m in merges]
+    kept = [m for m, (a, b) in zip(merges, pairs) if a in vocab and b in vocab and a + b in vocab]
+    tj["model"]["merges"] = kept
+    for a in tj["added_tokens"]:
+        a["id"] = ids[a["content"]]
+    tj["added_tokens"].sort(key=lambda a: a["id"])
+    (out / "tokenizer.json").write_text(json.dumps(tj, ensure_ascii=False))
+    (out / "tokenizer_config.json").write_text(json.dumps(tc, indent=2, ensure_ascii=False))
+    for name in ("preprocessor_config.json", "chat_template.json", "special_tokens_map.json", "generation_config.json"):
+        if (src / name).exists():
+            shutil.copy(src / name, out / name)
+    return str(out)
+
+
+class RexOmni:
+    """IDEA-Research's Rex-Omni (Qwen2.5-VL-3B fine-tuned to emit detections as text, each coordinate one of 1,000 bin
+    tokens) through transformers on MPS, with the repository's detection prompt, decoding settings and answer format
+    reimplemented here: the `rex_omni` package pins flash-attn and vLLM and does not install on macOS. `--weights awq`
+    runs the AWQ checkpoint dequantized (dequantize_awq)."""
+
+    name = "rexomni"
+
+    def __init__(self, weights: str = "bf16", max_new_tokens: int = 2048):
+        import torch
+        from huggingface_hub import snapshot_download
+        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+
+        self.torch = torch
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        cache = Path.home() / ".cache/ranch"
+        bf16_dir, awq_dir = snapshot_download(REX_REPOS["bf16"]), snapshot_download(REX_REPOS["awq"])
+        path = bf16_dir if weights == "bf16" else dequantize_awq(awq_dir, str(cache / "rex-omni-awq-bf16"))
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(path, dtype=torch.bfloat16, attn_implementation="sdpa").to(self.device).eval()
+        # The checkpoint's preprocessor_config carries the repository's settings (min 16, max 2560 patches of 28 px),
+        # so a 1280x720 frame is kept as is.
+        tok_dir = rex_tokenizer_dir(bf16_dir, awq_dir, str(cache / "rex-omni-tokenizer"))
+        self.processor = AutoProcessor.from_pretrained(tok_dir)
+        tok = self.processor.tokenizer
+        assert tok.convert_tokens_to_ids("<0>") == 150643 and tok.convert_tokens_to_ids("<|image_pad|>") == self.model.config.image_token_id, "Rex-Omni tokenizer ids"
+        self.variant = "" if weights == "bf16" else "-awq"
+        self.max_new_tokens = max_new_tokens
+        self.prompts = {"system": REX_SYSTEM, "detection": REX_PROMPT, "weights": REX_REPOS[weights], "repetition_penalty": 1.05, "max_new_tokens": max_new_tokens}
+        self.invalid = 0  # answers with no parsable box group at all
+
+    def detect(self, image: Image.Image, classes: list[str] | None = None) -> list[dict]:
+        cats = classes if classes is not None else CLASSES
+        messages = [
+            {"role": "system", "content": REX_SYSTEM},
+            {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": REX_PROMPT.format(categories=", ".join(cats))}]},
+        ]
+        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = self.processor(text=[text], images=[image], return_tensors="pt").to(self.device)
+        with self.torch.no_grad():
+            ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False, repetition_penalty=1.05, use_cache=True)
+        answer = self.processor.batch_decode(ids[:, inputs["input_ids"].shape[1] :], skip_special_tokens=False)[0]
+        out = []
+        for cat, boxes in REX_ANSWER.findall(answer):
+            kind = cat.strip().lower()
+            if kind not in CLASSES:
+                continue
+            for group in boxes.split(","):
+                bins = [int(b) for b in REX_BIN.findall(group)]
+                if len(bins) != 4:
+                    continue
+                b = box_row(scoring_label(kind), kind, *(v / 999 for v in bins))
+                if b:
+                    out.append(b)
+        if not out and "<|box_start|>" not in answer and answer.strip() not in ("", "<|im_end|>"):
+            self.invalid += 1
+        self.last_answer = answer
+        return out
+
+    def close(self):
+        pass
+
+
 def make(name: str, **kw):
     if name == "moondream":
         return Moondream(**kw)
@@ -215,4 +378,6 @@ def make(name: str, **kw):
         return Florence(**kw)
     if name == "qwen3vl":
         return Qwen3VL(**kw)
+    if name == "rexomni":
+        return RexOmni(**kw)
     raise SystemExit(f"unknown model {name}")
